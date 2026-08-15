@@ -182,6 +182,8 @@ export interface Collection {
   description?: string;
   auth?: AuthConfig;
   scripts?: RequestScripts;
+  /** Declarative assertions applied to every request in the collection. */
+  assertions?: Assertion[];
   variables: Variable[];
   folders: Folder[];
   requests: Request[];

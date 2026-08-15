@@ -168,6 +168,7 @@ function CollectionNode({ collection }: { collection: Collection }) {
   const deleteCollection = useAppStore((s) => s.deleteCollection);
   const addFolder = useAppStore((s) => s.addFolder);
   const addRequest = useAppStore((s) => s.addRequest);
+  const openCollectionTab = useAppStore((s) => s.openCollectionTab);
 
   const rename = () => {
     const name = window.prompt("Rename collection", collection.name);
@@ -197,7 +198,9 @@ function CollectionNode({ collection }: { collection: Collection }) {
         <button type="button" className="kp-tree-toggle" onClick={() => setOpen(!open)}>
           {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         </button>
-        <span className="kp-truncate" style={{ flex: 1 }}>{collection.name}</span>
+        <button type="button" className="kp-tree-label" style={{ flex: 1 }} title="Open collection" onClick={() => openCollectionTab(collection.id)}>
+          <span className="kp-truncate">{collection.name}</span>
+        </button>
         <span className="kp-count-badge">{countRequests(collection)}</span>
         <span className="kp-tree-actions">
           <button type="button" className="kp-icon-btn" title="New request" onClick={newRequest}><Plus size={12} /></button>

@@ -42,12 +42,15 @@ packages/storage/    Dexie schema (collections, environments, history, workspace
 packages/engine/     Test/assertion runtime (see §5b): @tropel/shims npm package (pm/bru/
                      chai) over TS bridge host. M3 swaps the host for @tropel/runtime-wasm;
 packages/ui/         ALL UI. Zustand store (store/app-store.ts) — tabs are polymorphic:
-                     kind "request" | "environment". Variable resolution in store/variables.ts
-                     ({{var}} with collection < environment precedence). Components:
+                     kind "request" | "environment" | "collection" | "runner". Variable
+                     resolution in store/variables.ts ({{var}} with collection < environment
+                     precedence; collection auth injected for auth.type "inherit"). Components:
                      layout/ (AppShell, Sidebar), request/RequestEditor, response/ (ResponseBody,
                      ResponseSummary), command/CommandPalette, modals/Modals (Codegen + Import),
-                     runner/RunnerModal, websocket/WebSocketModal, environments/EnvironmentEditor,
-                     common/CodeEditor (CodeMirror 6 wrapper).
+                     runner/RunnerTab (full-area collection runner tab), collections/CollectionEditor
+                     (Overview/Auth/Scripts/Tests/Variables/Runs subtabs), websocket/WebSocketModal,
+                     environments/EnvironmentEditor, common/ (CodeEditor CodeMirror 6 wrapper,
+                     AuthEditor + AssertionsEditor shared by request & collection editors).
 packages/plugin-host, plugin-api/   Stubs only (M4).
 ```
 
@@ -62,7 +65,16 @@ packages/plugin-host, plugin-api/   Stubs only (M4).
 - History: IndexedDB-persisted, reopenable in tabs, clearable.
 - Importers (cURL, Postman v2.1, HAR, auto-detect) + import modal.
 - Codegen modal (cURL/JS/Python) with regex syntax highlighting + copy.
-- Collection runner (sequential, iterations, per-request pass/fail).
+- Collection runner (sequential, iterations, per-request pass/fail) — now a full-area
+  RUNNER TAB (Postman style): config list with per-request toggles, live results,
+  per-request Response/Headers/Tests detail pane, history in CollectionEditor Runs subtab.
+  Runner state lives in the store (`runnerStates[collectionId]`) so it survives tab
+  switches; runner executes the LIVE open-tab copy of a request (unsaved edits included);
+  closing a dirty request tab flushes its edits into the collection tree + persists.
+- Collection editor full-area tab: Overview (markdown), Authorization, Scripts
+  (pre/test), Tests (declarative assertions), Variables, Runs. Collection-level auth
+  applies to requests with auth "inherit"; collection pre/test scripts + assertions run
+  in the send path and the runner, merged with the request's own.
 - WebSocket client modal (connect/send/log).
 - CodeMirror 6 for body + pre-request/test script editors.
 - Collections: create (palette/sidebar +), rename/delete, nested folders CRUD,
@@ -114,7 +126,8 @@ Follow-ups (not blocking):
       Tropel only.
 - [ ] Export: native KnockPort JSON + YAML (serializeCollection already exists) from palette;
       export environment too.
-- [ ] Collection variables editing UI (mirror EnvironmentEditor as full-area tab on collection).
+- [x] Collection variables editing UI — DONE: full-area tab (Braces button on collection row),
+      `pm.collectionVariables.*` + `{{var}}` resolution wired into send/runner; env overrides collection.
 - [ ] Virtualized sidebar tree (perf, when collections get big).
 - [ ] Disk-backed collections via FileSystemAdapter (open folder → read/write YAML per §5a of the arch doc).
 - [ ] Settings modal (theme, relay URL, timeouts) instead of inline prompts.
@@ -172,7 +185,10 @@ embeds, ShimBundle::default()) so scripts are byte-compatible with the M3 wasm r
 - Semantics to remember: `pm.response.code` is the NUMERIC status, `pm.response.status`
   is the reason TEXT; `pm.expect` is a lightweight chain, full chai lives at global
   `chai.expect`; `pm.test` records one check, thrown errors become `<name> (error)`
-  failed checks; variable stores JSON-encode on set / parse on get.
+  failed checks; variable stores JSON-encode on set / parse on get. `pm.request.headers`
+  is a Postman-style HeaderList (`.get()` / `.add()` / `.upsert()` / `.all()` /
+  `.toObject()`), NOT a plain object — bracket access returns undefined and throws
+  inside kp.expect.
 - Security: this host is NOT a sandbox — it executes user-authored scripts in the user's
   own browser (documented in test-runner.ts). Real isolation arrives in M3 (QuickJS wasm).
 - M3 swap path: replace `createRealmWithHost` with wasm realm; bridges become Rust
@@ -223,3 +239,8 @@ Separate from the relay. Expected shape (decide when we get there):
 - LSP sometimes reports stale "Cannot find module" for fresh files — trust `vite build`.
 - Regex tokenizers with `exec` loops need zero-width match guards (`re.lastIndex++`) —
   a `(\\?$)`-style alternative once froze the app (infinite loop).
+- CodeMirror 6 editors: browser-use `fill` on the `.cm-content` textbox role works;
+  `execCommand('delete')` clears the DOM but does NOT commit to editor state — re-fill
+  with "" instead.
+- Relay SSRF guard blocks loopback/private by design — verify requests against public
+  APIs (e.g. jsonplaceholder.typicode.com), never against the local dev server.

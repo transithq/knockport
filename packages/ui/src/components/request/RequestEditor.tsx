@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { Send, Loader2, ChevronDown, MoreHorizontal, Copy, Code2, Plus, Trash2 } from "lucide-react";
+import { Send, Loader2, ChevronDown, MoreHorizontal, Code2 } from "lucide-react";
 import { clsx } from "clsx";
 import { useAppStore, type ActivePanel } from "../../store/app-store";
-import { HTTP_METHODS, type HttpMethod, type KeyValuePair, type BodyContent, type AuthConfig, type Assertion } from "@knockport/core";
-import { buildVariableMap, environmentVariableMap, resolveRequest } from "../../store/variables";
+import { HTTP_METHODS, type HttpMethod, type KeyValuePair, type BodyContent, type Assertion } from "@knockport/core";
+import { buildVariableMap, collectionVariablesMap, environmentVariableMap, findCollectionOfRequest, resolveRequest } from "../../store/variables";
 import { CodeEditor } from "../common/CodeEditor";
+import { AuthEditor } from "../common/AuthEditor";
+import { AssertionsEditor } from "../common/AssertionsEditor";
 
 const methodColor: Record<string, string> = {
   GET: "var(--kp-method-get)",
@@ -248,62 +250,7 @@ function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyC
 }
 
 // ── Auth Editor ──────────────────────────────────────────────────────────────
-function AuthEditor({ auth, onChange }: { auth: AuthConfig; onChange: (a: AuthConfig) => void }) {
-  const types: AuthConfig["type"][] = ["none", "inherit", "bearer", "basic", "apiKey", "oauth2"];
-  const label = (t: string) => (t === "apiKey" ? "API Key" : t.charAt(0).toUpperCase() + t.slice(1));
-
-  return (
-    <div className="kp-body-editor">
-      <div className="kp-seg-row">
-        {types.map((t) => (
-          <button
-            key={t}
-            type="button"
-            className={clsx("kp-seg", auth.type === t && "active")}
-            onClick={() => onChange({ type: t })}
-          >
-            {label(t)}
-          </button>
-        ))}
-      </div>
-
-      {auth.type === "bearer" && (
-        <div className="kp-field">
-          <label>Token</label>
-          <input
-            type="text"
-            className="kp-mono"
-            value={auth.bearer?.token ?? ""}
-            placeholder="Enter bearer token"
-            onChange={(e) => onChange({ ...auth, bearer: { token: e.target.value } })}
-          />
-        </div>
-      )}
-      {auth.type === "basic" && (
-        <div className="kp-field-grid">
-          <div className="kp-field">
-            <label>Username</label>
-            <input
-              type="text"
-              value={auth.basic?.username ?? ""}
-              onChange={(e) => onChange({ ...auth, basic: { username: e.target.value, password: auth.basic?.password ?? "" } })}
-            />
-          </div>
-          <div className="kp-field">
-            <label>Password</label>
-            <input
-              type="password"
-              value={auth.basic?.password ?? ""}
-              onChange={(e) => onChange({ ...auth, basic: { username: auth.basic?.username ?? "", password: e.target.value } })}
-            />
-          </div>
-        </div>
-      )}
-      {auth.type === "none" && <p className="kp-hint">No authentication</p>}
-      {auth.type === "inherit" && <p className="kp-hint">Inherit from parent collection</p>}
-    </div>
-  );
-}
+// Moved to ../common/AuthEditor (shared with the collection Authorization subtab).
 
 // ── Script Editor ────────────────────────────────────────────────────────────
 function ScriptEditor({ tabId }: { tabId: string }) {
@@ -346,37 +293,7 @@ function TestsPanel({ tabId }: { tabId: string }) {
   return (
     <div className="kp-hint-block">
       <p>Quick assertions evaluated against <code className="kp-mono kp-accent-text">response</code> — must return <code className="kp-mono kp-accent-text">true</code> to pass:</p>
-      <div className="kp-tests-editor">
-        {assertions.map((a, i) => (
-          <div className="kp-test-edit-row" key={i}>
-            <input
-              className="kp-mono"
-              value={a.expression}
-              placeholder="response.status === 200"
-              onChange={(e) => {
-                const next = [...assertions];
-                next[i] = { ...next[i], expression: e.target.value };
-                setAssertions(next);
-              }}
-            />
-            <input
-              value={a.description ?? ""}
-              placeholder="description (optional)"
-              onChange={(e) => {
-                const next = [...assertions];
-                next[i] = { ...next[i], description: e.target.value || undefined };
-                setAssertions(next);
-              }}
-            />
-            <button type="button" className="kp-icon-btn" title="Remove" onClick={() => setAssertions(assertions.filter((_, j) => j !== i))}>
-              <Trash2 size={13} />
-            </button>
-          </div>
-        ))}
-        <button type="button" className="kp-lang-btn" onClick={() => setAssertions([...assertions, { expression: "" }])}>
-          <Plus size={12} /> Add assertion
-        </button>
-      </div>
+      <AssertionsEditor assertions={assertions} onChange={setAssertions} />
       <p>For full control, write test scripts in the <strong>Scripts</strong> tab — <code className="kp-mono kp-accent-text">kp.*</code>, <code className="kp-mono kp-accent-text">pm.*</code> and <code className="kp-mono kp-accent-text">bru.*</code> are all supported:</p>
       <pre className="kp-code-block kp-mono">{`kp.test("Status is 200", () => {
   kp.response.to.have.status(200);
@@ -450,27 +367,39 @@ async function handleSend(tabId: string) {
   store.setLoading(tabId, true);
   try {
     const { getTransport } = await import("@knockport/transport");
+    const collection = findCollectionOfRequest(store.collections, request.id);
     let vars = buildVariableMap(store);
-    if (request.scripts?.pre?.trim()) {
+    if (collection?.scripts?.pre?.trim() || request.scripts?.pre?.trim()) {
       const { runPreScript } = await import("@knockport/engine");
-      vars = runPreScript(request.scripts.pre, vars, {
+      const opts = {
         environment: environmentVariableMap(store),
+        collectionVariables: collectionVariablesMap(store),
         request,
-      }).variables;
+      };
+      if (collection?.scripts?.pre?.trim()) {
+        vars = runPreScript(collection.scripts.pre, vars, opts).variables;
+      }
+      if (request.scripts?.pre?.trim()) {
+        vars = runPreScript(request.scripts.pre, vars, opts).variables;
+      }
     }
-    const resolved = resolveRequest(request, vars);
+    const resolved = resolveRequest(request, vars, collection);
     const transport = getTransport({ useRelay: store.useRelay, relayUrl: store.relayUrl });
     const response = await transport.execute(resolved);
     store.setResponse(tabId, response);
 
     // Run test scripts + assertions (interim TS runner; wasm engine in M3)
-    const hasTests = Boolean(request.scripts?.test?.trim() || request.assertions?.length);
+    // Collection-level scripts/assertions run before the request's own.
+    const testScript = [collection?.scripts?.test, request.scripts?.test].filter((s) => s?.trim()).join("\n");
+    const assertions = [...(collection?.assertions ?? []), ...(request.assertions ?? [])];
+    const hasTests = Boolean(testScript.trim() || assertions.length);
     if (hasTests) {
       const { runTests } = await import("@knockport/engine");
       const summary = await runTests(response, {
-        script: request.scripts?.test,
-        assertions: request.assertions,
+        script: testScript || undefined,
+        assertions,
         environment: environmentVariableMap(store),
+        collectionVariables: collectionVariablesMap(store),
         request: resolved,
       });
       store.setTestResults(tabId, summary);

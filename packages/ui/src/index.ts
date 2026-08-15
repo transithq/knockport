@@ -7,7 +7,7 @@ export { ResponseSummary } from "./components/response/ResponseSummary";
 export { CommandPalette } from "./components/command/CommandPalette";
 export { CodegenModal, ImportModal } from "./components/modals/Modals";
 export { EnvironmentEditor } from "./components/environments/EnvironmentEditor";
-export { RunnerModal } from "./components/runner/RunnerModal";
+export { RunnerTab } from "./components/runner/RunnerTab";
 export { WebSocketModal } from "./components/websocket/WebSocketModal";
 
 // ── Primitives ───────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plug, X, Send, Loader2 } from "lucide-react";
+import { Plug, X, Send } from "lucide-react";
 import { useAppStore } from "../../store/app-store";
 
 interface WsMessage {

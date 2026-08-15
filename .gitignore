@@ -43,6 +43,10 @@ apps/desktop/src-tauri/target/
 # temp screenshots
 ss*.png
 knockport_initial_*.png
+headers.png
+
+# local reference checkouts (bruno/hoppscotch/tropel inputs)
+.staging/
 
 # toolchain installers
 vs_buildtools.exe

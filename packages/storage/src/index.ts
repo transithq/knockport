@@ -1,10 +1,4 @@
 import Dexie, { type Table } from "dexie";
-import type {
-  Collection,
-  Environment,
-  HistoryEntry,
-  Request,
-} from "@knockport/core";
 
 // ── Dexie Database ───────────────────────────────────────────────────────────
 export class KnockportDB extends Dexie {
@@ -255,11 +249,17 @@ export class FileSystemAdapter {
   private dirHandle: FileSystemDirectoryHandle | undefined;
 
   async openDirectory(): Promise<boolean> {
-    if (typeof window === "undefined" || !window.showDirectoryPicker) {
+    // showDirectoryPicker is not yet in lib.dom — cast locally
+    const picker = window as Window & {
+      showDirectoryPicker?: (options?: {
+        mode?: "read" | "readwrite";
+      }) => Promise<FileSystemDirectoryHandle>;
+    };
+    if (typeof window === "undefined" || !picker.showDirectoryPicker) {
       return false;
     }
     try {
-      this.dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+      this.dirHandle = await picker.showDirectoryPicker({ mode: "readwrite" });
       return true;
     } catch {
       return false;
@@ -311,7 +311,10 @@ export class FileSystemAdapter {
         }
       }
       const entries: string[] = [];
-      for await (const [name, handle] of dir.entries()) {
+      const iter = (dir as unknown as {
+        entries(): AsyncIterableIterator<[string, FileSystemHandle]>;
+      }).entries();
+      for await (const [name, handle] of iter) {
         if (handle.kind === "file" && (name.endsWith(".yaml") || name.endsWith(".yml"))) {
           entries.push(name);
         }

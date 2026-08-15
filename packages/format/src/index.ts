@@ -17,7 +17,7 @@ import type {
 // 2. Ordering lives in folder.yaml as an order: [...] list
 // 3. Secrets are references, never values
 
-const DOC_OPTS: DocumentOptions = { strict: false };
+const DOC_OPTS: DocumentOptions = {};
 const STR_OPTS: ToStringOptions = {
   lineWidth: 0,
   minContentWidth: 0,
@@ -147,7 +147,7 @@ function requestToYamlDoc(r: Request): Record<string, any> {
   };
 }
 
-function serializePairs(pairs: KeyValuePair[]): Record<string, string>[] | undefined {
+function serializePairs(pairs: KeyValuePair[]): Record<string, any>[] | undefined {
   if (!pairs.length) return undefined;
   return pairs.map((p) => ({
     key: p.key,
@@ -174,7 +174,11 @@ function serializeBody(body: BodyContent): Record<string, any> | undefined {
 
 function serializeAuth(auth?: AuthConfig): Record<string, any> | undefined {
   if (!auth || auth.type === "none" || auth.type === "inherit") return undefined;
-  return { type: auth.type, ...auth[auth.type as keyof AuthConfig] };
+  const details = (auth as unknown as Record<string, unknown>)[auth.type];
+  return {
+    type: auth.type,
+    ...(details && typeof details === "object" ? details : {}),
+  };
 }
 
 function serializeVariable(v: Variable): Record<string, any> {

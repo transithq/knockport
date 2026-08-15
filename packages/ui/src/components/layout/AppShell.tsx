@@ -6,6 +6,8 @@ import {
   ChevronDown,
   X,
   Boxes,
+  Braces,
+  Play,
 } from "lucide-react";
 import { useAppStore } from "../../store/app-store";
 import { Sidebar } from "./Sidebar";
@@ -14,9 +16,10 @@ import { ResponseBody } from "../response/ResponseBody";
 import { ResponseSummary } from "../response/ResponseSummary";
 import { CommandPalette } from "../command/CommandPalette";
 import { CodegenModal, ImportModal } from "../modals/Modals";
-import { RunnerModal } from "../runner/RunnerModal";
+import { RunnerTab } from "../runner/RunnerTab";
 import { WebSocketModal } from "../websocket/WebSocketModal";
 import { EnvironmentEditor } from "../environments/EnvironmentEditor";
+import { CollectionEditor } from "../collections/CollectionEditor";
 import { createId } from "@knockport/core";
 import type { Request } from "@knockport/core";
 
@@ -69,6 +72,10 @@ function TabBar() {
             >
               {tab.kind === "environment" ? (
                 <Boxes size={12} className="kp-env-tab-icon" />
+              ) : tab.kind === "collection" ? (
+                <Braces size={12} className="kp-env-tab-icon" />
+              ) : tab.kind === "runner" ? (
+                <Play size={12} className="kp-env-tab-icon" />
               ) : (
                 <span className="kp-method-tag" style={{ color: methodColor[req?.method ?? "GET"] }}>
                   {req?.method}
@@ -105,7 +112,6 @@ function EnvironmentSelector() {
   const environments = useAppStore((s) => s.environments);
   const activeEnvironmentId = useAppStore((s) => s.activeEnvironmentId);
   const setActiveEnvironment = useAppStore((s) => s.setActiveEnvironment);
-  const active = environments.find((e) => e.id === activeEnvironmentId);
 
   return (
     <div className="kp-env-selector">
@@ -189,7 +195,6 @@ export function AppShell() {
         const s = useAppStore.getState();
         if (s.codegenOpen) s.setCodegenOpen(false);
         else if (s.importOpen) s.setImportOpen(false);
-        else if (s.runnerOpen) s.setRunnerOpen(false);
         else if (s.websocketOpen) s.setWebsocketOpen(false);
       }
     };
@@ -214,6 +219,10 @@ export function AppShell() {
         {activeTab ? (
           activeTab.kind === "environment" ? (
             <EnvironmentEditor envId={activeTab.envId ?? ""} />
+          ) : activeTab.kind === "collection" ? (
+            <CollectionEditor collectionId={activeTab.collectionId ?? ""} />
+          ) : activeTab.kind === "runner" ? (
+            <RunnerTab collectionId={activeTab.collectionId ?? ""} />
           ) : (
             <div className="kp-workspace-grid">
               <div className="kp-col-left">
@@ -232,7 +241,6 @@ export function AppShell() {
       <CommandPalette />
       <CodegenModal />
       <ImportModal />
-      <RunnerModal />
       <WebSocketModal />
     </div>
   );

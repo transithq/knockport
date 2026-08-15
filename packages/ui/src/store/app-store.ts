@@ -25,13 +25,60 @@ export interface RequestTab {
   requestId: string;
   name: string;
   isDirty: boolean;
-  kind?: "request" | "environment";
+  kind?: "request" | "environment" | "collection" | "runner";
   envId?: string;
+  collectionId?: string;
 }
 
 export type ActivePanel = "params" | "headers" | "auth" | "body" | "scripts" | "tests" | "settings";
 export type ResponsePanel = "pretty" | "raw" | "preview" | "headers" | "timings" | "cookies";
 export type SidebarTab = "collections" | "environments" | "history";
+
+// ── Collection runner history (in-memory) ───────────────────────────────────
+export interface CollectionRunEntry {
+  name: string;
+  method: string;
+  status: number;
+  time: number;
+  ok: boolean;
+  testsPassed?: number;
+  testsTotal?: number;
+  error?: string;
+  /** Resolved URL that was executed. */
+  url?: string;
+  /** Full response for inspection in the runner tab. */
+  response?: Response | null;
+  testSummary?: TestRunSummary | null;
+}
+
+export interface CollectionRun {
+  id: string;
+  collectionId: string;
+  startedAt: string;
+  iterations: number;
+  results: CollectionRunEntry[];
+}
+
+// ── Runner tab state (kept in store so the tab survives unmount) ────────────
+export interface RunnerTabState {
+  phase: "config" | "running" | "done";
+  iterations: number;
+  delay: number;
+  excluded: string[];
+  results: CollectionRunEntry[];
+  selectedIdx: number | null;
+  filter: "all" | "passed" | "failed";
+}
+
+export const DEFAULT_RUNNER_STATE: RunnerTabState = {
+  phase: "config",
+  iterations: 1,
+  delay: 0,
+  excluded: [],
+  results: [],
+  selectedIdx: null,
+  filter: "all",
+};
 
 // ── Folder tree helpers ─────────────────────────────────────────────────────
 function makeFolder(name: string): Folder {
@@ -64,6 +111,20 @@ function removeRequest(folders: Folder[], requestId: string): Folder[] {
     ...f,
     requests: f.requests.filter((r) => r.id !== requestId),
     folders: removeRequest(f.folders, requestId),
+  }));
+}
+
+function containsRequest(folders: Folder[], requestId: string): boolean {
+  return folders.some(
+    (f) => f.requests.some((r) => r.id === requestId) || containsRequest(f.folders, requestId),
+  );
+}
+
+function replaceRequestInFolders(folders: Folder[], requestId: string, req: Request): Folder[] {
+  return folders.map((f) => ({
+    ...f,
+    requests: f.requests.map((r) => (r.id === requestId ? req : r)),
+    folders: replaceRequestInFolders(f.folders, requestId, req),
   }));
 }
 
@@ -104,13 +165,18 @@ export interface AppStore {
   // History
   history: HistoryEntry[];
 
+  // Collection runner history (session-only)
+  collectionRuns: CollectionRun[];
+
+  // Runner tab state (keyed by collection ID, session-only)
+  runnerStates: Record<string, RunnerTabState>;
+
   // UI
   activeRequestPanel: ActivePanel;
   activeResponsePanel: ResponsePanel;
   commandPaletteOpen: boolean;
   codegenOpen: boolean;
   importOpen: boolean;
-  runnerOpen: boolean;
   websocketOpen: boolean;
   theme: "dark" | "light";
 
@@ -145,6 +211,8 @@ export interface AppStore {
   // Actions — Tabs
   openTab: (request: Request) => void;
   openEnvironmentTab: (envId: string) => void;
+  openCollectionTab: (collectionId: string) => void;
+  openRunnerTab: (collectionId: string) => void;
   closeTab: (tabId: string) => void;
   setActiveTab: (tabId: string | null) => void;
 
@@ -166,6 +234,9 @@ export interface AppStore {
   addHistoryEntry: (entry: HistoryEntry) => void;
   clearHistory: () => void;
   loadHistory: () => Promise<void>;
+  recordCollectionRun: (run: CollectionRun) => void;
+  setRunnerState: (collectionId: string, patch: Partial<RunnerTabState>) => void;
+  clearRunnerState: (collectionId: string) => void;
 
   // Actions — UI
   setActiveRequestPanel: (panel: ActivePanel) => void;
@@ -173,7 +244,6 @@ export interface AppStore {
   setCommandPaletteOpen: (open: boolean) => void;
   setCodegenOpen: (open: boolean) => void;
   setImportOpen: (open: boolean) => void;
-  setRunnerOpen: (open: boolean) => void;
   setWebsocketOpen: (open: boolean) => void;
   toggleTheme: () => void;
   setUseRelay: (on: boolean) => void;
@@ -202,12 +272,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   history: [],
 
+  collectionRuns: [],
+  runnerStates: {},
+
   activeRequestPanel: "params",
   activeResponsePanel: "pretty",
   commandPaletteOpen: false,
   codegenOpen: false,
   importOpen: false,
-  runnerOpen: false,
   websocketOpen: false,
   theme: "dark",
 
@@ -232,15 +304,32 @@ export const useAppStore = create<AppStore>((set, get) => ({
       collections: s.collections.map((c) =>
         c.id === id ? { ...c, ...changes } : c,
       ),
+      // Keep any open collection tab's title in sync with the name
+      tabs: changes.name
+        ? s.tabs.map((t) =>
+            t.kind === "collection" && t.collectionId === id
+              ? { ...t, name: changes.name as string }
+              : t,
+          )
+        : s.tabs,
     }));
     const c = get().collections.find((x) => x.id === id);
     if (c) persistCollection(c);
   },
   deleteCollection: (id) => {
-    set((s) => ({
-      collections: s.collections.filter((c) => c.id !== id),
-      activeCollectionId: s.activeCollectionId === id ? null : s.activeCollectionId,
-    }));
+    set((s) => {
+      // Close any variables tab pointing at the deleted collection
+      const doomed = s.tabs.filter((t) => t.kind === "collection" && t.collectionId === id).map((t) => t.id);
+      const tabs = doomed.length > 0 ? s.tabs.filter((t) => !doomed.includes(t.id)) : s.tabs;
+      let activeTabId = s.activeTabId;
+      if (activeTabId && doomed.includes(activeTabId)) activeTabId = tabs[0]?.id ?? null;
+      return {
+        collections: s.collections.filter((c) => c.id !== id),
+        activeCollectionId: s.activeCollectionId === id ? null : s.activeCollectionId,
+        tabs,
+        activeTabId,
+      };
+    });
     dbCollections.delete(id).catch(() => {});
   },
 
@@ -416,7 +505,31 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }));
   },
 
-  closeTab: (tabId) =>
+  closeTab: (tabId) => {
+    const prev = get();
+    const tab = prev.tabs.find((t) => t.id === tabId);
+    // Flush unsaved request edits back into the collection tree before closing
+    if (tab && (!tab.kind || tab.kind === "request") && tab.isDirty) {
+      const edited = prev.requests[tabId];
+      if (edited) {
+        const col = prev.collections.find(
+          (c) =>
+            c.requests.some((r) => r.id === tab.requestId) ||
+            containsRequest(c.folders, tab.requestId),
+        );
+        if (col) {
+          const updated: Collection = {
+            ...col,
+            requests: col.requests.map((r) => (r.id === edited.id ? edited : r)),
+            folders: replaceRequestInFolders(col.folders, edited.id, edited),
+          };
+          set((st) => ({
+            collections: st.collections.map((c) => (c.id === col.id ? updated : c)),
+          }));
+          persistCollection(updated);
+        }
+      }
+    }
     set((s) => {
       const idx = s.tabs.findIndex((t) => t.id === tabId);
       const newTabs = s.tabs.filter((t) => t.id !== tabId);
@@ -432,6 +545,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       delete newResponses[tabId];
       delete newTestResults[tabId];
       delete newLoading[tabId];
+      // Drop runner-tab session state when the runner tab closes
+      let runnerStates = s.runnerStates;
+      if (tab?.kind === "runner" && tab.collectionId && runnerStates[tab.collectionId]) {
+        runnerStates = { ...runnerStates };
+        delete runnerStates[tab.collectionId];
+      }
       return {
         tabs: newTabs,
         activeTabId: newActive,
@@ -439,8 +558,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
         responses: newResponses,
         testResults: newTestResults,
         isLoading: newLoading,
+        runnerStates,
       };
-    }),
+    });
+  },
 
   setActiveTab: (tabId) => set({ activeTabId: tabId }),
 
@@ -458,6 +579,58 @@ export const useAppStore = create<AppStore>((set, get) => ({
       tabs: [
         ...st.tabs,
         { id: tabId, requestId: `env:${envId}`, envId, kind: "environment", name: env.name, isDirty: false },
+      ],
+      activeTabId: tabId,
+    }));
+  },
+
+  openCollectionTab: (collectionId) => {
+    const s = get();
+    const col = s.collections.find((c) => c.id === collectionId);
+    if (!col) return;
+    const existing = s.tabs.find((t) => t.kind === "collection" && t.collectionId === collectionId);
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return;
+    }
+    const tabId = createId("tab");
+    set((st) => ({
+      tabs: [
+        ...st.tabs,
+        {
+          id: tabId,
+          requestId: `col:${collectionId}`,
+          collectionId,
+          kind: "collection",
+          name: col.name,
+          isDirty: false,
+        },
+      ],
+      activeTabId: tabId,
+    }));
+  },
+
+  openRunnerTab: (collectionId) => {
+    const s = get();
+    const col = s.collections.find((c) => c.id === collectionId);
+    if (!col) return;
+    const existing = s.tabs.find((t) => t.kind === "runner" && t.collectionId === collectionId);
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return;
+    }
+    const tabId = createId("tab");
+    set((st) => ({
+      tabs: [
+        ...st.tabs,
+        {
+          id: tabId,
+          requestId: `run:${collectionId}`,
+          collectionId,
+          kind: "runner",
+          name: `▶ ${col.name}`,
+          isDirty: false,
+        },
       ],
       activeTabId: tabId,
     }));
@@ -565,13 +738,34 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
+    recordCollectionRun: (run) => {
+    set((s) => ({ collectionRuns: [run, ...s.collectionRuns].slice(0, 20) }));
+  },
+
+  setRunnerState: (collectionId, patch) =>
+    set((s) => ({
+      runnerStates: {
+        ...s.runnerStates,
+        [collectionId]: {
+          ...(s.runnerStates[collectionId] ?? DEFAULT_RUNNER_STATE),
+          ...patch,
+        },
+      },
+    })),
+
+  clearRunnerState: (collectionId) =>
+    set((s) => {
+      const next = { ...s.runnerStates };
+      delete next[collectionId];
+      return { runnerStates: next };
+    }),
+
   // ── UI Actions ───────────────────────────────────────────────────────────
   setActiveRequestPanel: (panel) => set({ activeRequestPanel: panel }),
   setActiveResponsePanel: (panel) => set({ activeResponsePanel: panel }),
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   setCodegenOpen: (open) => set({ codegenOpen: open }),
   setImportOpen: (open) => set({ importOpen: open }),
-  setRunnerOpen: (open) => set({ runnerOpen: open }),
   setWebsocketOpen: (open) => set({ websocketOpen: open }),
   toggleTheme: () =>
     set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
