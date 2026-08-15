@@ -143,6 +143,8 @@ export interface RequestMetadata {
 export interface Response {
   id: string;
   requestId: string;
+  /** Fully-resolved URL that was fetched (after variable resolution). */
+  url?: string;
   status: number;
   statusText: string;
   headers: Record<string, string>;
@@ -170,6 +172,7 @@ export interface ResponseCookie {
   domain?: string;
   path?: string;
   expires?: string;
+  maxAge?: number;
   httpOnly?: boolean;
   secure?: boolean;
   sameSite?: "Strict" | "Lax" | "None";

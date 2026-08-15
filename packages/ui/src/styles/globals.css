@@ -697,6 +697,14 @@ body {
 .kp-kv-key { font-size: 12px; line-height: 1.6; color: var(--kp-text-secondary); flex-shrink: 0; white-space: nowrap; }
 .kp-kv-val { font-size: 12px; line-height: 1.6; color: var(--kp-text-primary); text-align: right; min-width: 0; overflow-wrap: anywhere; }
 
+.kp-cookies-list { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; }
+.kp-cookie-card { border: 1px solid var(--kp-border-primary); border-radius: var(--kp-radius-sm); padding: 8px 12px; }
+.kp-cookie-card:hover { background: var(--kp-bg-hover); }
+.kp-cookie-main { display: flex; align-items: baseline; gap: 12px; }
+.kp-cookie-val { font-size: 12px; color: var(--kp-text-primary); min-width: 0; overflow-wrap: anywhere; }
+.kp-cookie-attrs { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 6px; }
+.kp-cookie-attr { font-size: 10.5px; color: var(--kp-text-tertiary); background: var(--kp-bg-secondary); border: 1px solid var(--kp-border-primary); border-radius: var(--kp-radius-sm); padding: 1px 7px; font-family: var(--kp-font-mono, ui-monospace, monospace); }
+
 /* ── Response summary (right column) ────────────────────────────────────── */
 .kp-response-summary { flex: 1; min-height: 0; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
 .kp-summary-statusbar { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--kp-text-secondary); }

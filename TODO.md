@@ -137,7 +137,15 @@ Follow-ups (not blocking):
 - [ ] Disk-backed collections via FileSystemAdapter (open folder → read/write YAML per §5a of the arch doc).
 - [x] Settings modal (theme, relay URL, timeouts) instead of inline prompts. DONE: `components/settings/SettingsModal.tsx` (opened from topbar gear + sidebar Settings nav, Escape closes); theme dark/light + relay toggle/URL + global `timeoutMs` all persisted to localStorage (`kp-theme`, `kp-use-relay`, `kp-relay-url`, `kp-timeout-ms`). Timeout is enforced in `handleSend` + RunnerTab via an AbortSignal passed through `TransportOptions.signal`; AbortError renders "Request timed out after N ms". The per-request Settings tab now points to the global modal.
 - [x] Keyboard shortcuts: Ctrl+Enter send, Ctrl+S save-to-collection. DONE: global keydown in AppShell (skipped while any modal/palette is open, request tabs only); Ctrl+S uses new store action `saveRequestTab` (flushes dirty tab into owning collection + persistCollection without closing); `handleSend` in RequestEditor.tsx is exported for reuse.
-- [ ] Response preview tab (HTML render in sandboxed iframe), cookies tab data.
+- [x] Response preview tab (HTML render in sandboxed iframe), cookies tab data. DONE: Preview tab in
+      ResponseBody now renders HTML in a fully sandboxed iframe (`sandbox=""`), injects `<base>`
+      from the resolved request URL (`Response.url`) so relative links resolve, and shows a notice
+      for non-HTML bodies. Cookies tab lists every Set-Cookie with full attributes
+      (Domain/Path/Expires/Max-Age/SameSite/HttpOnly/Secure) and a tab count badge. Transport fixes:
+      RelayTransport preserved multiple Set-Cookie header pairs (previously flattened into one →
+      cookies lost); cookie parser no longer splits on commas (broke `Expires` dates) and splits
+      attribute pairs on the first `=` only; DirectTransport uses `Headers.getSetCookie()`.
+      8 vitest cases in packages/transport + a relay-live E2E guard (skips when relay offline).
 
 ## 5a · Importers — shared via Tropel input adapters (DECIDED)
 

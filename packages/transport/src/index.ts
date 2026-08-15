@@ -123,42 +123,65 @@ function buildBody(request: Request): BodyInit | undefined {
   }
 }
 
-function parseCookies(headers: Headers): import("@knockport/core").ResponseCookie[] {
-  const cookies: import("@knockport/core").ResponseCookie[] = [];
-  const setCookie = headers.get("set-cookie");
-  if (!setCookie) return cookies;
+// ── Set-Cookie parsing ───────────────────────────────────────────────────────
+/** Parse a single Set-Cookie header value into a ResponseCookie.
+ * Attribute values may contain "=" (e.g. Expires dates), so split attribute
+ * pairs on the FIRST "=" only and treat value-less flags (HttpOnly/Secure)
+ * separately.
+ */
+export function parseSetCookie(header: string): import("@knockport/core").ResponseCookie | null {
+  const parts = header.split(";").map((s) => s.trim());
+  const nameValue = parts.shift();
+  if (!nameValue) return null;
 
-  const parts = setCookie.split(",").map((s) => s.trim());
-  for (const part of parts) {
-    const [nameValue, ...attrs] = part.split(";").map((s) => s.trim());
-    const eqIdx = nameValue.indexOf("=");
-    if (eqIdx === -1) continue;
+  const eqIdx = nameValue.indexOf("=");
+  if (eqIdx <= 0) return null;
 
-    const cookie: import("@knockport/core").ResponseCookie = {
-      name: nameValue.slice(0, eqIdx),
-      value: nameValue.slice(eqIdx + 1),
-    };
+  const cookie: import("@knockport/core").ResponseCookie = {
+    name: nameValue.slice(0, eqIdx),
+    value: nameValue.slice(eqIdx + 1),
+  };
 
-    for (const attr of attrs) {
-      const [key, val] = attr.split("=").map((s) => s.trim());
-      const lk = key.toLowerCase();
-      if (lk === "domain") cookie.domain = val;
-      else if (lk === "path") cookie.path = val;
-      else if (lk === "expires") cookie.expires = val;
-      else if (lk === "httponly") cookie.httpOnly = true;
-      else if (lk === "secure") cookie.secure = true;
-      else if (lk === "samesite")
+  for (const attr of parts) {
+    if (!attr) continue;
+    const sep = attr.indexOf("=");
+    const key = (sep === -1 ? attr : attr.slice(0, sep)).trim();
+    const val = sep === -1 ? "" : attr.slice(sep + 1).trim();
+    switch (key.toLowerCase()) {
+      case "domain":
+        cookie.domain = val;
+        break;
+      case "path":
+        cookie.path = val;
+        break;
+      case "expires":
+        cookie.expires = val;
+        break;
+      case "max-age":
+        cookie.maxAge = Number(val);
+        break;
+      case "httponly":
+        cookie.httpOnly = true;
+        break;
+      case "secure":
+        cookie.secure = true;
+        break;
+      case "samesite":
         cookie.sameSite = val as "Strict" | "Lax" | "None";
+        break;
     }
-    cookies.push(cookie);
   }
-  return cookies;
+  return cookie;
 }
 
-function parseCookieString(setCookie: string | undefined): import("@knockport/core").ResponseCookie[] {
-  const headers = new Headers();
-  if (setCookie) headers.set("set-cookie", setCookie);
-  return parseCookies(headers);
+/** Parse a list of raw Set-Cookie header values (one cookie per entry). */
+export function parseSetCookies(values: string[]): import("@knockport/core").ResponseCookie[] {
+  const cookies: import("@knockport/core").ResponseCookie[] = [];
+  for (const v of values) {
+    const c = parseSetCookie(v);
+    if (c) cookies.push(c);
+  }
+  return cookies;
 }
 
 // ── Relay Transport (apps/relay Rust service) ────────────────────────────────
@@ -231,7 +254,13 @@ export class RelayTransport implements Transport {
       const endTime = performance.now();
 
       const responseHeaders: Record<string, string> = {};
-      for (const h of relay.headers) responseHeaders[h.key.toLowerCase()] = h.value;
+      const setCookieValues: string[] = [];
+      for (const h of relay.headers) {
+        const key = h.key.toLowerCase();
+        if (key === "set-cookie") setCookieValues.push(h.value);
+        else responseHeaders[key] = h.value;
+      }
+      if (setCookieValues.length > 0) responseHeaders["set-cookie"] = setCookieValues.join(", ");
 
       const decodedBody =
         relay.encoding === "base64" ? decodeBase64ToBinaryText(relay.body) : relay.body;
@@ -245,6 +274,7 @@ export class RelayTransport implements Transport {
       return {
         id: crypto.randomUUID(),
         requestId: request.id,
+        url,
         status: relay.status,
         statusText: relay.statusText,
         headers: responseHeaders,
@@ -252,7 +282,7 @@ export class RelayTransport implements Transport {
         bodySize: new TextEncoder().encode(decodedBody).length,
         contentType: responseHeaders["content-type"],
         timings,
-        cookies: parseCookieString(responseHeaders["set-cookie"]),
+        cookies: parseSetCookies(setCookieValues),
         timestamp: new Date().toISOString(),
       };
     } finally {
@@ -360,9 +390,18 @@ export class DirectTransport implements Transport {
 
       const contentType = fetchResponse.headers.get("content-type") ?? undefined;
 
+      const cookies = parseSetCookies(
+        typeof fetchResponse.headers.getSetCookie === "function"
+          ? fetchResponse.headers.getSetCookie()
+          : fetchResponse.headers.get("set-cookie")
+            ? [fetchResponse.headers.get("set-cookie") as string]
+            : [],
+      );
+
       return {
         id: crypto.randomUUID(),
         requestId: request.id,
+        url,
         status: fetchResponse.status,
         statusText: fetchResponse.statusText,
         headers: responseHeaders,
@@ -370,7 +409,7 @@ export class DirectTransport implements Transport {
         bodySize: new TextEncoder().encode(responseBody).length,
         contentType,
         timings,
-        cookies: parseCookies(fetchResponse.headers),
+        cookies,
         timestamp: new Date().toISOString(),
       };
     } finally {
