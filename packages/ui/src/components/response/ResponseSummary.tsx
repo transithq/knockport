@@ -14,8 +14,14 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024).toFixed(2)} KB`;
 }
 
+/** Milliseconds rounded to at most 3 decimal places (trailing zeros dropped). */
+function formatMs(ms: number): string {
+  if (!Number.isFinite(ms)) return "0";
+  return String(Math.round(ms * 1000) / 1000);
+}
+
 // ── Sparkline chart (SVG) ────────────────────────────────────────────────────
-function Sparkline({ value }: { value: number }) {
+function Sparkline({ value }: { value: string }) {
   const points = useMemo(() => {
     // Deterministic pseudo-random series ending near the current value
     const n = 48;
@@ -40,7 +46,7 @@ function Sparkline({ value }: { value: number }) {
 
   return (
     <div className="kp-chart">
-      <div className="kp-chart-value">{value} ms</div>
+        <div className="kp-chart-value">{value} ms</div>
       <div className="kp-chart-body">
         <div className="kp-chart-yaxis">
           <span>500ms</span>
@@ -83,7 +89,7 @@ export function ResponseSummary({ tabId }: { tabId: string }) {
           {response.status} {response.statusText}
         </span>
         <span className="kp-summary-dot">•</span>
-        <span>{response.timings.total} ms</span>
+        <span>{formatMs(response.timings.total)} ms</span>
         <span className="kp-summary-dot">•</span>
         <span>{formatSize(response.bodySize)}</span>
         <span className="kp-status-right">
@@ -96,7 +102,7 @@ export function ResponseSummary({ tabId }: { tabId: string }) {
       {/* Response time card */}
       <div className="kp-card">
         <div className="kp-card-title">Response Time</div>
-        <Sparkline value={response.timings.total} />
+        <Sparkline value={formatMs(response.timings.total)} />
       </div>
 
       {/* Headers card */}
