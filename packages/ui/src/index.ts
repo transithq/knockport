@@ -11,6 +11,7 @@ export { WebSocketModal } from "./components/websocket/WebSocketModal";
 
 // ── Primitives ───────────────────────────────────────────────────────────────
 export { Button, Input, Badge, Tabs, IconButton, EmptyState } from "./components/common/primitives";
+export { CodeEditor } from "./components/common/CodeEditor";
 
 // ── Store ───────────────────────────────────────────────────────────────────
 export { useAppStore, type AppStore, type RequestTab, type ActivePanel, type ResponsePanel, type SidebarTab } from "./store/app-store";

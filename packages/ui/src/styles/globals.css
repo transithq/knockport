@@ -331,6 +331,10 @@ body {
   background: var(--kp-bg-elevated);
   color: var(--kp-text-tertiary);
 }
+.kp-tree-actions { display: none; align-items: center; gap: 2px; }
+.kp-tree-collection:hover .kp-tree-actions { display: inline-flex; }
+.kp-tree-collection:hover .kp-count-badge { display: none; }
+.kp-icon-btn.kp-danger:hover { color: var(--kp-error); background: var(--kp-error-bg); }
 .kp-active-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--kp-accent); }
 .kp-empty-hint { padding: 12px; font-size: 12px; color: var(--kp-text-muted); text-align: center; }
 .kp-history-url { font-family: var(--kp-font-mono); font-size: 11px; }
@@ -690,3 +694,11 @@ body {
 .kp-ws-msg.out .kp-ws-dir { color: var(--kp-accent); }
 .kp-ws-msg.sys .kp-ws-dir { color: var(--kp-text-muted); }
 .kp-ws-text { color: var(--kp-text-secondary); word-break: break-all; }
+
+/* ── CodeMirror editor ────────────────────────────────────────────────────── */
+.kp-code-editor {
+  border: 1px solid var(--kp-border-primary);
+  border-radius: var(--kp-radius-md);
+  overflow: hidden;
+}
+.kp-code-editor .cm-editor { outline: none; }

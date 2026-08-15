@@ -14,6 +14,7 @@ import {
   Plus,
   MoreHorizontal,
   Moon,
+  Trash2,
   Aperture,
 } from "lucide-react";
 import type { Collection, Folder, Request } from "@knockport/core";
@@ -115,6 +116,17 @@ function countRequests(collection: Collection): number {
 
 function CollectionNode({ collection }: { collection: Collection }) {
   const [open, setOpen] = useState(true);
+  const updateCollection = useAppStore((s) => s.updateCollection);
+  const deleteCollection = useAppStore((s) => s.deleteCollection);
+
+  const rename = () => {
+    const name = window.prompt("Rename collection", collection.name);
+    if (name && name.trim()) updateCollection(collection.id, { name: name.trim() });
+  };
+  const remove = () => {
+    if (window.confirm(`Delete collection "${collection.name}"?`)) deleteCollection(collection.id);
+  };
+
   return (
     <div>
       <div className="kp-tree-item kp-tree-collection">
@@ -123,6 +135,10 @@ function CollectionNode({ collection }: { collection: Collection }) {
         </button>
         <span className="kp-truncate" style={{ flex: 1 }}>{collection.name}</span>
         <span className="kp-count-badge">{countRequests(collection)}</span>
+        <span className="kp-tree-actions">
+          <button type="button" className="kp-icon-btn" title="Rename" onClick={rename}><MoreHorizontal size={13} /></button>
+          <button type="button" className="kp-icon-btn kp-danger" title="Delete" onClick={remove}><Trash2 size={13} /></button>
+        </span>
       </div>
       {open && (
         <div>

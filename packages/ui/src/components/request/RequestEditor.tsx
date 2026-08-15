@@ -4,6 +4,7 @@ import { clsx } from "clsx";
 import { useAppStore, type ActivePanel } from "../../store/app-store";
 import { HTTP_METHODS, type HttpMethod, type KeyValuePair, type BodyContent, type AuthConfig } from "@knockport/core";
 import { buildVariableMap, resolveRequest } from "../../store/variables";
+import { CodeEditor } from "../common/CodeEditor";
 
 const methodColor: Record<string, string> = {
   GET: "var(--kp-method-get)",
@@ -229,12 +230,11 @@ function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyC
         ))}
       </div>
       {body.type !== "none" && (
-        <textarea
-          className="kp-code-input kp-mono"
+        <CodeEditor
           value={body.content ?? ""}
-          onChange={(e) => onChange({ ...body, content: e.target.value })}
-          placeholder={body.type === "json" ? '{\n  "key": "value"\n}' : "Enter request body..."}
-          spellCheck={false}
+          onChange={(content) => onChange({ ...body, content })}
+          language={body.type === "json" ? "json" : "text"}
+          height="200px"
         />
       )}
     </div>
@@ -318,14 +318,11 @@ function ScriptEditor({ tabId }: { tabId: string }) {
           Tests
         </button>
       </div>
-      <textarea
-        className="kp-code-input kp-mono"
+      <CodeEditor
         value={value}
-        spellCheck={false}
-        placeholder={which === "pre" ? "// Pre-request script\nkp.variables.set('key', 'value');" : "// Test script\nkp.test('Status 200', () => kp.response.to.have.status(200));"}
-        onChange={(e) =>
-          updateRequest(tabId, { scripts: { ...request.scripts, [which]: e.target.value } })
-        }
+        onChange={(v) => updateRequest(tabId, { scripts: { ...request.scripts, [which]: v } })}
+        language="javascript"
+        height="200px"
       />
     </div>
   );
