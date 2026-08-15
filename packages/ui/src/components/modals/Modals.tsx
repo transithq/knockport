@@ -1,9 +1,83 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Copy, X, Download } from "lucide-react";
 import { clsx } from "clsx";
 import { useAppStore } from "../../store/app-store";
 import { buildVariableMap, resolveRequest } from "../../store/variables";
 import { generateCode, importAuto, type CodegenTarget } from "@knockport/format";
+
+// ── Lightweight syntax highlighting for generated code ──────────────────────
+const JS_KW = new Set(["const", "let", "var", "await", "async", "function", "return", "import", "from", "export", "new", "if", "else", "for", "while", "try", "catch", "throw", "typeof"]);
+const PY_KW = new Set(["import", "from", "def", "return", "if", "elif", "else", "for", "while", "try", "except", "with", "as", "print", "True", "False", "None"]);
+
+function highlightLine(line: string, target: CodegenTarget): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let k = 0;
+  const push = (cls: string | null, text: string) =>
+    nodes.push(cls ? <span key={k++} className={cls}>{text}</span> : <span key={k++}>{text}</span>);
+
+  if (target === "curl") {
+    // flags in purple, quoted strings in blue
+    const re = /(--?[a-zA-Z-]+)|('(?:[^'\\]|\\.)*')/g;
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(line)) !== null) {
+      if (m.index === re.lastIndex) re.lastIndex++; // zero-width guard
+      if (m.index > last) push(null, line.slice(last, m.index));
+      if (m[1]) push("tok-flag", m[1]);
+      else if (m[2]) push("tok-str", m[2]);
+      last = re.lastIndex;
+    }
+    if (last < line.length) push(null, line.slice(last));
+    return nodes;
+  }
+
+  const kws = target === "javascript" ? JS_KW : PY_KW;
+  // Find comment start outside of any quoted string (avoids "https://" in URLs).
+  const marker = target === "javascript" ? "//" : "#";
+  let commentStart = -1;
+  for (let i = line.indexOf(marker); i !== -1; i = line.indexOf(marker, i + 1)) {
+    const before = line.slice(0, i);
+    const quotes = (before.match(/"/g)?.length ?? 0) + (before.match(/'/g)?.length ?? 0);
+    if (quotes % 2 === 0) {
+      commentStart = i;
+      break;
+    }
+  }
+  let codePart = line;
+  if (commentStart !== -1) {
+    codePart = line.slice(0, commentStart);
+  }
+
+  const re = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|\b(\d+(?:\.\d+)?)\b|([A-Za-z_][A-Za-z0-9_]*)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(codePart)) !== null) {
+    if (m.index === re.lastIndex) re.lastIndex++; // zero-width guard
+    if (m.index > last) push(null, codePart.slice(last, m.index));
+    if (m[1]) push("tok-str", m[1]);
+    else if (m[2]) push("tok-num", m[2]);
+    else if (m[3]) {
+      const word = m[3];
+      if (kws.has(word)) push("tok-kw", word);
+      else if (codePart[re.lastIndex] === "(") push("tok-fn", word);
+      else push(null, word);
+    }
+    last = re.lastIndex;
+  }
+  if (last < codePart.length) push(null, codePart.slice(last));
+  if (commentStart !== -1) push("tok-comment", line.slice(commentStart));
+  return nodes;
+}
+
+function CodeBlock({ code, target }: { code: string; target: CodegenTarget }) {
+  return (
+    <pre className="kp-code-block kp-mono kp-modal-code">
+      {code.split("\n").map((line, i) => (
+        <div key={i}>{highlightLine(line, target)}</div>
+      ))}
+    </pre>
+  );
+}
 
 // ── Codegen Modal ────────────────────────────────────────────────────────────
 export function CodegenModal() {
@@ -45,7 +119,7 @@ export function CodegenModal() {
             </button>
           ))}
         </div>
-        <pre className="kp-code-block kp-mono kp-modal-code">{code}</pre>
+        <CodeBlock code={code} target={target} />
         <div className="kp-modal-footer">
           <button type="button" className="kp-btn primary" onClick={copy}>
             <Copy size={14} /> {copied ? "Copied!" : "Copy"}

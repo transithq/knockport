@@ -178,6 +178,13 @@ export function AppShell() {
         e.preventDefault();
         closeTab(activeTabId);
       }
+      if (e.key === "Escape") {
+        const s = useAppStore.getState();
+        if (s.codegenOpen) s.setCodegenOpen(false);
+        else if (s.importOpen) s.setImportOpen(false);
+        else if (s.runnerOpen) s.setRunnerOpen(false);
+        else if (s.websocketOpen) s.setWebsocketOpen(false);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
