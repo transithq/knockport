@@ -136,7 +136,11 @@ Follow-ups (not blocking):
       the environments store. 10 vitest round-trip cases in packages/format.
 - [x] Collection variables editing UI — DONE: full-area tab (Braces button on collection row),
       `pm.collectionVariables.*` + `{{var}}` resolution wired into send/runner; env overrides collection.
-- [ ] Virtualized sidebar tree (perf, when collections get big).
+- [x] Virtualized sidebar tree (perf, when collections get big). DONE: `components/layout/CollectionTree.tsx`
+      flattens the forest depth-first (`tree-model.ts`, pure + tested) and renders it through
+      @tanstack/react-virtual (only the visible slice + 12-row overscan is mounted). Expand/
+      collapse state moved to the store (`collapsedNodes` + `toggleNode`) so it survives
+      sidebar-tab switching. 5 vitest cases incl. a 50 000-request forest (flatten < 500 ms).
 - [ ] Disk-backed collections via FileSystemAdapter (open folder → read/write YAML per §5a of the arch doc).
 - [x] Settings modal (theme, relay URL, timeouts) instead of inline prompts. DONE: `components/settings/SettingsModal.tsx` (opened from topbar gear + sidebar Settings nav, Escape closes); theme dark/light + relay toggle/URL + global `timeoutMs` all persisted to localStorage (`kp-theme`, `kp-use-relay`, `kp-relay-url`, `kp-timeout-ms`). Timeout is enforced in `handleSend` + RunnerTab via an AbortSignal passed through `TransportOptions.signal`; AbortError renders "Request timed out after N ms". The per-request Settings tab now points to the global modal.
 - [x] Keyboard shortcuts: Ctrl+Enter send, Ctrl+S save-to-collection. DONE: global keydown in AppShell (skipped while any modal/palette is open, request tabs only); Ctrl+S uses new store action `saveRequestTab` (flushes dirty tab into owning collection + persistCollection without closing); `handleSend` in RequestEditor.tsx is exported for reuse.

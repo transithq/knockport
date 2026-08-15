@@ -153,6 +153,8 @@ export interface AppStore {
   // Collections
   collections: Collection[];
   activeCollectionId: string | null;
+  /** IDs of collapsed sidebar tree nodes (collections + folders). */
+  collapsedNodes: string[];
 
   // Environments
   environments: Environment[];
@@ -202,6 +204,7 @@ export interface AppStore {
   // Actions — Collections
   addCollection: (collection: Collection) => void;
   setActiveCollection: (id: string | null) => void;
+  toggleNode: (id: string) => void;
   updateCollection: (id: string, changes: Partial<Collection>) => void;
   deleteCollection: (id: string) => void;
   addFolder: (collectionId: string, parentFolderId: string | null, name: string) => void;
@@ -272,6 +275,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   collections: [],
   activeCollectionId: null,
+  collapsedNodes: [],
 
   environments: [],
   activeEnvironmentId: null,
@@ -318,6 +322,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
     persistCollection(collection);
   },
   setActiveCollection: (id) => set({ activeCollectionId: id }),
+  toggleNode: (id) =>
+    set((s) => ({
+      collapsedNodes: s.collapsedNodes.includes(id)
+        ? s.collapsedNodes.filter((x) => x !== id)
+        : [...s.collapsedNodes, id],
+    })),
   updateCollection: (id, changes) => {
     set((s) => ({
       collections: s.collections.map((c) =>
