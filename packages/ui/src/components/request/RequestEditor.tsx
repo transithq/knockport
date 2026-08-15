@@ -1,41 +1,36 @@
-import React from "react";
-import { useAppStore, type ActivePanel } from "../../store/app-store";
-import { HTTP_METHODS, type HttpMethod, type KeyValuePair } from "@knockport/core";
-import { Tabs, Button } from "../common/primitives";
-import { Send, Loader2, Plus, Trash2, ChevronDown } from "lucide-react";
+import { useState } from "react";
+import { Send, Loader2, ChevronDown, MoreHorizontal, Copy } from "lucide-react";
 import { clsx } from "clsx";
+import { useAppStore, type ActivePanel } from "../../store/app-store";
+import { HTTP_METHODS, type HttpMethod, type KeyValuePair, type BodyContent, type AuthConfig } from "@knockport/core";
+import { buildVariableMap, resolveRequest } from "../../store/variables";
+
+const methodColor: Record<string, string> = {
+  GET: "var(--kp-method-get)",
+  POST: "var(--kp-method-post)",
+  PUT: "var(--kp-method-put)",
+  PATCH: "var(--kp-method-patch)",
+  DELETE: "var(--kp-method-delete)",
+  HEAD: "var(--kp-method-head)",
+  OPTIONS: "var(--kp-method-options)",
+};
 
 // ── Request Editor ───────────────────────────────────────────────────────────
-export function RequestEditor() {
-  const {
-    activeTabId,
-    requests,
-    isLoading,
-    updateRequestMethod,
-    updateRequestUrl,
-    updateRequestHeaders,
-    updateRequestParams,
-    updateRequestBody,
-    activeRequestPanel,
-    setActiveRequestPanel,
-  } = useAppStore();
+export function RequestEditor({ tabId }: { tabId: string }) {
+  const requests = useAppStore((s) => s.requests);
+  const isLoading = useAppStore((s) => s.isLoading);
+  const updateRequestMethod = useAppStore((s) => s.updateRequestMethod);
+  const updateRequestUrl = useAppStore((s) => s.updateRequestUrl);
+  const activeRequestPanel = useAppStore((s) => s.activeRequestPanel);
+  const setActiveRequestPanel = useAppStore((s) => s.setActiveRequestPanel);
 
-  if (!activeTabId || !requests[activeTabId]) {
-    return (
-      <div className="flex items-center justify-center h-full text-[var(--kp-text-muted)]">
-        <p className="text-sm">Select a request to get started</p>
-      </div>
-    );
-  }
-
-  const tabId = activeTabId;
   const request = requests[tabId];
+  if (!request) return null;
   const loading = isLoading[tabId] ?? false;
-  const enabledHeaders = request.headers.filter((h) => h.enabled).length;
 
-  const requestTabs = [
-    { id: "params", label: "Params", count: request.params.filter((p) => p.enabled).length || undefined },
-    { id: "headers", label: "Headers", count: enabledHeaders || undefined },
+  const requestTabs: { id: ActivePanel; label: string; dot?: boolean; count?: number }[] = [
+    { id: "params", label: "Params", dot: request.params.some((p) => p.enabled) },
+    { id: "headers", label: "Headers", count: request.headers.filter((h) => h.enabled).length || undefined },
     { id: "auth", label: "Authorization" },
     { id: "body", label: "Body" },
     { id: "scripts", label: "Scripts" },
@@ -44,229 +39,193 @@ export function RequestEditor() {
   ];
 
   return (
-    <div className="flex flex-col h-full">
-      {/* URL Bar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--kp-border-primary)]">
-        {/* Method selector */}
-        <div className="relative">
+    <div className="kp-request-editor">
+      {/* URL bar */}
+      <div className="kp-urlbar">
+        <div className="kp-method-select">
           <select
             value={request.method}
             onChange={(e) => updateRequestMethod(tabId, e.target.value as HttpMethod)}
-            className={clsx(
-              "h-8 px-2 pr-6 bg-[var(--kp-bg-tertiary)] border border-[var(--kp-border-primary)] rounded-md text-xs font-bold appearance-none cursor-pointer focus:outline-none focus:border-[var(--kp-border-focus)]",
-              getMethodTextColor(request.method),
-            )}
+            style={{ color: methodColor[request.method] }}
           >
             {HTTP_METHODS.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
+              <option key={m} value={m}>{m}</option>
             ))}
           </select>
-          <ChevronDown
-            size={12}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--kp-text-muted)]"
-          />
+          <ChevronDown size={13} className="kp-select-caret" />
         </div>
 
-        {/* URL input */}
         <input
           type="text"
           value={request.url}
           onChange={(e) => updateRequestUrl(tabId, e.target.value)}
           placeholder="https://api.example.com/endpoint"
-          className="flex-1 h-8 px-3 bg-[var(--kp-bg-tertiary)] border border-[var(--kp-border-primary)] rounded-md text-sm font-mono text-[var(--kp-text-primary)] placeholder:text-[var(--kp-text-muted)] focus:outline-none focus:border-[var(--kp-border-focus)]"
+          className="kp-url-input kp-mono"
         />
 
-        {/* Send button */}
-        <Button
-          variant="primary"
-          onClick={() => handleSend(tabId)}
+        <button
+          type="button"
+          className="kp-send-btn"
           disabled={loading || !request.url}
-          icon={loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+          onClick={() => handleSend(tabId)}
         >
-          {loading ? "Sending" : "Send"}
-        </Button>
+          {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+          Send
+        </button>
+        <button type="button" className="kp-send-caret" title="Send options">
+          <ChevronDown size={14} />
+        </button>
       </div>
 
       {/* Tabs */}
-      <div className="px-4">
-        <Tabs
-          tabs={requestTabs}
-          active={activeRequestPanel}
-          onChange={(id) => setActiveRequestPanel(id as ActivePanel)}
-        />
+      <div className="kp-req-tabs">
+        {requestTabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={clsx("kp-req-tab", activeRequestPanel === t.id && "active")}
+            onClick={() => setActiveRequestPanel(t.id)}
+          >
+            {t.label}
+            {t.dot && <span className="kp-tab-dot" />}
+            {t.count !== undefined && <span className="kp-tab-count">{t.count}</span>}
+          </button>
+        ))}
       </div>
 
       {/* Panel content */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="kp-req-panel kp-scroll">
         {activeRequestPanel === "params" && (
-          <KeyValueEditor
+          <KeyValueTable
+            title="Query Params"
             pairs={request.params}
-            onChange={(params) => updateRequestParams(tabId, params)}
-            keyPlaceholder="Parameter"
-            valuePlaceholder="Value"
+            onChange={(p) => useAppStore.getState().updateRequestParams(tabId, p)}
           />
         )}
         {activeRequestPanel === "headers" && (
-          <KeyValueEditor
+          <KeyValueTable
+            title="Headers"
             pairs={request.headers}
-            onChange={(headers) => updateRequestHeaders(tabId, headers)}
-            keyPlaceholder="Header"
-            valuePlaceholder="Value"
-          />
-        )}
-        {activeRequestPanel === "body" && (
-          <BodyEditor
-            body={request.body}
-            onChange={(body) => updateRequestBody(tabId, body)}
+            onChange={(h) => useAppStore.getState().updateRequestHeaders(tabId, h)}
           />
         )}
         {activeRequestPanel === "auth" && (
-          <AuthEditor auth={request.auth} onChange={(auth) => useAppStore.getState().updateRequestAuth(tabId, auth)} />
+          <AuthEditor auth={request.auth} onChange={(a) => useAppStore.getState().updateRequestAuth(tabId, a)} />
         )}
-        {activeRequestPanel === "scripts" && (
-          <ScriptEditor
-            preScript={request.scripts?.pre ?? ""}
-            testScript={request.scripts?.test ?? ""}
-          />
+        {activeRequestPanel === "body" && (
+          <BodyEditor body={request.body} onChange={(b) => useAppStore.getState().updateRequestBody(tabId, b)} />
         )}
-        {activeRequestPanel === "tests" && (
-          <div className="text-xs text-[var(--kp-text-tertiary)]">
-            <p className="mb-2">Write test assertions using the <code className="kp-mono text-[var(--kp-accent)]">kp.*</code> API:</p>
-            <pre className="p-3 bg-[var(--kp-bg-tertiary)] rounded-md text-xs font-mono text-[var(--kp-text-secondary)] overflow-auto">
-{`kp.test("Status is 200", () => {
-  kp.response.to.have.status(200);
-});
-
-kp.test("Response has data", () => {
-  const json = kp.response.json();
-  kp.expect(json).to.have.property("data");
-});`}
-            </pre>
-          </div>
-        )}
-        {activeRequestPanel === "settings" && (
-          <RequestSettings />
-        )}
+        {activeRequestPanel === "scripts" && <ScriptEditor tabId={tabId} />}
+        {activeRequestPanel === "tests" && <TestsPanel />}
+        {activeRequestPanel === "settings" && <RequestSettings />}
       </div>
     </div>
   );
 }
 
-// ── Key-Value Editor ─────────────────────────────────────────────────────────
-interface KeyValueEditorProps {
+// ── Key-Value Table (matches design: checkbox | Key | Value | Description) ───
+function KeyValueTable({
+  title,
+  pairs,
+  onChange,
+}: {
+  title: string;
   pairs: KeyValuePair[];
   onChange: (pairs: KeyValuePair[]) => void;
-  keyPlaceholder?: string;
-  valuePlaceholder?: string;
-}
-
-function KeyValueEditor({ pairs, onChange, keyPlaceholder, valuePlaceholder }: KeyValueEditorProps) {
-  const handleAdd = () => {
-    onChange([...pairs, { key: "", value: "", enabled: true }]);
-  };
-
-  const handleRemove = (index: number) => {
-    onChange(pairs.filter((_, i) => i !== index));
-  };
-
-  const handleChange = (index: number, field: keyof KeyValuePair, value: string | boolean) => {
-    const updated = pairs.map((p, i) =>
-      i === index ? { ...p, [field]: value } : p,
-    );
-    onChange(updated);
-  };
+}) {
+  const update = (i: number, field: keyof KeyValuePair, value: string | boolean) =>
+    onChange(pairs.map((p, idx) => (idx === i ? { ...p, [field]: value } : p)));
 
   return (
-    <div className="space-y-1">
-      <div className="grid grid-cols-[32px_1fr_1fr_28px] gap-2 text-[10px] text-[var(--kp-text-muted)] uppercase tracking-wider mb-2 px-1">
-        <span />
-        <span>Key</span>
-        <span>Value</span>
-        <span />
-      </div>
-
-      {pairs.map((pair, index) => (
-        <div
-          key={index}
-          className="grid grid-cols-[32px_1fr_1fr_28px] gap-2 items-center"
-        >
-          <input
-            type="checkbox"
-            checked={pair.enabled}
-            onChange={(e) => handleChange(index, "enabled", e.target.checked)}
-            className="w-3.5 h-3.5 rounded border-[var(--kp-border-primary)] accent-[var(--kp-accent)]"
-          />
-          <input
-            type="text"
-            value={pair.key}
-            onChange={(e) => handleChange(index, "key", e.target.value)}
-            placeholder={keyPlaceholder}
-            className="h-7 px-2 bg-[var(--kp-bg-tertiary)] border border-[var(--kp-border-primary)] rounded text-xs text-[var(--kp-text-primary)] placeholder:text-[var(--kp-text-muted)] focus:outline-none focus:border-[var(--kp-border-focus)]"
-          />
-          <input
-            type="text"
-            value={pair.value}
-            onChange={(e) => handleChange(index, "value", e.target.value)}
-            placeholder={valuePlaceholder}
-            className="h-7 px-2 bg-[var(--kp-bg-tertiary)] border border-[var(--kp-border-primary)] rounded text-xs text-[var(--kp-text-primary)] placeholder:text-[var(--kp-text-muted)] focus:outline-none focus:border-[var(--kp-border-focus)]"
-          />
-          <button
-            onClick={() => handleRemove(index)}
-            className="p-1 rounded hover:bg-[var(--kp-bg-hover)] text-[var(--kp-text-muted)] hover:text-[var(--kp-error)]"
-          >
-            <Trash2 size={12} />
-          </button>
+    <div className="kp-kv">
+      <div className="kp-kv-title">{title}</div>
+      <div className="kp-kv-table">
+        <div className="kp-kv-row kp-kv-head">
+          <span />
+          <span>Key</span>
+          <span>Value</span>
+          <span>Description</span>
+          <span className="kp-kv-menu"><MoreHorizontal size={13} /></span>
         </div>
-      ))}
 
-      <button
-        onClick={handleAdd}
-        className="flex items-center gap-1 px-2 py-1 text-xs text-[var(--kp-text-tertiary)] hover:text-[var(--kp-text-secondary)] transition-colors"
-      >
-        <Plus size={12} />
-        Add row
-      </button>
+        {pairs.map((pair, i) => (
+          <div className="kp-kv-row" key={i}>
+            <input
+              type="checkbox"
+              className="kp-checkbox"
+              checked={pair.enabled}
+              onChange={(e) => update(i, "enabled", e.target.checked)}
+            />
+            <input
+              type="text"
+              value={pair.key}
+              placeholder="Key"
+              onChange={(e) => update(i, "key", e.target.value)}
+            />
+            <input
+              type="text"
+              value={pair.value}
+              placeholder="Value"
+              onChange={(e) => update(i, "value", e.target.value)}
+            />
+            <input
+              type="text"
+              value={pair.description ?? ""}
+              placeholder="Description"
+              onChange={(e) => update(i, "description", e.target.value)}
+            />
+            <span />
+          </div>
+        ))}
+
+        {/* Empty add row */}
+        <div className="kp-kv-row kp-kv-empty">
+          <span />
+          <input
+            type="text"
+            placeholder="Key"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onChange([...pairs, { key: "", value: "", enabled: true }]);
+            }}
+            onChange={(e) => {
+              if (e.target.value) onChange([...pairs, { key: e.target.value, value: "", enabled: true }]);
+            }}
+          />
+          <input type="text" placeholder="Value" readOnly />
+          <input type="text" placeholder="Description" readOnly />
+          <span />
+        </div>
+      </div>
     </div>
   );
 }
 
 // ── Body Editor ──────────────────────────────────────────────────────────────
-function BodyEditor({
-  body,
-  onChange,
-}: {
-  body: import("@knockport/core").BodyContent;
-  onChange: (body: import("@knockport/core").BodyContent) => void;
-}) {
-  const bodyTypes = ["none", "json", "text", "xml", "html", "form-urlencoded", "multipart-form", "graphql"] as const;
+function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyContent) => void }) {
+  const types: BodyContent["type"][] = ["none", "json", "text", "xml", "html", "form-urlencoded", "multipart-form", "graphql"];
+  const label = (t: string) =>
+    t === "form-urlencoded" ? "Form" : t === "multipart-form" ? "Multipart" : t.charAt(0).toUpperCase() + t.slice(1);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        {bodyTypes.map((type) => (
+    <div className="kp-body-editor">
+      <div className="kp-seg-row">
+        {types.map((t) => (
           <button
-            key={type}
-            onClick={() => onChange({ ...body, type })}
-            className={clsx(
-              "px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
-              body.type === type
-                ? "bg-[var(--kp-accent-muted)] text-[var(--kp-accent)]"
-                : "text-[var(--kp-text-secondary)] hover:bg-[var(--kp-bg-hover)]",
-            )}
+            key={t}
+            type="button"
+            className={clsx("kp-seg", body.type === t && "active")}
+            onClick={() => onChange({ ...body, type: t })}
           >
-            {type === "form-urlencoded" ? "Form" : type === "multipart-form" ? "Multipart" : type.charAt(0).toUpperCase() + type.slice(1)}
+            {label(t)}
           </button>
         ))}
       </div>
-
       {body.type !== "none" && (
         <textarea
+          className="kp-code-input kp-mono"
           value={body.content ?? ""}
           onChange={(e) => onChange({ ...body, content: e.target.value })}
           placeholder={body.type === "json" ? '{\n  "key": "value"\n}' : "Enter request body..."}
-          className="w-full h-64 p-3 bg-[var(--kp-bg-tertiary)] border border-[var(--kp-border-primary)] rounded-md text-xs font-mono text-[var(--kp-text-primary)] placeholder:text-[var(--kp-text-muted)] focus:outline-none focus:border-[var(--kp-border-focus)] resize-y"
           spellCheck={false}
         />
       )}
@@ -275,128 +234,108 @@ function BodyEditor({
 }
 
 // ── Auth Editor ──────────────────────────────────────────────────────────────
-function AuthEditor({
-  auth,
-  onChange,
-}: {
-  auth: import("@knockport/core").AuthConfig;
-  onChange: (auth: import("@knockport/core").AuthConfig) => void;
-}) {
-  const authTypes = ["none", "inherit", "bearer", "basic", "apiKey", "oauth2"] as const;
+function AuthEditor({ auth, onChange }: { auth: AuthConfig; onChange: (a: AuthConfig) => void }) {
+  const types: AuthConfig["type"][] = ["none", "inherit", "bearer", "basic", "apiKey", "oauth2"];
+  const label = (t: string) => (t === "apiKey" ? "API Key" : t.charAt(0).toUpperCase() + t.slice(1));
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        {authTypes.map((type) => (
+    <div className="kp-body-editor">
+      <div className="kp-seg-row">
+        {types.map((t) => (
           <button
-            key={type}
-            onClick={() => onChange({ type, ...auth })}
-            className={clsx(
-              "px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
-              auth.type === type
-                ? "bg-[var(--kp-accent-muted)] text-[var(--kp-accent)]"
-                : "text-[var(--kp-text-secondary)] hover:bg-[var(--kp-bg-hover)]",
-            )}
+            key={t}
+            type="button"
+            className={clsx("kp-seg", auth.type === t && "active")}
+            onClick={() => onChange({ type: t })}
           >
-            {type === "apiKey" ? "API Key" : type.charAt(0).toUpperCase() + type.slice(1)}
+            {label(t)}
           </button>
         ))}
       </div>
 
       {auth.type === "bearer" && (
-        <div className="space-y-2">
-          <label className="text-xs text-[var(--kp-text-secondary)]">Token</label>
+        <div className="kp-field">
+          <label>Token</label>
           <input
             type="text"
+            className="kp-mono"
             value={auth.bearer?.token ?? ""}
-            onChange={(e) => onChange({ ...auth, bearer: { token: e.target.value } })}
             placeholder="Enter bearer token"
-            className="w-full h-8 px-3 bg-[var(--kp-bg-tertiary)] border border-[var(--kp-border-primary)] rounded-md text-xs font-mono text-[var(--kp-text-primary)] placeholder:text-[var(--kp-text-muted)] focus:outline-none focus:border-[var(--kp-border-focus)]"
+            onChange={(e) => onChange({ ...auth, bearer: { token: e.target.value } })}
           />
         </div>
       )}
-
       {auth.type === "basic" && (
-        <div className="space-y-2">
-          <div>
-            <label className="text-xs text-[var(--kp-text-secondary)]">Username</label>
+        <div className="kp-field-grid">
+          <div className="kp-field">
+            <label>Username</label>
             <input
               type="text"
               value={auth.basic?.username ?? ""}
-              onChange={(e) => onChange({ ...auth, basic: { ...auth.basic!, username: e.target.value } })}
-              className="w-full h-8 px-3 bg-[var(--kp-bg-tertiary)] border border-[var(--kp-border-primary)] rounded-md text-xs text-[var(--kp-text-primary)] focus:outline-none focus:border-[var(--kp-border-focus)]"
+              onChange={(e) => onChange({ ...auth, basic: { username: e.target.value, password: auth.basic?.password ?? "" } })}
             />
           </div>
-          <div>
-            <label className="text-xs text-[var(--kp-text-secondary)]">Password</label>
+          <div className="kp-field">
+            <label>Password</label>
             <input
               type="password"
               value={auth.basic?.password ?? ""}
-              onChange={(e) => onChange({ ...auth, basic: { ...auth.basic!, password: e.target.value } })}
-              className="w-full h-8 px-3 bg-[var(--kp-bg-tertiary)] border border-[var(--kp-border-primary)] rounded-md text-xs text-[var(--kp-text-primary)] focus:outline-none focus:border-[var(--kp-border-focus)]"
+              onChange={(e) => onChange({ ...auth, basic: { username: auth.basic?.username ?? "", password: e.target.value } })}
             />
           </div>
         </div>
       )}
-
-      {auth.type === "none" && (
-        <p className="text-xs text-[var(--kp-text-tertiary)]">No authentication</p>
-      )}
-      {auth.type === "inherit" && (
-        <p className="text-xs text-[var(--kp-text-tertiary)]">Inherit from parent collection</p>
-      )}
+      {auth.type === "none" && <p className="kp-hint">No authentication</p>}
+      {auth.type === "inherit" && <p className="kp-hint">Inherit from parent collection</p>}
     </div>
   );
 }
 
 // ── Script Editor ────────────────────────────────────────────────────────────
-function ScriptEditor({
-  preScript,
-  testScript,
-}: {
-  preScript: string;
-  testScript: string;
-}) {
-  const [activeScript, setActiveScript] = React.useState<"pre" | "test">("pre");
+function ScriptEditor({ tabId }: { tabId: string }) {
+  const requests = useAppStore((s) => s.requests);
+  const updateRequest = useAppStore((s) => s.updateRequest);
+  const request = requests[tabId];
+  const [which, setWhich] = useState<"pre" | "test">("pre");
+  if (!request) return null;
+  const value = which === "pre" ? request.scripts?.pre ?? "" : request.scripts?.test ?? "";
 
   return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
-        <button
-          onClick={() => setActiveScript("pre")}
-          className={clsx(
-            "px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
-            activeScript === "pre"
-              ? "bg-[var(--kp-accent-muted)] text-[var(--kp-accent)]"
-              : "text-[var(--kp-text-secondary)] hover:bg-[var(--kp-bg-hover)]",
-          )}
-        >
+    <div className="kp-body-editor">
+      <div className="kp-seg-row">
+        <button type="button" className={clsx("kp-seg", which === "pre" && "active")} onClick={() => setWhich("pre")}>
           Pre-request
         </button>
-        <button
-          onClick={() => setActiveScript("test")}
-          className={clsx(
-            "px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
-            activeScript === "test"
-              ? "bg-[var(--kp-accent-muted)] text-[var(--kp-accent)]"
-              : "text-[var(--kp-text-secondary)] hover:bg-[var(--kp-bg-hover)]",
-          )}
-        >
+        <button type="button" className={clsx("kp-seg", which === "test" && "active")} onClick={() => setWhich("test")}>
           Tests
         </button>
       </div>
-
       <textarea
-        value={activeScript === "pre" ? preScript : testScript}
-        readOnly
-        placeholder={
-          activeScript === "pre"
-            ? "// Pre-request script — runs before the request\n// Use kp.variables.set('key', value)"
-            : "// Test script — runs after the response\n// Use kp.test('name', () => { ... })"
-        }
-        className="w-full h-48 p-3 bg-[var(--kp-bg-tertiary)] border border-[var(--kp-border-primary)] rounded-md text-xs font-mono text-[var(--kp-text-primary)] placeholder:text-[var(--kp-text-muted)] focus:outline-none focus:border-[var(--kp-border-focus)] resize-y"
+        className="kp-code-input kp-mono"
+        value={value}
         spellCheck={false}
+        placeholder={which === "pre" ? "// Pre-request script\nkp.variables.set('key', 'value');" : "// Test script\nkp.test('Status 200', () => kp.response.to.have.status(200));"}
+        onChange={(e) =>
+          updateRequest(tabId, { scripts: { ...request.scripts, [which]: e.target.value } })
+        }
       />
+    </div>
+  );
+}
+
+// ── Tests Panel ──────────────────────────────────────────────────────────────
+function TestsPanel() {
+  return (
+    <div className="kp-hint-block">
+      <p>Write test assertions using the <code className="kp-mono kp-accent-text">kp.*</code> API:</p>
+      <pre className="kp-code-block kp-mono">{`kp.test("Status is 200", () => {
+  kp.response.to.have.status(200);
+});
+
+kp.test("Response has data", () => {
+  const json = kp.response.json();
+  kp.expect(json).to.have.property("data");
+});`}</pre>
     </div>
   );
 }
@@ -404,45 +343,39 @@ function ScriptEditor({
 // ── Request Settings ─────────────────────────────────────────────────────────
 function RequestSettings() {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <label className="text-xs text-[var(--kp-text-secondary)] w-32">Follow Redirects</label>
-        <input type="checkbox" defaultChecked className="accent-[var(--kp-accent)]" />
+    <div className="kp-settings">
+      <div className="kp-setting-row">
+        <label>Follow Redirects</label>
+        <input type="checkbox" className="kp-checkbox" defaultChecked />
       </div>
-      <div className="flex items-center gap-3">
-        <label className="text-xs text-[var(--kp-text-secondary)] w-32">Verify SSL</label>
-        <input type="checkbox" defaultChecked className="accent-[var(--kp-accent)]" />
+      <div className="kp-setting-row">
+        <label>Verify SSL</label>
+        <input type="checkbox" className="kp-checkbox" defaultChecked />
       </div>
-      <div className="flex items-center gap-3">
-        <label className="text-xs text-[var(--kp-text-secondary)] w-32">Timeout (ms)</label>
-        <input
-          type="number"
-          defaultValue={30000}
-          className="w-24 h-7 px-2 bg-[var(--kp-bg-tertiary)] border border-[var(--kp-border-primary)] rounded text-xs text-[var(--kp-text-primary)] focus:outline-none focus:border-[var(--kp-border-focus)]"
-        />
+      <div className="kp-setting-row">
+        <label>Timeout (ms)</label>
+        <input type="number" defaultValue={30000} className="kp-num-input" />
       </div>
     </div>
   );
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Send ─────────────────────────────────────────────────────────────────────
 async function handleSend(tabId: string) {
   const store = useAppStore.getState();
   const request = store.requests[tabId];
   if (!request) return;
 
   store.setLoading(tabId, true);
-
   try {
     const { DirectTransport } = await import("@knockport/transport");
-    const transport = new DirectTransport();
-    const response = await transport.execute(request);
+    const vars = buildVariableMap(store);
+    const resolved = resolveRequest(request, vars);
+    const response = await new DirectTransport().execute(resolved);
     store.setResponse(tabId, response);
-
-    // Add to history
     store.addHistoryEntry({
       id: crypto.randomUUID(),
-      request,
+      request: resolved,
       response,
       timestamp: new Date().toISOString(),
     });
@@ -462,17 +395,4 @@ async function handleSend(tabId: string) {
   } finally {
     store.setLoading(tabId, false);
   }
-}
-
-function getMethodTextColor(method: string): string {
-  const colors: Record<string, string> = {
-    GET: "text-[var(--kp-method-get)]",
-    POST: "text-[var(--kp-method-post)]",
-    PUT: "text-[var(--kp-method-put)]",
-    PATCH: "text-[var(--kp-method-patch)]",
-    DELETE: "text-[var(--kp-method-delete)]",
-    HEAD: "text-[var(--kp-method-head)]",
-    OPTIONS: "text-[var(--kp-method-options)]",
-  };
-  return colors[method] ?? "text-[var(--kp-text-secondary)]";
 }

@@ -1,284 +1,272 @@
-import React from "react";
-import { useAppStore, type SidebarTab } from "../../store/app-store";
+import { useState } from "react";
 import {
-  FolderTree,
-  Globe,
-  Clock,
+  LayoutDashboard,
+  FolderClosed,
+  Boxes,
+  History as HistoryIcon,
+  Plug,
+  Server,
+  Radio,
+  Settings,
   Search,
-  Plus,
-  ChevronRight,
   ChevronDown,
-  File,
-  Folder,
+  ChevronRight,
+  Plus,
+  MoreHorizontal,
+  Moon,
+  Aperture,
 } from "lucide-react";
-import { clsx } from "clsx";
+import type { Collection, Folder, Request } from "@knockport/core";
+import { useAppStore, type SidebarTab } from "../../store/app-store";
+
+// ── Method color helper ──────────────────────────────────────────────────────
+const methodColor: Record<string, string> = {
+  GET: "var(--kp-method-get)",
+  POST: "var(--kp-method-post)",
+  PUT: "var(--kp-method-put)",
+  PATCH: "var(--kp-method-patch)",
+  DELETE: "var(--kp-method-delete)",
+  HEAD: "var(--kp-method-head)",
+  OPTIONS: "var(--kp-method-options)",
+};
+
+function MethodTag({ method }: { method: string }) {
+  return (
+    <span
+      className="kp-method-tag"
+      style={{ color: methodColor[method] ?? "var(--kp-text-secondary)" }}
+    >
+      {method === "DELETE" ? "DEL" : method}
+    </span>
+  );
+}
+
+// ── Nav items ────────────────────────────────────────────────────────────────
+interface NavItem {
+  id: SidebarTab | "placeholder";
+  label: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { id: "placeholder", label: "Dashboard", icon: LayoutDashboard },
+  { id: "collections", label: "Collections", icon: FolderClosed },
+  { id: "environments", label: "Environments", icon: Boxes },
+  { id: "history", label: "History", icon: HistoryIcon },
+  { id: "placeholder", label: "APIs", icon: Plug },
+  { id: "placeholder", label: "Mock Servers", icon: Server },
+  { id: "placeholder", label: "WebSockets", icon: Radio },
+  { id: "placeholder", label: "Settings", icon: Settings },
+];
+
+// ── Collection tree ──────────────────────────────────────────────────────────
+function RequestRow({ request }: { request: Request }) {
+  const openTab = useAppStore((s) => s.openTab);
+  const activeTabId = useAppStore((s) => s.activeTabId);
+  const tabs = useAppStore((s) => s.tabs);
+  const isActive = tabs.find((t) => t.id === activeTabId)?.requestId === request.id;
+
+  return (
+    <button
+      type="button"
+      className={`kp-tree-item kp-tree-request${isActive ? " active" : ""}`}
+      onClick={() => openTab(request)}
+    >
+      <MethodTag method={request.method} />
+      <span className="kp-truncate">{request.name}</span>
+    </button>
+  );
+}
+
+function FolderNode({ folder, depth }: { folder: Folder; depth: number }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div>
+      <button
+        type="button"
+        className="kp-tree-item kp-tree-folder"
+        style={{ paddingLeft: `${12 + depth * 14}px` }}
+        onClick={() => setOpen(!open)}
+      >
+        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        <span className="kp-truncate">{folder.name}</span>
+      </button>
+      {open && (
+        <div>
+          {folder.folders.map((f) => (
+            <FolderNode key={f.id} folder={f} depth={depth + 1} />
+          ))}
+          {folder.requests.map((r) => (
+            <div key={r.id} style={{ paddingLeft: `${(depth + 1) * 14}px` }}>
+              <RequestRow request={r} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function countRequests(collection: Collection): number {
+  const countFolder = (f: Folder): number =>
+    f.requests.length + f.folders.reduce((acc, x) => acc + countFolder(x), 0);
+  return collection.requests.length + collection.folders.reduce((acc, f) => acc + countFolder(f), 0);
+}
+
+function CollectionNode({ collection }: { collection: Collection }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div>
+      <div className="kp-tree-item kp-tree-collection">
+        <button type="button" className="kp-tree-toggle" onClick={() => setOpen(!open)}>
+          {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        </button>
+        <span className="kp-truncate" style={{ flex: 1 }}>{collection.name}</span>
+        <span className="kp-count-badge">{countRequests(collection)}</span>
+      </div>
+      {open && (
+        <div>
+          {collection.folders.map((f) => (
+            <FolderNode key={f.id} folder={f} depth={1} />
+          ))}
+          {collection.requests.map((r) => (
+            <div key={r.id} style={{ paddingLeft: "14px" }}>
+              <RequestRow request={r} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 export function Sidebar() {
-  const { sidebarTab, setSidebarTab, collections, sidebarCollapsed } = useAppStore();
-
-  if (sidebarCollapsed) return null;
-
-  const navItems: { id: SidebarTab; icon: React.ReactNode; label: string }[] = [
-    { id: "collections", icon: <FolderTree size={16} />, label: "Collections" },
-    { id: "environments", icon: <Globe size={16} />, label: "Environments" },
-    { id: "history", icon: <Clock size={16} />, label: "History" },
-  ];
+  const sidebarTab = useAppStore((s) => s.sidebarTab);
+  const setSidebarTab = useAppStore((s) => s.setSidebarTab);
+  const collections = useAppStore((s) => s.collections);
+  const environments = useAppStore((s) => s.environments);
+  const activeEnvironmentId = useAppStore((s) => s.activeEnvironmentId);
+  const setActiveEnvironment = useAppStore((s) => s.setActiveEnvironment);
+  const history = useAppStore((s) => s.history);
+  const openCommandPalette = useAppStore((s) => s.setCommandPaletteOpen);
+  const toggleTheme = useAppStore((s) => s.toggleTheme);
 
   return (
-    <aside
-      className="flex flex-col h-full border-r border-[var(--kp-border-primary)] bg-[var(--kp-bg-secondary)]"
-      style={{ width: "var(--kp-sidebar-width)", minWidth: 220, maxWidth: 400 }}
-    >
-      {/* Workspace header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--kp-border-primary)]">
-        <span className="text-sm font-semibold text-[var(--kp-text-primary)] truncate">
-          My Workspace
+    <aside className="kp-sidebar">
+      {/* Logo */}
+      <div className="kp-sidebar-logo">
+        <span className="kp-logo-mark">
+          <Aperture size={18} />
         </span>
-        <button className="p-1 rounded hover:bg-[var(--kp-bg-hover)] text-[var(--kp-text-secondary)]">
-          <Plus size={14} />
+        <span className="kp-logo-text">KnockPort</span>
+      </div>
+
+      {/* Workspace selector */}
+      <button type="button" className="kp-workspace-btn">
+        <Boxes size={15} />
+        <span className="kp-truncate" style={{ flex: 1, textAlign: "left" }}>My Workspace</span>
+        <ChevronDown size={14} />
+      </button>
+
+      {/* Search */}
+      <button type="button" className="kp-search-btn" onClick={() => openCommandPalette(true)}>
+        <Search size={14} />
+        <span style={{ flex: 1, textAlign: "left" }}>Search</span>
+        <span className="kp-kbd">⌘K</span>
+      </button>
+
+      {/* Nav */}
+      <nav className="kp-nav">
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          const active = item.id === sidebarTab;
+          return (
+            <button
+              key={item.label}
+              type="button"
+              className={`kp-nav-item${active ? " active" : ""}`}
+              onClick={() => item.id !== "placeholder" && setSidebarTab(item.id as SidebarTab)}
+            >
+              <Icon size={15} />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Section */}
+      <div className="kp-sidebar-section">
+        <div className="kp-sidebar-section-header">
+          <span>
+            {sidebarTab === "collections" && "Collections"}
+            {sidebarTab === "environments" && "Environments"}
+            {sidebarTab === "history" && "History"}
+          </span>
+          <button type="button" className="kp-icon-btn" title="New">
+            <Plus size={14} />
+          </button>
+        </div>
+
+        <div className="kp-sidebar-tree kp-scroll">
+          {sidebarTab === "collections" &&
+            (collections.length === 0 ? (
+              <div className="kp-empty-hint">No collections yet</div>
+            ) : (
+              collections.map((c) => <CollectionNode key={c.id} collection={c} />)
+            ))}
+
+          {sidebarTab === "environments" &&
+            (environments.length === 0 ? (
+              <div className="kp-empty-hint">No environments yet</div>
+            ) : (
+              environments.map((e) => (
+                <button
+                  key={e.id}
+                  type="button"
+                  className={`kp-tree-item${e.id === activeEnvironmentId ? " active" : ""}`}
+                  onClick={() => setActiveEnvironment(e.id)}
+                >
+                  <span className="kp-truncate" style={{ flex: 1 }}>{e.name}</span>
+                  {e.id === activeEnvironmentId && <span className="kp-active-dot" />}
+                </button>
+              ))
+            ))}
+
+          {sidebarTab === "history" &&
+            (history.length === 0 ? (
+              <div className="kp-empty-hint">No history yet</div>
+            ) : (
+              history.map((h) => (
+                <div key={h.id} className="kp-tree-item kp-history-item">
+                  <MethodTag method={h.request.method} />
+                  <span className="kp-truncate kp-history-url">{h.request.url}</span>
+                </div>
+              ))
+            ))}
+        </div>
+      </div>
+
+      {/* User footer */}
+      <div className="kp-user-footer">
+        <div className="kp-avatar">AD</div>
+        <div className="kp-user-info">
+          <div className="kp-user-name">Arjun Dev</div>
+          <div className="kp-user-email">arjun@transithq.dev</div>
+        </div>
+        <button type="button" className="kp-icon-btn" onClick={toggleTheme} title="Toggle theme">
+          <Moon size={14} />
         </button>
       </div>
 
-      {/* Search */}
-      <div className="px-3 py-2">
-        <div className="relative">
-          <Search
-            size={14}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--kp-text-muted)]"
-          />
-          <input
-            type="text"
-            placeholder="Search..."
-            className="w-full h-7 pl-7 pr-3 bg-[var(--kp-bg-tertiary)] border border-[var(--kp-border-primary)] rounded-md text-xs text-[var(--kp-text-primary)] placeholder:text-[var(--kp-text-muted)] focus:outline-none focus:border-[var(--kp-border-focus)]"
-          />
-        </div>
-      </div>
-
-      {/* Nav tabs */}
-      <div className="flex px-3 gap-1">
-        {navItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setSidebarTab(item.id)}
-            className={clsx(
-              "flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors",
-              sidebarTab === item.id
-                ? "bg-[var(--kp-accent-muted)] text-[var(--kp-accent)]"
-                : "text-[var(--kp-text-secondary)] hover:bg-[var(--kp-bg-hover)]",
-            )}
-          >
-            {item.icon}
-            {item.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-auto px-2 py-2">
-        {sidebarTab === "collections" && <CollectionTree />}
-        {sidebarTab === "environments" && <EnvironmentList />}
-        {sidebarTab === "history" && <HistoryList />}
-      </div>
-
-      {/* Footer */}
-      <div className="px-3 py-2 border-t border-[var(--kp-border-primary)] flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-[var(--kp-accent)] flex items-center justify-center text-white text-xs font-bold">
-            K
-          </div>
-          <div>
-            <div className="text-xs text-[var(--kp-text-primary)]">KnockPort</div>
-            <div className="text-[10px] text-[var(--kp-text-muted)]">v0.1.0</div>
-          </div>
-        </div>
+      {/* Status bar */}
+      <div className="kp-status-bar">
+        <span className="kp-status-online">
+          <span className="kp-online-dot" /> Online
+        </span>
+        <span>v0.1.0</span>
+        <button type="button" className="kp-link-btn">Feedback</button>
       </div>
     </aside>
   );
-}
-
-// ── Collection Tree ──────────────────────────────────────────────────────────
-function CollectionTree() {
-  const { collections, openTab } = useAppStore();
-  const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
-
-  const toggle = (id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  if (!collections.length) {
-    return (
-      <div className="flex flex-col items-center justify-center py-8 text-center">
-        <FolderTree size={24} className="text-[var(--kp-text-muted)] mb-2" />
-        <p className="text-xs text-[var(--kp-text-tertiary)]">No collections yet</p>
-        <p className="text-[10px] text-[var(--kp-text-muted)] mt-1">
-          Create one to get started
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-0.5">
-      {collections.map((collection) => (
-        <div key={collection.id}>
-          <button
-            onClick={() => toggle(collection.id)}
-            className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md text-xs text-[var(--kp-text-primary)] hover:bg-[var(--kp-bg-hover)] transition-colors"
-          >
-            {expanded.has(collection.id) ? (
-              <ChevronDown size={12} />
-            ) : (
-              <ChevronRight size={12} />
-            )}
-            <Folder size={14} className="text-[var(--kp-accent)]" />
-            <span className="truncate">{collection.name}</span>
-          </button>
-
-          {expanded.has(collection.id) && (
-            <div className="ml-5 space-y-0.5">
-              {collection.folders.map((folder) => (
-                <div key={folder.id}>
-                  <button
-                    onClick={() => toggle(folder.id)}
-                    className="flex items-center gap-1.5 w-full px-2 py-1 rounded-md text-xs text-[var(--kp-text-secondary)] hover:bg-[var(--kp-bg-hover)] transition-colors"
-                  >
-                    {expanded.has(folder.id) ? (
-                      <ChevronDown size={12} />
-                    ) : (
-                      <ChevronRight size={12} />
-                    )}
-                    <Folder size={12} className="text-[var(--kp-text-tertiary)]" />
-                    <span className="truncate">{folder.name}</span>
-                  </button>
-                </div>
-              ))}
-              {collection.requests.map((request) => (
-                <button
-                  key={request.id}
-                  onClick={() => openTab(request)}
-                  className="flex items-center gap-1.5 w-full px-2 py-1 rounded-md text-xs hover:bg-[var(--kp-bg-hover)] transition-colors group"
-                >
-                  <File size={12} className="text-[var(--kp-text-muted)]" />
-                  <span
-                    className={clsx(
-                      "text-[10px] font-bold w-10 shrink-0",
-                      getMethodColor(request.method),
-                    )}
-                  >
-                    {request.method}
-                  </span>
-                  <span className="truncate text-[var(--kp-text-secondary)] group-hover:text-[var(--kp-text-primary)]">
-                    {request.name}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function EnvironmentList() {
-  const { environments, activeEnvironmentId, setActiveEnvironment } = useAppStore();
-
-  if (!environments.length) {
-    return (
-      <div className="flex flex-col items-center justify-center py-8 text-center">
-        <Globe size={24} className="text-[var(--kp-text-muted)] mb-2" />
-        <p className="text-xs text-[var(--kp-text-tertiary)]">No environments</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-0.5">
-      {environments.map((env) => (
-        <button
-          key={env.id}
-          onClick={() => setActiveEnvironment(env.id)}
-          className={clsx(
-            "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs transition-colors",
-            activeEnvironmentId === env.id
-              ? "bg-[var(--kp-accent-muted)] text-[var(--kp-accent)]"
-              : "text-[var(--kp-text-secondary)] hover:bg-[var(--kp-bg-hover)]",
-          )}
-        >
-          <Globe size={12} />
-          <span className="truncate">{env.name}</span>
-          {env.isDefault && (
-            <span className="ml-auto text-[10px] text-[var(--kp-text-muted)]">default</span>
-          )}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function HistoryList() {
-  const { history, openTab } = useAppStore();
-
-  if (!history.length) {
-    return (
-      <div className="flex flex-col items-center justify-center py-8 text-center">
-        <Clock size={24} className="text-[var(--kp-text-muted)] mb-2" />
-        <p className="text-xs text-[var(--kp-text-tertiary)]">No history yet</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-0.5">
-      {history.map((entry) => (
-        <button
-          key={entry.id}
-          onClick={() => openTab(entry.request)}
-          className="flex items-center gap-1.5 w-full px-2 py-1 rounded-md text-xs hover:bg-[var(--kp-bg-hover)] transition-colors"
-        >
-          <span
-            className={clsx(
-              "text-[10px] font-bold w-10 shrink-0",
-              getMethodColor(entry.request.method),
-            )}
-          >
-            {entry.request.method}
-          </span>
-          <span className="truncate text-[var(--kp-text-secondary)]">{entry.request.url}</span>
-          <span className="ml-auto text-[10px] text-[var(--kp-text-muted)] shrink-0">
-            {formatTimeAgo(entry.timestamp)}
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-function getMethodColor(method: string): string {
-  const colors: Record<string, string> = {
-    GET: "text-[var(--kp-method-get)]",
-    POST: "text-[var(--kp-method-post)]",
-    PUT: "text-[var(--kp-method-put)]",
-    PATCH: "text-[var(--kp-method-patch)]",
-    DELETE: "text-[var(--kp-method-delete)]",
-    HEAD: "text-[var(--kp-method-head)]",
-    OPTIONS: "text-[var(--kp-method-options)]",
-  };
-  return colors[method] ?? "text-[var(--kp-text-secondary)]";
-}
-
-function formatTimeAgo(timestamp: string): string {
-  const diff = Date.now() - new Date(timestamp).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
 }

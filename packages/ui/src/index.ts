@@ -1,12 +1,16 @@
 // ── Components ───────────────────────────────────────────────────────────────
-export { AppShell } from "./components/layout/AppShell.js";
-export { Sidebar } from "./components/layout/Sidebar.js";
-export { RequestEditor } from "./components/request/RequestEditor.js";
-export { ResponseViewer } from "./components/response/ResponseViewer.js";
-export { CommandPalette } from "./components/command/CommandPalette.js";
+export { AppShell } from "./components/layout/AppShell";
+export { Sidebar } from "./components/layout/Sidebar";
+export { RequestEditor } from "./components/request/RequestEditor";
+export { ResponseBody } from "./components/response/ResponseBody";
+export { ResponseSummary } from "./components/response/ResponseSummary";
+export { CommandPalette } from "./components/command/CommandPalette";
 
 // ── Primitives ───────────────────────────────────────────────────────────────
-export { Button, Input, Badge, Tabs, IconButton, EmptyState } from "./components/common/primitives.js";
+export { Button, Input, Badge, Tabs, IconButton, EmptyState } from "./components/common/primitives";
 
-// ── Store ────────────────────────────────────────────────────────────────────
-export { useAppStore, type AppStore, type RequestTab, type ActivePanel, type ResponsePanel, type SidebarTab } from "./store/app-store.js";
+// ── Store ───────────────────────────────────────────────────────────────────
+export { useAppStore, type AppStore, type RequestTab, type ActivePanel, type ResponsePanel, type SidebarTab } from "./store/app-store";
+
+// ── Seed ─────────────────────────────────────────────────────────────────────
+export { createSeedCollection, createSeedEnvironment, createProductionEnvironment } from "./store/seed";
