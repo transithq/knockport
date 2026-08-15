@@ -41,8 +41,9 @@ export function RunnerModal() {
     if (!selected) return;
     setRunning(true);
     setResults([]);
-    const { DirectTransport } = await import("@knockport/transport");
-    const transport = new DirectTransport();
+    const { getTransport } = await import("@knockport/transport");
+    const settings = useAppStore.getState();
+    const transport = getTransport({ useRelay: settings.useRelay, relayUrl: settings.relayUrl });
     const requests = flattenRequests(selected);
     const all: RunResult[] = [];
 

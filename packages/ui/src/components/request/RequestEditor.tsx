@@ -353,6 +353,11 @@ kp.test("Response has data", () => {
 
 // ── Request Settings ─────────────────────────────────────────────────────────
 function RequestSettings() {
+  const useRelay = useAppStore((s) => s.useRelay);
+  const relayUrl = useAppStore((s) => s.relayUrl);
+  const setUseRelay = useAppStore((s) => s.setUseRelay);
+  const setRelayUrl = useAppStore((s) => s.setRelayUrl);
+
   return (
     <div className="kp-settings">
       <div className="kp-setting-row">
@@ -367,6 +372,27 @@ function RequestSettings() {
         <label>Timeout (ms)</label>
         <input type="number" defaultValue={30000} className="kp-num-input" />
       </div>
+      <div className="kp-setting-row">
+        <label>Send via relay (bypasses CORS)</label>
+        <input
+          type="checkbox"
+          className="kp-checkbox"
+          checked={useRelay}
+          onChange={(e) => setUseRelay(e.target.checked)}
+        />
+      </div>
+      {useRelay && (
+        <div className="kp-setting-row">
+          <label>Relay URL</label>
+          <input
+            type="text"
+            className="kp-text-input"
+            value={relayUrl}
+            onChange={(e) => setRelayUrl(e.target.value)}
+            placeholder="http://localhost:8787"
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -379,10 +405,11 @@ async function handleSend(tabId: string) {
 
   store.setLoading(tabId, true);
   try {
-    const { DirectTransport } = await import("@knockport/transport");
+    const { getTransport } = await import("@knockport/transport");
     const vars = buildVariableMap(store);
     const resolved = resolveRequest(request, vars);
-    const response = await new DirectTransport().execute(resolved);
+    const transport = getTransport({ useRelay: store.useRelay, relayUrl: store.relayUrl });
+    const response = await transport.execute(resolved);
     store.setResponse(tabId, response);
     store.addHistoryEntry({
       id: crypto.randomUUID(),

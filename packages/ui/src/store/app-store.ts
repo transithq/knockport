@@ -112,6 +112,10 @@ export interface AppStore {
   websocketOpen: boolean;
   theme: "dark" | "light";
 
+  // Transport settings (relay)
+  useRelay: boolean;
+  relayUrl: string;
+
   // Actions — Sidebar
   setSidebarTab: (tab: SidebarTab) => void;
   setSidebarWidth: (width: number) => void;
@@ -169,6 +173,8 @@ export interface AppStore {
   setRunnerOpen: (open: boolean) => void;
   setWebsocketOpen: (open: boolean) => void;
   toggleTheme: () => void;
+  setUseRelay: (on: boolean) => void;
+  setRelayUrl: (url: string) => void;
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -200,6 +206,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
   runnerOpen: false,
   websocketOpen: false,
   theme: "dark",
+
+  useRelay: typeof localStorage !== "undefined" && localStorage.getItem("kp-use-relay") === "1",
+  relayUrl:
+    (typeof localStorage !== "undefined" && localStorage.getItem("kp-relay-url")) ||
+    "http://localhost:8787",
 
   // ── Sidebar Actions ──────────────────────────────────────────────────────
   setSidebarTab: (tab) => set({ sidebarTab: tab }),
@@ -549,4 +560,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setWebsocketOpen: (open) => set({ websocketOpen: open }),
   toggleTheme: () =>
     set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
+
+  setUseRelay: (on) => {
+    set({ useRelay: on });
+    try {
+      localStorage.setItem("kp-use-relay", on ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  },
+
+  setRelayUrl: (url) => {
+    set({ relayUrl: url });
+    try {
+      localStorage.setItem("kp-relay-url", url);
+    } catch {
+      // ignore
+    }
+  },
 }));
