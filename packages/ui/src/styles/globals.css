@@ -726,6 +726,21 @@ body {
 .kp-runner-name { flex: 1; font-size: 12.5px; color: var(--kp-text-primary); }
 .kp-runner-meta { font-size: 11px; color: var(--kp-text-tertiary); font-family: var(--kp-font-mono); }
 
+/* ── Test results ────────────────────────────────────────────────────── */
+.kp-tests-list { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; }
+.kp-tests-summary { display: flex; align-items: center; gap: 10px; padding: 6px 8px; margin-bottom: 4px; border-bottom: 1px solid var(--kp-border-primary); }
+.kp-test-row { display: flex; align-items: baseline; gap: 10px; padding: 5px 8px; border-radius: var(--kp-radius-sm); }
+.kp-test-row:hover { background: var(--kp-bg-hover); }
+.kp-test-row .kp-runner-status { flex-shrink: 0; align-self: center; }
+.kp-test-name { font-size: 12.5px; color: var(--kp-text-primary); word-break: break-word; }
+.kp-test-msg { font-size: 11px; color: var(--kp-text-tertiary); word-break: break-all; }
+.kp-test-error { padding: 6px 8px; margin-bottom: 4px; font-size: 12px; color: var(--kp-error); background: var(--kp-error-bg); border-radius: var(--kp-radius-sm); }
+.kp-tests-editor { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.kp-test-edit-row { display: flex; gap: 6px; align-items: center; }
+.kp-test-edit-row input { flex: 1; padding: 6px 9px; background: var(--kp-bg-tertiary); border: 1px solid var(--kp-border-primary); border-radius: var(--kp-radius-sm); color: var(--kp-text-primary); font-size: 12px; outline: none; }
+.kp-test-edit-row input:first-child { flex: 2; }
+.kp-test-edit-row input:focus { border-color: var(--kp-accent); }
+
 /* ── WebSocket ────────────────────────────────────────────────────────────── */
 .kp-ws-controls { display: flex; gap: 8px; padding: 0 14px; }
 .kp-ws-log { flex: 1; min-height: 200px; max-height: 320px; display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; background: var(--kp-bg-tertiary); margin: 0 14px; border-radius: var(--kp-radius-md); }

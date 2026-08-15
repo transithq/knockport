@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Play, X, Loader2 } from "lucide-react";
 import { useAppStore } from "../../store/app-store";
-import { buildVariableMap, resolveRequest } from "../../store/variables";
+import { buildVariableMap, environmentVariableMap, resolveRequest } from "../../store/variables";
 import type { Collection, Folder, Request } from "@knockport/core";
 
 interface RunResult {
@@ -10,6 +10,8 @@ interface RunResult {
   status: number;
   time: number;
   ok: boolean;
+  testsPassed?: number;
+  testsTotal?: number;
   error?: string;
 }
 
@@ -42,6 +44,7 @@ export function RunnerModal() {
     setRunning(true);
     setResults([]);
     const { getTransport } = await import("@knockport/transport");
+    const { runTests, runPreScript } = await import("@knockport/engine");
     const settings = useAppStore.getState();
     const transport = getTransport({ useRelay: settings.useRelay, relayUrl: settings.relayUrl });
     const requests = flattenRequests(selected);
@@ -50,16 +53,40 @@ export function RunnerModal() {
     for (let it = 0; it < iterations; it++) {
       for (const req of requests) {
         const state = useAppStore.getState();
-        const resolved = resolveRequest(req, buildVariableMap(state));
+        let vars = buildVariableMap(state);
+        if (req.scripts?.pre?.trim()) {
+          vars = runPreScript(req.scripts.pre, vars, {
+            environment: environmentVariableMap(state),
+            request: req,
+          }).variables;
+        }
+        const resolved = resolveRequest(req, vars);
         const start = performance.now();
         try {
           const res = await transport.execute(resolved);
+          let testsPassed: number | undefined;
+          let testsTotal: number | undefined;
+          let testsOk = true;
+          const hasTests = Boolean(req.scripts?.test?.trim() || req.assertions?.length);
+          if (hasTests) {
+            const summary = await runTests(res, {
+              script: req.scripts?.test,
+              assertions: req.assertions,
+              environment: environmentVariableMap(state),
+              request: resolved,
+            });
+            testsPassed = summary.passed;
+            testsTotal = summary.tests.length;
+            testsOk = summary.failed === 0 && !summary.scriptError;
+          }
           all.push({
             name: req.name,
             method: req.method,
             status: res.status,
             time: Math.round(performance.now() - start),
-            ok: res.status >= 200 && res.status < 400,
+            ok: res.status >= 200 && res.status < 400 && testsOk,
+            testsPassed,
+            testsTotal,
           });
         } catch (err) {
           all.push({
@@ -110,7 +137,10 @@ export function RunnerModal() {
               <span className={`kp-runner-status ${r.ok ? "ok" : "fail"}`}>{r.ok ? "PASS" : "FAIL"}</span>
               <span className="kp-method-tag">{r.method}</span>
               <span className="kp-runner-name">{r.name}</span>
-              <span className="kp-runner-meta">{r.status} • {r.time} ms</span>
+              <span className="kp-runner-meta">
+                {r.status} • {r.time} ms
+                {r.testsTotal !== undefined && ` • tests ${r.testsPassed}/${r.testsTotal}`}
+              </span>
             </div>
           ))}
         </div>

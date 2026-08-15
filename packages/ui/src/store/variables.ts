@@ -27,6 +27,18 @@ export function buildVariableMap(state: Pick<AppStore, "collections" | "environm
   return map;
 }
 
+/** Variables of the active environment only (pm.environment.* scope). */
+export function environmentVariableMap(state: Pick<AppStore, "environments" | "activeEnvironmentId">): Record<string, string> {
+  const map: Record<string, string> = {};
+  const env = state.environments.find((e) => e.id === state.activeEnvironmentId);
+  if (env) {
+    for (const v of env.variables ?? []) {
+      if (v.enabled) map[v.key] = v.value;
+    }
+  }
+  return map;
+}
+
 function resolvePairs(pairs: KeyValuePair[], vars: Record<string, string>): KeyValuePair[] {
   return pairs.map((p) => ({
     ...p,

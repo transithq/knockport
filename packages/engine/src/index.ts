@@ -12,6 +12,11 @@
  * once @tropel/runtime-wasm is published.
  */
 
+export { runTests, runPreScript } from "./test-runner";
+export type { TestResult, TestRunSummary, RunTestsOptions, PreScriptResult } from "./test-runner";
+
+import { runTests, runPreScript } from "./test-runner";
+
 export type EngineStatus = "idle" | "loading" | "ready" | "error";
 
 export interface EngineConfig {
@@ -57,6 +62,10 @@ export class ScriptEngine {
     return this.status;
   }
 
+  getConfig(): EngineConfig {
+    return this.config;
+  }
+
   /**
    * Initialize the engine. Call this after first paint to avoid blocking UI.
    */
@@ -80,16 +89,16 @@ export class ScriptEngine {
   async executePreScript(
     script: string,
     variables: Record<string, string>,
-    request: any,
+    _request: any,
   ): Promise<ScriptExecutionResult> {
     const start = performance.now();
     try {
-      // M3: Send to Worker via postcard ABI
-      // For now, stub execution
+      const result = runPreScript(script, variables);
       return {
-        success: true,
-        variables,
+        success: !result.error,
+        variables: result.variables,
         assertions: [],
+        error: result.error,
         duration: performance.now() - start,
       };
     } catch (err) {
@@ -113,10 +122,12 @@ export class ScriptEngine {
   ): Promise<ScriptExecutionResult> {
     const start = performance.now();
     try {
+      const summary = await runTests(response, { script });
       return {
-        success: true,
+        success: !summary.scriptError && summary.failed === 0,
         variables,
-        assertions: [],
+        assertions: summary.tests.map((t) => ({ expression: t.name, passed: t.passed, message: t.message })),
+        error: summary.scriptError,
         duration: performance.now() - start,
       };
     } catch (err) {
@@ -137,14 +148,15 @@ export class ScriptEngine {
     assertions: string[],
     response: any,
   ): AssertionResult[] {
-    return assertions.map((expr) => {
-      try {
-        // M3: Delegate to engine
-        return { expression: expr, passed: true };
-      } catch {
-        return { expression: expr, passed: false, message: "Not implemented" };
-      }
+    // Fire-and-forget shim: callers that need results should use runTests()
+    // directly (async). Kept for interface compatibility.
+    const results: AssertionResult[] = [];
+    void runTests(response, {
+      assertions: assertions.map((expression) => ({ expression })),
+    }).then((summary) => {
+      results.push(...summary.tests.map((t) => ({ expression: t.name, passed: t.passed, message: t.message })));
     });
+    return results;
   }
 
   /**

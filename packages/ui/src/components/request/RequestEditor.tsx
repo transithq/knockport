@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Send, Loader2, ChevronDown, MoreHorizontal, Copy, Code2 } from "lucide-react";
+import { Send, Loader2, ChevronDown, MoreHorizontal, Copy, Code2, Plus, Trash2 } from "lucide-react";
 import { clsx } from "clsx";
 import { useAppStore, type ActivePanel } from "../../store/app-store";
-import { HTTP_METHODS, type HttpMethod, type KeyValuePair, type BodyContent, type AuthConfig } from "@knockport/core";
-import { buildVariableMap, resolveRequest } from "../../store/variables";
+import { HTTP_METHODS, type HttpMethod, type KeyValuePair, type BodyContent, type AuthConfig, type Assertion } from "@knockport/core";
+import { buildVariableMap, environmentVariableMap, resolveRequest } from "../../store/variables";
 import { CodeEditor } from "../common/CodeEditor";
 
 const methodColor: Record<string, string> = {
@@ -125,7 +125,7 @@ export function RequestEditor({ tabId }: { tabId: string }) {
           <BodyEditor body={request.body} onChange={(b) => useAppStore.getState().updateRequestBody(tabId, b)} />
         )}
         {activeRequestPanel === "scripts" && <ScriptEditor tabId={tabId} />}
-        {activeRequestPanel === "tests" && <TestsPanel />}
+        {activeRequestPanel === "tests" && <TestsPanel tabId={tabId} />}
         {activeRequestPanel === "settings" && <RequestSettings />}
       </div>
     </div>
@@ -335,17 +335,61 @@ function ScriptEditor({ tabId }: { tabId: string }) {
 }
 
 // ── Tests Panel ──────────────────────────────────────────────────────────────
-function TestsPanel() {
+function TestsPanel({ tabId }: { tabId: string }) {
+  const requests = useAppStore((s) => s.requests);
+  const updateRequest = useAppStore((s) => s.updateRequest);
+  const request = requests[tabId];
+  if (!request) return null;
+  const assertions = request.assertions ?? [];
+  const setAssertions = (list: Assertion[]) => updateRequest(tabId, { assertions: list });
+
   return (
     <div className="kp-hint-block">
-      <p>Write test assertions using the <code className="kp-mono kp-accent-text">kp.*</code> API:</p>
+      <p>Quick assertions evaluated against <code className="kp-mono kp-accent-text">response</code> — must return <code className="kp-mono kp-accent-text">true</code> to pass:</p>
+      <div className="kp-tests-editor">
+        {assertions.map((a, i) => (
+          <div className="kp-test-edit-row" key={i}>
+            <input
+              className="kp-mono"
+              value={a.expression}
+              placeholder="response.status === 200"
+              onChange={(e) => {
+                const next = [...assertions];
+                next[i] = { ...next[i], expression: e.target.value };
+                setAssertions(next);
+              }}
+            />
+            <input
+              value={a.description ?? ""}
+              placeholder="description (optional)"
+              onChange={(e) => {
+                const next = [...assertions];
+                next[i] = { ...next[i], description: e.target.value || undefined };
+                setAssertions(next);
+              }}
+            />
+            <button type="button" className="kp-icon-btn" title="Remove" onClick={() => setAssertions(assertions.filter((_, j) => j !== i))}>
+              <Trash2 size={13} />
+            </button>
+          </div>
+        ))}
+        <button type="button" className="kp-lang-btn" onClick={() => setAssertions([...assertions, { expression: "" }])}>
+          <Plus size={12} /> Add assertion
+        </button>
+      </div>
+      <p>For full control, write test scripts in the <strong>Scripts</strong> tab — <code className="kp-mono kp-accent-text">kp.*</code>, <code className="kp-mono kp-accent-text">pm.*</code> and <code className="kp-mono kp-accent-text">bru.*</code> are all supported:</p>
       <pre className="kp-code-block kp-mono">{`kp.test("Status is 200", () => {
   kp.response.to.have.status(200);
 });
 
-kp.test("Response has data", () => {
-  const json = kp.response.json();
-  kp.expect(json).to.have.property("data");
+pm.test("Response has data", () => {
+  const json = pm.response.json();
+  pm.expect(json).to.have.property("data");
+});
+
+// response CODE is numeric; pm.response.status is the reason text
+kp.test("fast enough", () => {
+  chai.expect(kp.response.responseTime).to.be.below(2000);
 });`}</pre>
     </div>
   );
@@ -406,11 +450,34 @@ async function handleSend(tabId: string) {
   store.setLoading(tabId, true);
   try {
     const { getTransport } = await import("@knockport/transport");
-    const vars = buildVariableMap(store);
+    let vars = buildVariableMap(store);
+    if (request.scripts?.pre?.trim()) {
+      const { runPreScript } = await import("@knockport/engine");
+      vars = runPreScript(request.scripts.pre, vars, {
+        environment: environmentVariableMap(store),
+        request,
+      }).variables;
+    }
     const resolved = resolveRequest(request, vars);
     const transport = getTransport({ useRelay: store.useRelay, relayUrl: store.relayUrl });
     const response = await transport.execute(resolved);
     store.setResponse(tabId, response);
+
+    // Run test scripts + assertions (interim TS runner; wasm engine in M3)
+    const hasTests = Boolean(request.scripts?.test?.trim() || request.assertions?.length);
+    if (hasTests) {
+      const { runTests } = await import("@knockport/engine");
+      const summary = await runTests(response, {
+        script: request.scripts?.test,
+        assertions: request.assertions,
+        environment: environmentVariableMap(store),
+        request: resolved,
+      });
+      store.setTestResults(tabId, summary);
+    } else {
+      store.setTestResults(tabId, null);
+    }
+
     store.addHistoryEntry({
       id: crypto.randomUUID(),
       request: resolved,
@@ -418,6 +485,7 @@ async function handleSend(tabId: string) {
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
+    store.setTestResults(tabId, null);
     store.setResponse(tabId, {
       id: crypto.randomUUID(),
       requestId: request.id,

@@ -30,16 +30,18 @@ work despite CORS. Monetization backend (auth/sync/billing) is a future phase �
 
 ```
 apps/web/            Vite SPA entry (main.tsx: loadCollections → seed if empty → loadHistory)
-apps/relay/          NOT YET CREATED — Rust/Axum CORS relay (next task, see §4)
+apps/relay/          Rust/Axum CORS relay — DONE (see §4). Standalone Cargo project.
 packages/core/       Domain types (Request, Response, Collection, Folder, Environment,
                      Variable, AuthConfig, BodyContent…), createId() util. Stable — extend, don't rewrite.
 packages/format/     YAML byte-stable serializer, importers (cURL/Postman v2.1/HAR + auto),
                      codegen (cURL/JS fetch/Python), exporters (Postman v2.1, native JSON).
-packages/transport/  Transport interface + DirectTransport (browser fetch) + registry.
-                     RelayTransport NOT implemented yet (pairs with apps/relay).
+packages/transport/  Transport interface + DirectTransport + RelayTransport + getTransport().
+                     Request Settings panel toggles relay vs direct.
 packages/storage/    Dexie schema (collections, environments, history, workspaces) with
                      create/save/update/delete per table; OPFS BodyStore; FileSystemAdapter.
-packages/engine/     ScriptEngine stub (real runtime lands in M3 via @tropel/runtime-wasm).
+packages/engine/     Test/assertion runtime (see §5b): vendored Tropel shims (pm/bru/chai)
+                     over TS bridge host. M3 swaps the host for @tropel/runtime-wasm;
+                     the shim files stay identical.
 packages/ui/         ALL UI. Zustand store (store/app-store.ts) — tabs are polymorphic:
                      kind "request" | "environment". Variable resolution in store/variables.ts
                      ({{var}} with collection < environment precedence). Components:
@@ -104,25 +106,83 @@ Follow-ups (not blocking):
 
 ## 5 · After relay — UI completeness (M2 remainder)
 
-- [ ] Assertions/tests actually executed client-side (simple expr eval first; real engine in M3)
-      — runner currently reports pass/fail from HTTP status only; wire `request.assertions`.
-- [ ] OpenAPI 3.x + Swagger 2.0 importer (format/importers.ts pattern), then Bruno `.bru`,
-      Insomnia, `.http` importers.
+- [x] Assertions/tests executed client-side — DONE via vendored Tropel shims (see §5b).
+      `request.assertions` (declarative) + `scripts.test` both run; results render in the
+      response Tests tab and gate the runner verdict.
+- [ ] Importers — **decided: reuse Tropel input adapters, do NOT rewrite in TS** (see §5a).
+      Existing TS importers (cURL/Postman/HAR) stay as the fallback until the wasm import
+      slice lands; new formats (OpenAPI/Swagger/Bruno/Insomnia/.http) are implemented in
+      Tropel only.
 - [ ] Export: native KnockPort JSON + YAML (serializeCollection already exists) from palette;
       export environment too.
 - [ ] Collection variables editing UI (mirror EnvironmentEditor as full-area tab on collection).
 - [ ] Virtualized sidebar tree (perf, when collections get big).
-- [ ] Disk-backed collections via FileSystemAdapter (open folder → read/write YAML per §5a).
+- [ ] Disk-backed collections via FileSystemAdapter (open folder → read/write YAML per §5a of the arch doc).
 - [ ] Settings modal (theme, relay URL, timeouts) instead of inline prompts.
 - [ ] Keyboard shortcuts: Ctrl+Enter send, Ctrl+S save-to-collection.
 - [ ] Response preview tab (HTML render in sandboxed iframe), cookies tab data.
 
+## 5a · Importers — shared via Tropel input adapters (DECIDED)
+
+One implementation for every surface (web wasm, extension, desktop native, CLI):
+- Tropel (`D:/tropel/crates/inputs/*`) defines `tropel_sdk::InputAdapter`
+  (`id` / `detect(bytes)` / `parse(bytes) -> Scenario`), registered via
+  `inventory::submit!` with priority-based auto-detect. Linked through tropel-engine.
+- Existing adapters: openapi (3.x + Swagger 2.0, $ref resolution), har, postman
+  (v2.1 via tropel-collection), k6, subprocess.
+- Added by us (committed in Tropel): `tropel-input-bru` (Bruno .bru block grammar,
+  path params → {{vars}}, disabled `~key` dropped, scripts/tests mapped) and
+  `tropel-input-insomnia` (v4 export JSON, parentId tree rebuild, env → variables).
+- Still to add in Tropel, same pattern: `tropel-input-http` (.http files),
+  `tropel-input-curl` (cURL one-liners).
+- KnockPort consumption plan:
+  1. Add an import entry point to the wasm slice (tropel-web or a slim new crate):
+     `import_any(bytes) -> Scenario JSON` iterating registered adapters by priority.
+  2. packages/format: one TS mapper `Scenario → Collection` (ScenarioItem folders ↔
+     Folder tree, Request fields ↔ core Request, Body variants ↔ BodyContent,
+     AuthConfig ↔ AuthConfig). That mapper is the ONLY KnockPort-side import code.
+  3. ImportModal: file upload (File System Access / drag-drop) → wasm import_any.
+     Bruno collections are directory trees → read every .bru under the folder
+     (bruno.json marks the root), one adapter call per file, assemble folders from paths.
+- Until the wasm slice lands, TS importers for cURL/Postman/HAR remain the web path.
+
+## 5b · Test scripting — vendored Tropel shims over a TS bridge host (DONE)
+
+Decision (user-directed): do NOT hand-roll assertions in TS — reuse Tropel's existing
+scripting shims verbatim so scripts are byte-compatible with the M3 wasm runtime.
+
+- Vendored (DO NOT EDIT, re-vendor from `D:\tropel` when upstream changes):
+  `packages/engine/shims/chai-shim.js` ← `D:\tropel\js\chai\chai-shim.js` (full chai,
+  ES5, Proxy guard throws on unknown assertion props), `shims/pm.js` ←
+  `D:\tropel\js\scripting-api\pm.js` (pm.* over ~60 `__tropel_pm_*` bridges),
+  `shims/bru.js` ← same dir (bru/req/res Bruno compat). Each carries a provenance header.
+- `packages/engine/src/test-runner.ts` is the HOST: `buildBridges()` implements the
+  `__tropel_pm_*` bridges in TS (response code/status/time/headers/body/json/cookies,
+  env/variables/collectionVariables stores, pm.test recording). A realm factory compiles
+  `chai-shim + pm + bru + prelude` ONCE via `new Function`; every run gets a fresh sandbox
+  (shims install non-configurable globalThis bindings) and direct-evals the user script in
+  prelude scope. `__tropel_sandbox_config = {namespace: 'kp'}` → canonical namespace is
+  `kp.*`; `pm.*` and `bru.*` are compat peers.
+- Semantics to remember: `pm.response.code` is the NUMERIC status, `pm.response.status`
+  is the reason TEXT; `pm.expect` is a lightweight chain (eql/equal/include/property/...),
+  full chai lives at global `chai.expect`; `pm.test` records one check, thrown errors
+  become `<name> (error)` failed checks; variable stores JSON-encode on set / parse on get.
+- Security: this host is NOT a sandbox — it executes user-authored scripts in the user's
+  own browser (documented in test-runner.ts). Real isolation arrives in M3 (QuickJS wasm).
+- M3 swap path: replace `createRealmWithHost` with wasm realm; bridges become Rust
+  functions; shims unchanged. Assertions data is passed as a JSON literal, never
+  string-concatenated into the script.
+- Vite `?raw` imports embed the shim sources; `raw.d.ts` needed in BOTH packages/engine
+  and packages/ui (ui's tsc compiles engine transitively).
+- Tests: `packages/engine/src/test-runner.test.ts` — 13 vitest cases (kp/pm/bru surfaces,
+  declarative assertions, error paths, runPreScript). Run: `cd packages/engine; npx vitest run`.
+
 ## 6 · M3 · Scripting engine
 
 - [ ] `packages/engine`: @tropel/runtime-wasm in a Web Worker, postcard ABI (see D:/tropel).
+      Replace the TS bridge host in test-runner.ts; keep the same vendored shim files.
 - [ ] Lazy-load wasm after first paint.
-- [ ] kp.* API; pm.*/bru.* compat; script editor type hints (CodeMirror completions).
-- [ ] Execute pre-request scripts before send, test scripts after response; expose kp.env get/set.
+- [ ] Script editor type hints (CodeMirror completions) for kp.*/pm.*/bru.*.
 
 ## 7 · M4 · Plugin host
 

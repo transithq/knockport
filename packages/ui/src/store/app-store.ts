@@ -17,6 +17,7 @@ import type {
   Folder,
 } from "@knockport/core";
 import { createId } from "@knockport/core";
+import type { TestRunSummary } from "@knockport/engine";
 
 // ── Tab types ────────────────────────────────────────────────────────────────
 export interface RequestTab {
@@ -97,6 +98,7 @@ export interface AppStore {
   // Request state (keyed by tab ID)
   requests: Record<string, Request>;
   responses: Record<string, Response | null>;
+  testResults: Record<string, TestRunSummary | null>;
   isLoading: Record<string, boolean>;
 
   // History
@@ -157,6 +159,7 @@ export interface AppStore {
 
   // Actions — Response
   setResponse: (tabId: string, response: Response | null) => void;
+  setTestResults: (tabId: string, results: TestRunSummary | null) => void;
   setLoading: (tabId: string, loading: boolean) => void;
 
   // Actions — History
@@ -194,6 +197,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   requests: {},
   responses: {},
+  testResults: {},
   isLoading: {},
 
   history: [],
@@ -312,6 +316,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       // Close any tab pointing at the deleted request
       const doomed = s.tabs.filter((t) => t.requestId === requestId).map((t) => t.id);
       let { tabs, activeTabId, requests, responses, isLoading } = s;
+      const testResults = { ...s.testResults };
       if (doomed.length > 0) {
         tabs = tabs.filter((t) => t.requestId !== requestId);
         if (activeTabId && doomed.includes(activeTabId)) activeTabId = tabs[0]?.id ?? null;
@@ -321,12 +326,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
         for (const id of doomed) {
           delete requests[id];
           delete responses[id];
+          delete testResults[id];
           delete isLoading[id];
         }
       }
       const c = collections.find((x) => x.id === collectionId);
       if (c) persistCollection(c);
-      return { collections, tabs, activeTabId, requests, responses, isLoading };
+      return { collections, tabs, activeTabId, requests, responses, testResults, isLoading };
     }),
 
   loadCollections: async () => {
@@ -406,6 +412,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       activeTabId: tabId,
       requests: { ...s.requests, [tabId]: request },
       responses: { ...s.responses, [tabId]: null },
+      testResults: { ...s.testResults, [tabId]: null },
     }));
   },
 
@@ -419,15 +426,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
       const newRequests = { ...s.requests };
       const newResponses = { ...s.responses };
+      const newTestResults = { ...s.testResults };
       const newLoading = { ...s.isLoading };
       delete newRequests[tabId];
       delete newResponses[tabId];
+      delete newTestResults[tabId];
       delete newLoading[tabId];
       return {
         tabs: newTabs,
         activeTabId: newActive,
         requests: newRequests,
         responses: newResponses,
+        testResults: newTestResults,
         isLoading: newLoading,
       };
     }),
@@ -523,6 +533,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setResponse: (tabId, response) =>
     set((s) => ({
       responses: { ...s.responses, [tabId]: response },
+    })),
+
+  setTestResults: (tabId, results) =>
+    set((s) => ({
+      testResults: { ...s.testResults, [tabId]: results },
     })),
 
   setLoading: (tabId, loading) =>

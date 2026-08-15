@@ -68,6 +68,7 @@ function formatSize(bytes: number): string {
 // ── Response Body (left-bottom panel) ────────────────────────────────────────
 export function ResponseBody({ tabId }: { tabId: string }) {
   const responses = useAppStore((s) => s.responses);
+  const testResults = useAppStore((s) => s.testResults[tabId]);
   const response = responses[tabId];
   const [bodyTab, setBodyTab] = useState<BodyTab>("body");
   const [viewTab, setViewTab] = useState<ViewTab>("pretty");
@@ -94,7 +95,9 @@ export function ResponseBody({ tabId }: { tabId: string }) {
         <button type="button" className={clsx("kp-req-tab", bodyTab === "headers" && "active")} onClick={() => setBodyTab("headers")}>
           Headers <span className="kp-tab-count">{headerCount}</span>
         </button>
-        <button type="button" className={clsx("kp-req-tab", bodyTab === "tests" && "active")} onClick={() => setBodyTab("tests")}>Test Results</button>
+        <button type="button" className={clsx("kp-req-tab", bodyTab === "tests" && "active")} onClick={() => setBodyTab("tests")}>
+          Test Results {testResults && testResults.tests.length > 0 && <span className="kp-tab-count">{testResults.passed}/{testResults.tests.length}</span>}
+        </button>
       </div>
 
       {bodyTab === "body" && (
@@ -156,7 +159,39 @@ export function ResponseBody({ tabId }: { tabId: string }) {
       )}
 
       {bodyTab === "tests" && (
-        <div className="kp-empty-center"><p className="kp-empty-sub">Test results appear here after running</p></div>
+        <div className="kp-tests-list kp-scroll">
+          {!testResults && (
+            <div className="kp-empty-center">
+              <p className="kp-empty-sub">No tests were run for this request</p>
+              <p className="kp-empty-sub">Add a test script or assertions in the Scripts / Tests tabs</p>
+            </div>
+          )}
+          {testResults && (
+            <>
+              <div className="kp-tests-summary">
+                <span className={`kp-runner-status ${testResults.failed === 0 && !testResults.scriptError ? "ok" : "fail"}`}>
+                  {testResults.failed === 0 && !testResults.scriptError ? "PASS" : "FAIL"}
+                </span>
+                <span className="kp-hint">
+                  {testResults.passed}/{testResults.tests.length} passed • {testResults.duration.toFixed(1)} ms
+                </span>
+              </div>
+              {testResults.scriptError && (
+                <div className="kp-test-error">Script error: {testResults.scriptError}</div>
+              )}
+              {testResults.tests.length === 0 && !testResults.scriptError && (
+                <p className="kp-hint">The script defined no tests.</p>
+              )}
+              {testResults.tests.map((t, i) => (
+                <div className="kp-test-row" key={i}>
+                  <span className={`kp-runner-status ${t.passed ? "ok" : "fail"}`}>{t.passed ? "PASS" : "FAIL"}</span>
+                  <span className="kp-test-name">{t.name}</span>
+                  {t.message && <span className="kp-test-msg kp-mono">{t.message}</span>}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
       )}
     </div>
   );
