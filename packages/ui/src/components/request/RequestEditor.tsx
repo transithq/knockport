@@ -145,6 +145,14 @@ function KeyValueTable({
   const update = (i: number, field: keyof KeyValuePair, value: string | boolean) =>
     onChange(pairs.map((p, idx) => (idx === i ? { ...p, [field]: value } : p)));
 
+  const [newKey, setNewKey] = useState("");
+  const commitNew = () => {
+    if (newKey.trim()) {
+      onChange([...pairs, { key: newKey.trim(), value: "", enabled: true }]);
+      setNewKey("");
+    }
+  };
+
   return (
     <div className="kp-kv">
       <div className="kp-kv-title">{title}</div>
@@ -193,12 +201,10 @@ function KeyValueTable({
           <input
             type="text"
             placeholder="Key"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") onChange([...pairs, { key: "", value: "", enabled: true }]);
-            }}
-            onChange={(e) => {
-              if (e.target.value) onChange([...pairs, { key: e.target.value, value: "", enabled: true }]);
-            }}
+            value={newKey}
+            onChange={(e) => setNewKey(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && commitNew()}
+            onBlur={commitNew}
           />
           <input type="text" placeholder="Value" readOnly />
           <input type="text" placeholder="Description" readOnly />

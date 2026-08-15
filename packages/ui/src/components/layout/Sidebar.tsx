@@ -347,7 +347,7 @@ export function Sidebar() {
                       title="Edit variables"
                       onClick={(ev) => {
                         ev.stopPropagation();
-                        useAppStore.getState().setEnvEditor(e.id);
+                        useAppStore.getState().openEnvironmentTab(e.id);
                       }}
                     >
                       <MoreHorizontal size={12} />

@@ -13,9 +13,10 @@ import { RequestEditor } from "../request/RequestEditor";
 import { ResponseBody } from "../response/ResponseBody";
 import { ResponseSummary } from "../response/ResponseSummary";
 import { CommandPalette } from "../command/CommandPalette";
-import { CodegenModal, ImportModal, EnvironmentEditorModal } from "../modals/Modals";
+import { CodegenModal, ImportModal } from "../modals/Modals";
 import { RunnerModal } from "../runner/RunnerModal";
 import { WebSocketModal } from "../websocket/WebSocketModal";
+import { EnvironmentEditor } from "../environments/EnvironmentEditor";
 import { createId } from "@knockport/core";
 import type { Request } from "@knockport/core";
 
@@ -66,9 +67,13 @@ function TabBar() {
               role="tab"
               aria-selected={active}
             >
-              <span className="kp-method-tag" style={{ color: methodColor[req?.method ?? "GET"] }}>
-                {req?.method}
-              </span>
+              {tab.kind === "environment" ? (
+                <Boxes size={12} className="kp-env-tab-icon" />
+              ) : (
+                <span className="kp-method-tag" style={{ color: methodColor[req?.method ?? "GET"] }}>
+                  {req?.method}
+                </span>
+              )}
               <span className="kp-truncate kp-tab-name">{tab.name}</span>
               {active && (
                 <button
@@ -161,8 +166,10 @@ function WelcomeScreen() {
 export function AppShell() {
   const theme = useAppStore((s) => s.theme);
   const activeTabId = useAppStore((s) => s.activeTabId);
+  const tabs = useAppStore((s) => s.tabs);
   const setCommandPaletteOpen = useAppStore((s) => s.setCommandPaletteOpen);
   const closeTab = useAppStore((s) => s.closeTab);
+  const activeTab = tabs.find((t) => t.id === activeTabId);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -184,7 +191,6 @@ export function AppShell() {
         else if (s.importOpen) s.setImportOpen(false);
         else if (s.runnerOpen) s.setRunnerOpen(false);
         else if (s.websocketOpen) s.setWebsocketOpen(false);
-        else if (s.envEditorId) s.setEnvEditor(null);
       }
     };
     window.addEventListener("keydown", handler);
@@ -205,16 +211,20 @@ export function AppShell() {
           </div>
         </div>
 
-        {activeTabId ? (
-          <div className="kp-workspace-grid">
-            <div className="kp-col-left">
-              <RequestEditor tabId={activeTabId} />
-              <ResponseBody tabId={activeTabId} />
+        {activeTab ? (
+          activeTab.kind === "environment" ? (
+            <EnvironmentEditor envId={activeTab.envId ?? ""} />
+          ) : (
+            <div className="kp-workspace-grid">
+              <div className="kp-col-left">
+                <RequestEditor tabId={activeTab.id} />
+                <ResponseBody tabId={activeTab.id} />
+              </div>
+              <div className="kp-col-right">
+                <ResponseSummary tabId={activeTab.id} />
+              </div>
             </div>
-            <div className="kp-col-right">
-              <ResponseSummary tabId={activeTabId} />
-            </div>
-          </div>
+          )
         ) : (
           <WelcomeScreen />
         )}
@@ -224,7 +234,6 @@ export function AppShell() {
       <ImportModal />
       <RunnerModal />
       <WebSocketModal />
-      <EnvironmentEditorModal />
     </div>
   );
 }

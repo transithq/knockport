@@ -345,6 +345,32 @@ body {
   outline: none;
 }
 .kp-env-name-input:focus { border-color: var(--kp-border-focus); }
+
+/* Full-area environment editor (opens as a tab) */
+.kp-env-editor { flex: 1; padding: 20px 24px; max-width: 900px; }
+.kp-env-editor-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.kp-env-editor-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--kp-accent-muted);
+  color: var(--kp-accent);
+  flex-shrink: 0;
+}
+.kp-env-editor .kp-hint { margin-bottom: 16px; }
+.kp-env-editor .kp-hint code {
+  font-family: var(--kp-font-mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--kp-bg-elevated);
+  color: var(--kp-accent);
+}
+.kp-env-editor .kp-kv-row { grid-template-columns: 28px 1fr 1fr 32px; }
+.kp-env-tab-icon { color: var(--kp-accent); flex-shrink: 0; }
 .kp-icon-btn.kp-danger:hover { color: var(--kp-error); background: var(--kp-error-bg); }
 .kp-active-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--kp-accent); }
 .kp-empty-hint { padding: 12px; font-size: 12px; color: var(--kp-text-muted); text-align: center; }

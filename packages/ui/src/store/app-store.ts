@@ -24,6 +24,8 @@ export interface RequestTab {
   requestId: string;
   name: string;
   isDirty: boolean;
+  kind?: "request" | "environment";
+  envId?: string;
 }
 
 export type ActivePanel = "params" | "headers" | "auth" | "body" | "scripts" | "tests" | "settings";
@@ -108,7 +110,6 @@ export interface AppStore {
   importOpen: boolean;
   runnerOpen: boolean;
   websocketOpen: boolean;
-  envEditorId: string | null;
   theme: "dark" | "light";
 
   // Actions — Sidebar
@@ -137,6 +138,7 @@ export interface AppStore {
 
   // Actions — Tabs
   openTab: (request: Request) => void;
+  openEnvironmentTab: (envId: string) => void;
   closeTab: (tabId: string) => void;
   setActiveTab: (tabId: string | null) => void;
 
@@ -166,7 +168,6 @@ export interface AppStore {
   setImportOpen: (open: boolean) => void;
   setRunnerOpen: (open: boolean) => void;
   setWebsocketOpen: (open: boolean) => void;
-  setEnvEditor: (id: string | null) => void;
   toggleTheme: () => void;
 }
 
@@ -198,7 +199,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   importOpen: false,
   runnerOpen: false,
   websocketOpen: false,
-  envEditorId: null,
   theme: "dark",
 
   // ── Sidebar Actions ──────────────────────────────────────────────────────
@@ -346,6 +346,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       environments: s.environments.map((e) =>
         e.id === id ? { ...e, ...changes } : e,
       ),
+      // Keep any open environment tab's title in sync with the name
+      tabs: changes.name
+        ? s.tabs.map((t) =>
+            t.kind === "environment" && t.envId === id ? { ...t, name: changes.name as string } : t,
+          )
+        : s.tabs,
     }));
     const e = get().environments.find((x) => x.id === id);
     if (e) persistEnvironment(e);
@@ -416,6 +422,25 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }),
 
   setActiveTab: (tabId) => set({ activeTabId: tabId }),
+
+  openEnvironmentTab: (envId) => {
+    const s = get();
+    const env = s.environments.find((e) => e.id === envId);
+    if (!env) return;
+    const existing = s.tabs.find((t) => t.kind === "environment" && t.envId === envId);
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return;
+    }
+    const tabId = createId("tab");
+    set((st) => ({
+      tabs: [
+        ...st.tabs,
+        { id: tabId, requestId: `env:${envId}`, envId, kind: "environment", name: env.name, isDirty: false },
+      ],
+      activeTabId: tabId,
+    }));
+  },
 
   // ── Request Actions ──────────────────────────────────────────────────────
   updateRequest: (tabId, changes) =>
@@ -522,7 +547,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setImportOpen: (open) => set({ importOpen: open }),
   setRunnerOpen: (open) => set({ runnerOpen: open }),
   setWebsocketOpen: (open) => set({ websocketOpen: open }),
-  setEnvEditor: (id) => set({ envEditorId: id }),
   toggleTheme: () =>
     set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
 }));

@@ -42,7 +42,7 @@
 - [x] Persistence — collections/environments saved to IndexedDB, restored on load (active env remembered)
 - [x] Codegen modal — syntax highlighting for cURL/JavaScript/Python output
 - [x] Collection export — Postman v2.1 JSON download from command palette
-- [x] Environment editor — modal to edit name + variables (add/remove/toggle), delete env from sidebar
+- [x] Environment editor — opens as a full-area tab (not a dialog): edit name + variables live, delete env from sidebar
 
 ## Not Started
 
