@@ -18,11 +18,12 @@
 - [x] Sidebar — workspace header, search, nav tabs (Collections/Environments/History), collection tree, env list, history list
 - [x] Request editor — method selector, URL bar, Send button, tabs (Params/Headers/Auth/Body/Scripts/Tests/Settings)
 - [x] Response viewer — status bar (status/timing/size), tabs (Pretty/Raw/Headers/Cookies/Timings), JSON pretty-print
-- [ ] AppShell — main layout with resizable panels (sidebar + tabs + request + response)
-- [ ] Command palette — cmdk-based command palette (Ctrl+K)
-- [ ] `apps/web` — Vite SPA wired to all packages
-- [ ] History persistence — Dexie-backed history with add/clear
-- [ ] Install deps + verify build
+- [x] AppShell - main layout with tab bar, sidebar toggle, request + response split
+- [x] Command palette - keyboard-navigable (arrows + enter), Ctrl+K shortcut
+- [x] `apps/web` - Vite SPA wired to all packages, dev server running on :5173
+- [x] History persistence - Dexie-backed history with add/clear
+- [x] Install deps + verify build (173 packages, pnpm + Turborepo)
+- [x] Git init + initial commit (57 files, 9067 insertions, no AI attribution)
 
 ## Not Started
 
