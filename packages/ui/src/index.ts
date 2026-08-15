@@ -16,6 +16,13 @@ export { CodeEditor } from "./components/common/CodeEditor";
 
 // ── Store ───────────────────────────────────────────────────────────────────
 export { useAppStore, type AppStore, type RequestTab, type ActivePanel, type ResponsePanel, type SidebarTab } from "./store/app-store";
+export {
+  openCollectionFolder,
+  isDiskCollection,
+  writeCollectionToDisk,
+  installDiskSync,
+  releaseDiskCollection,
+} from "./store/disk";
 
 // ── Seed ─────────────────────────────────────────────────────────────────────
 export { createSeedCollection, createSeedEnvironment, createProductionEnvironment } from "./store/seed";

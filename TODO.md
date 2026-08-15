@@ -141,7 +141,16 @@ Follow-ups (not blocking):
       @tanstack/react-virtual (only the visible slice + 12-row overscan is mounted). Expand/
       collapse state moved to the store (`collapsedNodes` + `toggleNode`) so it survives
       sidebar-tab switching. 5 vitest cases incl. a 50 000-request forest (flatten < 500 ms).
-- [ ] Disk-backed collections via FileSystemAdapter (open folder → read/write YAML per §5a of the arch doc).
+- [x] Disk-backed collections via FileSystemAdapter (open folder → read/write YAML per §5a of the arch doc).
+      DONE: `packages/format/src/files.ts` serializes/parses the multi-file directory layout
+      (`knockport.yaml` + `requests/**/folder.yaml` + per-request YAML, IDs persisted in files,
+      byte-stable, order preserved); 5 vitest round-trip cases. `packages/storage` gained
+      `readAllYaml()` (recursive), `removeEntry()` (recursive delete) and `rootName()` on
+      FileSystemAdapter. UI: palette command "Open Collection Folder…" imports the folder's
+      collection and binds the handle; `store/disk.ts` auto-writes changes back to disk
+      (debounced 400 ms via `installDiskSync()`, stale YAML leaves removed), "Save Collection to
+      Folder" force-writes, disk-backed collections show an open-folder badge in the tree.
+      Handles are session-only (re-open the folder next session).
 - [x] Settings modal (theme, relay URL, timeouts) instead of inline prompts. DONE: `components/settings/SettingsModal.tsx` (opened from topbar gear + sidebar Settings nav, Escape closes); theme dark/light + relay toggle/URL + global `timeoutMs` all persisted to localStorage (`kp-theme`, `kp-use-relay`, `kp-relay-url`, `kp-timeout-ms`). Timeout is enforced in `handleSend` + RunnerTab via an AbortSignal passed through `TransportOptions.signal`; AbortError renders "Request timed out after N ms". The per-request Settings tab now points to the global modal.
 - [x] Keyboard shortcuts: Ctrl+Enter send, Ctrl+S save-to-collection. DONE: global keydown in AppShell (skipped while any modal/palette is open, request tabs only); Ctrl+S uses new store action `saveRequestTab` (flushes dirty tab into owning collection + persistCollection without closing); `handleSend` in RequestEditor.tsx is exported for reuse.
 - [x] Response preview tab (HTML render in sandboxed iframe), cookies tab data. DONE: Preview tab in

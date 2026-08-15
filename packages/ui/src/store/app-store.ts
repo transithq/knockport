@@ -155,6 +155,8 @@ export interface AppStore {
   activeCollectionId: string | null;
   /** IDs of collapsed sidebar tree nodes (collections + folders). */
   collapsedNodes: string[];
+  /** Collection ID → name of the folder it is backed by on disk (session). */
+  diskRoots: Record<string, string>;
 
   // Environments
   environments: Environment[];
@@ -205,6 +207,7 @@ export interface AppStore {
   addCollection: (collection: Collection) => void;
   setActiveCollection: (id: string | null) => void;
   toggleNode: (id: string) => void;
+  setDiskRoot: (collectionId: string, rootName: string | null) => void;
   updateCollection: (id: string, changes: Partial<Collection>) => void;
   deleteCollection: (id: string) => void;
   addFolder: (collectionId: string, parentFolderId: string | null, name: string) => void;
@@ -276,6 +279,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   collections: [],
   activeCollectionId: null,
   collapsedNodes: [],
+  diskRoots: {},
 
   environments: [],
   activeEnvironmentId: null,
@@ -328,6 +332,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
         ? s.collapsedNodes.filter((x) => x !== id)
         : [...s.collapsedNodes, id],
     })),
+  setDiskRoot: (collectionId, rootName) =>
+    set((s) => {
+      const diskRoots = { ...s.diskRoots };
+      if (rootName === null) delete diskRoots[collectionId];
+      else diskRoots[collectionId] = rootName;
+      return { diskRoots };
+    }),
   updateCollection: (id, changes) => {
     set((s) => ({
       collections: s.collections.map((c) =>
@@ -352,11 +363,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const tabs = doomed.length > 0 ? s.tabs.filter((t) => !doomed.includes(t.id)) : s.tabs;
       let activeTabId = s.activeTabId;
       if (activeTabId && doomed.includes(activeTabId)) activeTabId = tabs[0]?.id ?? null;
+      const diskRoots = { ...s.diskRoots };
+      delete diskRoots[id];
       return {
         collections: s.collections.filter((c) => c.id !== id),
         activeCollectionId: s.activeCollectionId === id ? null : s.activeCollectionId,
         tabs,
         activeTabId,
+        diskRoots,
       };
     });
     dbCollections.delete(id).catch(() => {});

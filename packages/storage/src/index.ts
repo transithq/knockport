@@ -325,8 +325,69 @@ export class FileSystemAdapter {
     }
   }
 
+  /**
+   * Recursively read every YAML file under the opened directory (or a
+   * sub-path inside it). Returns forward-slash relative paths → contents.
+   */
+  async readAllYaml(subPath = ""): Promise<Record<string, string>> {
+    const out: Record<string, string> = {};
+    if (!this.dirHandle) return out;
+    try {
+      let root: FileSystemDirectoryHandle = this.dirHandle;
+      if (subPath) {
+        for (const part of subPath.split("/")) {
+          if (part) root = await root.getDirectoryHandle(part);
+        }
+      }
+      const walk = async (dir: FileSystemDirectoryHandle, prefix: string) => {
+        const iter = (dir as unknown as {
+          entries(): AsyncIterableIterator<[string, FileSystemHandle]>;
+        }).entries();
+        for await (const [name, handle] of iter) {
+          if (handle.kind === "file") {
+            if (name.endsWith(".yaml") || name.endsWith(".yml")) {
+              const file = await (handle as FileSystemFileHandle).getFile();
+              out[`${prefix}${name}`] = await file.text();
+            }
+          } else if (handle.kind === "directory") {
+            await walk(handle as FileSystemDirectoryHandle, `${prefix}${name}/`);
+          }
+        }
+      };
+      await walk(root, "");
+    } catch {
+      // unreadable tree — return what we have
+    }
+    return out;
+  }
+
+  /**
+   * Delete a relative path (file or directory) under the opened directory.
+   * Used when a request/folder is removed from a disk-backed collection so
+   * stale YAML files do not linger.
+   */
+  async removeEntry(path: string): Promise<boolean> {
+    if (!this.dirHandle) return false;
+    try {
+      const parts = path.split("/");
+      let dir = this.dirHandle;
+      for (let i = 0; i < parts.length - 1; i++) {
+        dir = await dir.getDirectoryHandle(parts[i]);
+      }
+      await dir.removeEntry(parts[parts.length - 1], { recursive: true });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   isOpen(): boolean {
     return this.dirHandle !== undefined;
+  }
+
+  /** Name of the opened directory (display only). */
+  rootName(): string | undefined {
+    return this.dirHandle?.name;
   }
 }
 

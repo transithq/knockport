@@ -6,6 +6,7 @@ import {
   createSeedCollection,
   createSeedEnvironment,
   createProductionEnvironment,
+  installDiskSync,
 } from "@knockport/ui";
 import "@knockport/ui/styles/globals.css";
 import "./styles.css";
@@ -41,6 +42,10 @@ async function seed() {
 }
 
 seed();
+
+// Disk-backed collections auto-sync store changes → YAML files in the opened
+// folder (no-op until a folder is opened via "Open Collection Folder…").
+installDiskSync();
 
 const root = document.getElementById("root")!;
 ReactDOM.createRoot(root).render(

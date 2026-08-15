@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronDown,
   ChevronRight,
+  FolderOpen,
   FolderPlus,
   MoreHorizontal,
   Plus,
@@ -52,6 +53,7 @@ function CollectionRow({ row, collapsed, onToggle }: RowProps) {
   const addFolder = useAppStore((s) => s.addFolder);
   const addRequest = useAppStore((s) => s.addRequest);
   const openCollectionTab = useAppStore((s) => s.openCollectionTab);
+  const diskRoot = useAppStore((s) => s.diskRoots[collection.id]);
   const open = !collapsed.has(collection.id);
 
   const rename = () => {
@@ -90,6 +92,11 @@ function CollectionRow({ row, collapsed, onToggle }: RowProps) {
       >
         <span className="kp-truncate">{collection.name}</span>
       </button>
+      {diskRoot && (
+        <span className="kp-disk-badge" title={`Disk-backed: ${diskRoot}`}>
+          <FolderOpen size={11} />
+        </span>
+      )}
       <span className="kp-count-badge">{countRequests(collection)}</span>
       <span className="kp-tree-actions">
         <button type="button" className="kp-icon-btn" title="New request" onClick={newRequest}>

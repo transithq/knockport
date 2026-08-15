@@ -331,6 +331,7 @@ body {
   background: var(--kp-bg-elevated);
   color: var(--kp-text-tertiary);
 }
+.kp-disk-badge { display: inline-flex; align-items: center; color: var(--kp-accent, #7c8cf8); flex-shrink: 0; }
 .kp-tree-actions { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; visibility: hidden; }
 .kp-tree-item:hover .kp-tree-actions, .kp-tree-item:focus-within .kp-tree-actions { visibility: visible; }
 .kp-tree-collection:hover .kp-count-badge { display: none; }

@@ -10,6 +10,12 @@ export {
   environmentFromRaw,
   assignCollectionIds,
 } from "./yaml";
+export {
+  collectionToFiles,
+  environmentsToFiles,
+  filesToCollection,
+  filesToEnvironments,
+} from "./files";
 
 // ── Importers & codegen ──────────────────────────────────────────────────────
 export {

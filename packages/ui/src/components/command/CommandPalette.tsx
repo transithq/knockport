@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../../store/app-store";
+import { openCollectionFolder, isDiskCollection, writeCollectionToDisk } from "../../store/disk";
 import { createId } from "@knockport/core";
 import { exportPostman, exportJson, serializeCollection, serializeEnvironment } from "@knockport/format";
 import {
   Search,
   FilePlus,
   FolderPlus,
+  FolderOpen,
   Trash2,
   Moon,
   Sun,
@@ -86,6 +88,22 @@ export function CommandPalette() {
     { id: "toggle-theme", label: `Switch to ${theme === "dark" ? "Light" : "Dark"} Theme`, icon: theme === "dark" ? <Sun size={14} /> : <Moon size={14} />, group: "Preferences", action: () => { toggleTheme(); setCommandPaletteOpen(false); } },
     { id: "clear-history", label: "Clear History", icon: <Trash2 size={14} />, group: "Actions", action: () => { clearHistory(); setCommandPaletteOpen(false); } },
     { id: "import-collection", label: "Import Collection", icon: <Download size={14} />, group: "Actions", action: () => { setCommandPaletteOpen(false); setImportOpen(true); } },
+    { id: "open-collection-folder", label: "Open Collection Folder…", icon: <FolderOpen size={14} />, group: "Actions", action: () => {
+      setCommandPaletteOpen(false);
+      openCollectionFolder().then(({ error }) => {
+        if (error) window.alert(error);
+      });
+    } },
+    { id: "save-collection-to-folder", label: "Save Collection to Folder", icon: <FolderOpen size={14} />, group: "Actions", action: () => {
+      const s = useAppStore.getState();
+      const col = s.collections.find((c) => c.id === s.activeCollectionId) ?? s.collections[0];
+      setCommandPaletteOpen(false);
+      if (col && isDiskCollection(col.id)) {
+        writeCollectionToDisk(col)
+          .then((ok) => window.alert(ok ? "Collection written to disk." : "Could not write collection to disk."))
+          .catch(() => window.alert("Could not write collection to disk."));
+      }
+    } },
     { id: "run-collection", label: "Run Collection", icon: <Play size={14} />, group: "Actions", action: () => {
       const s = useAppStore.getState();
       const colId = s.activeCollectionId ?? s.collections[0]?.id;
