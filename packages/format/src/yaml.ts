@@ -317,6 +317,7 @@ function rawToFolder(raw: any): Folder {
 }
 
 function rawToRequest(raw: any): Request {
+  const body = raw.body;
   return {
     id: raw.id ?? "",
     name: raw.name ?? "Request",
@@ -324,9 +325,12 @@ function rawToRequest(raw: any): Request {
     url: raw.url ?? "",
     headers: (raw.headers ?? []).map(deserializePair),
     params: (raw.params ?? []).map(deserializePair),
-    body: raw.body
-      ? { type: raw.body.type, content: raw.body.content, formData: raw.body.formData, graphql: raw.body.graphql }
-      : { type: "none" },
+    body:
+      body && typeof body === "object"
+        ? { type: body.type ?? "none", content: body.content, formData: body.formData, graphql: body.graphql }
+        : body && typeof body === "string"
+          ? { type: "text", content: body }
+          : { type: "none" },
     auth: raw.auth ? deserializeAuth(raw.auth) : { type: "inherit" },
     scripts: raw.scripts,
     assertions: raw.assertions,

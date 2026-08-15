@@ -49,6 +49,18 @@ function safeName(name: string, used: Set<string>): string {
 
 // ── Write side ────────────────────────────────────────────────────────────────
 function requestDoc(r: Request): Record<string, any> {
+  const body = r.body;
+  const diskBody =
+    body.formData !== undefined
+      ? {
+          ...body,
+          // File handles cannot live in a text file — replace with a marker.
+          formData: body.formData.map((f) => ({
+            ...f,
+            value: typeof f.value === "string" ? f.value : "[file]",
+          })),
+        }
+      : body;
   return {
     id: r.id,
     name: r.name,
@@ -56,7 +68,7 @@ function requestDoc(r: Request): Record<string, any> {
     url: r.url,
     headers: r.headers.length ? r.headers : undefined,
     params: r.params.length ? r.params : undefined,
-    body: r.body.type !== "none" ? r.body : undefined,
+    body: body.type !== "none" ? diskBody : undefined,
     auth: r.auth?.type !== "inherit" ? r.auth : undefined,
     scripts: r.scripts,
     assertions: r.assertions?.length ? r.assertions : undefined,

@@ -113,5 +113,9 @@ export function installDiskSync(): void {
       if (!adapters.has(c.id)) continue;
       if (c !== prev.find((p) => p.id === c.id)) scheduleDiskWrite(c.id);
     }
+    // Drop adapters for collections that were deleted while disk-backed
+    for (const id of [...adapters.keys()]) {
+      if (!state.collections.some((c) => c.id === id)) adapters.delete(id);
+    }
   });
 }
