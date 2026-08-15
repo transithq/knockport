@@ -392,7 +392,7 @@ kp.test("fast enough", () => {
 }
 
 // ── Request Settings ─────────────────────────────────────────────────────────
-// Transport preferences (relay, timeout) are global — see SettingsModal.
+// Transport preferences (relay, timeout) are global — see the Settings page.
 function RequestSettings() {
   return (
     <div className="kp-hint-block">
@@ -403,7 +403,7 @@ function RequestSettings() {
       <button
         type="button"
         className="kp-btn secondary"
-        onClick={() => useAppStore.getState().setSettingsOpen(true)}
+        onClick={() => useAppStore.getState().openSettingsTab()}
       >
         Open Settings
       </button>

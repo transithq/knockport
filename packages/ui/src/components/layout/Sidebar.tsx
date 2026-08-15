@@ -1,22 +1,22 @@
-import {
-  LayoutDashboard,
-  FolderClosed,
-  Boxes,
-  History as HistoryIcon,
-  Plug,
-  Server,
-  Radio,
-  Settings,
-  Search,
-  ChevronDown,
-  Plus,
-  MoreHorizontal,
-  Moon,
-  Trash2,
-  Aperture,
-} from "lucide-react";
 import { createId } from "@knockport/core";
-import { useAppStore, type SidebarTab } from "../../store/app-store";
+import {
+  Aperture,
+  Boxes,
+  ChevronDown,
+  FolderClosed,
+  History as HistoryIcon,
+  LayoutDashboard,
+  Moon,
+  MoreHorizontal,
+  Plug,
+  Plus,
+  Radio,
+  Search,
+  Server,
+  Settings,
+  Trash2,
+} from "lucide-react";
+import { type SidebarTab, useAppStore } from "../../store/app-store";
 import { CollectionTree } from "./CollectionTree";
 
 // ── Method color helper ──────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ export function Sidebar() {
   const openCommandPalette = useAppStore((s) => s.setCommandPaletteOpen);
   const toggleTheme = useAppStore((s) => s.toggleTheme);
   const setWebsocketOpen = useAppStore((s) => s.setWebsocketOpen);
-  const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
+  const openSettingsTab = useAppStore((s) => s.openSettingsTab);
   const addCollection = useAppStore((s) => s.addCollection);
   const addEnvironment = useAppStore((s) => s.addEnvironment);
 
@@ -109,7 +109,9 @@ export function Sidebar() {
       {/* Workspace selector */}
       <button type="button" className="kp-workspace-btn">
         <Boxes size={15} />
-        <span className="kp-truncate" style={{ flex: 1, textAlign: "left" }}>My Workspace</span>
+        <span className="kp-truncate" style={{ flex: 1, textAlign: "left" }}>
+          My Workspace
+        </span>
         <ChevronDown size={14} />
       </button>
 
@@ -132,7 +134,7 @@ export function Sidebar() {
               className={`kp-nav-item${active ? " active" : ""}`}
               onClick={() => {
                 if (item.id === "websocket") setWebsocketOpen(true);
-                else if (item.id === "settings") setSettingsOpen(true);
+                else if (item.id === "settings") openSettingsTab();
                 else if (item.id !== "placeholder") setSidebarTab(item.id as SidebarTab);
               }}
             >
@@ -180,7 +182,9 @@ export function Sidebar() {
                     onClick={() => setActiveEnvironment(e.id)}
                     onKeyDown={(ev) => ev.key === "Enter" && setActiveEnvironment(e.id)}
                   >
-                    <span className="kp-truncate" style={{ flex: 1 }}>{e.name}</span>
+                    <span className="kp-truncate" style={{ flex: 1 }}>
+                      {e.name}
+                    </span>
                     {e.id === activeEnvironmentId && <span className="kp-active-dot" />}
                     <span className="kp-tree-actions">
                       <button
@@ -251,7 +255,9 @@ export function Sidebar() {
           <span className="kp-online-dot" /> Online
         </span>
         <span>v0.1.0</span>
-        <button type="button" className="kp-link-btn">Feedback</button>
+        <button type="button" className="kp-link-btn">
+          Feedback
+        </button>
       </div>
     </aside>
   );

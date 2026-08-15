@@ -1,23 +1,23 @@
-import { create } from "zustand";
-import {
-  history as dbHistory,
-  collections as dbCollections,
-  environments as dbEnvironments,
-} from "@knockport/storage";
 import type {
-  Request,
-  Response,
+  AuthConfig,
+  BodyContent,
   Collection,
   Environment,
-  HistoryEntry,
-  KeyValuePair,
-  BodyContent,
-  AuthConfig,
-  HttpMethod,
   Folder,
+  HistoryEntry,
+  HttpMethod,
+  KeyValuePair,
+  Request,
+  Response,
 } from "@knockport/core";
 import { createId } from "@knockport/core";
 import type { TestRunSummary } from "@knockport/engine";
+import {
+  collections as dbCollections,
+  environments as dbEnvironments,
+  history as dbHistory,
+} from "@knockport/storage";
+import { create } from "zustand";
 
 // ── Tab types ────────────────────────────────────────────────────────────────
 export interface RequestTab {
@@ -25,7 +25,7 @@ export interface RequestTab {
   requestId: string;
   name: string;
   isDirty: boolean;
-  kind?: "request" | "environment" | "collection" | "runner";
+  kind?: "request" | "environment" | "collection" | "runner" | "settings";
   envId?: string;
   collectionId?: string;
 }
@@ -128,7 +128,10 @@ function replaceRequestInFolders(folders: Folder[], requestId: string, req: Requ
   }));
 }
 
-function findOwningCollection(collections: Collection[], requestId: string): Collection | undefined {
+function findOwningCollection(
+  collections: Collection[],
+  requestId: string,
+): Collection | undefined {
   return collections.find(
     (c) => c.requests.some((r) => r.id === requestId) || containsRequest(c.folders, requestId),
   );
@@ -188,7 +191,6 @@ export interface AppStore {
   codegenOpen: boolean;
   importOpen: boolean;
   websocketOpen: boolean;
-  settingsOpen: boolean;
   theme: "dark" | "light";
 
   // Transport settings (relay)
@@ -229,6 +231,7 @@ export interface AppStore {
   openEnvironmentTab: (envId: string) => void;
   openCollectionTab: (collectionId: string) => void;
   openRunnerTab: (collectionId: string) => void;
+  openSettingsTab: () => void;
   closeTab: (tabId: string) => void;
   saveRequestTab: (tabId: string) => void;
   setActiveTab: (tabId: string | null) => void;
@@ -262,7 +265,6 @@ export interface AppStore {
   setCodegenOpen: (open: boolean) => void;
   setImportOpen: (open: boolean) => void;
   setWebsocketOpen: (open: boolean) => void;
-  setSettingsOpen: (open: boolean) => void;
   toggleTheme: () => void;
   setTheme: (theme: "dark" | "light") => void;
   setUseRelay: (on: boolean) => void;
@@ -303,8 +305,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   codegenOpen: false,
   importOpen: false,
   websocketOpen: false,
-  settingsOpen: false,
-  theme: typeof localStorage !== "undefined" && localStorage.getItem("kp-theme") === "light" ? "light" : "dark",
+  theme:
+    typeof localStorage !== "undefined" && localStorage.getItem("kp-theme") === "light"
+      ? "light"
+      : "dark",
 
   useRelay: typeof localStorage !== "undefined" && localStorage.getItem("kp-use-relay") === "1",
   relayUrl:
@@ -312,7 +316,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     "http://localhost:8787",
 
   timeoutMs:
-    (typeof localStorage !== "undefined" && Number.parseInt(localStorage.getItem("kp-timeout-ms") ?? "", 10)) ||
+    (typeof localStorage !== "undefined" &&
+      Number.parseInt(localStorage.getItem("kp-timeout-ms") ?? "", 10)) ||
     30000,
 
   // ── Sidebar Actions ──────────────────────────────────────────────────────
@@ -341,9 +346,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }),
   updateCollection: (id, changes) => {
     set((s) => ({
-      collections: s.collections.map((c) =>
-        c.id === id ? { ...c, ...changes } : c,
-      ),
+      collections: s.collections.map((c) => (c.id === id ? { ...c, ...changes } : c)),
       // Keep any open collection tab's title in sync with the name
       tabs: changes.name
         ? s.tabs.map((t) =>
@@ -359,7 +362,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   deleteCollection: (id) => {
     set((s) => {
       // Close any variables tab pointing at the deleted collection
-      const doomed = s.tabs.filter((t) => t.kind === "collection" && t.collectionId === id).map((t) => t.id);
+      const doomed = s.tabs
+        .filter((t) => t.kind === "collection" && t.collectionId === id)
+        .map((t) => t.id);
       const tabs = doomed.length > 0 ? s.tabs.filter((t) => !doomed.includes(t.id)) : s.tabs;
       let activeTabId = s.activeTabId;
       if (activeTabId && doomed.includes(activeTabId)) activeTabId = tabs[0]?.id ?? null;
@@ -403,9 +408,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   deleteFolder: (collectionId, folderId) => {
     set((s) => ({
       collections: s.collections.map((c) =>
-        c.id === collectionId
-          ? { ...c, folders: removeFolder(c.folders, folderId) }
-          : c,
+        c.id === collectionId ? { ...c, folders: removeFolder(c.folders, folderId) } : c,
       ),
     }));
     const c = get().collections.find((x) => x.id === collectionId);
@@ -428,7 +431,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
       collections: s.collections.map((c) =>
         c.id === collectionId
           ? folderId
-            ? { ...c, folders: mapFolderTree(c.folders, folderId, (f) => ({ ...f, requests: [...f.requests, request] })) }
+            ? {
+                ...c,
+                folders: mapFolderTree(c.folders, folderId, (f) => ({
+                  ...f,
+                  requests: [...f.requests, request],
+                })),
+              }
             : { ...c, requests: [...c.requests, request] }
           : c,
       ),
@@ -442,7 +451,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set((s) => {
       const collections = s.collections.map((c) =>
         c.id === collectionId
-          ? { ...c, folders: removeRequest(c.folders, requestId), requests: c.requests.filter((r) => r.id !== requestId) }
+          ? {
+              ...c,
+              folders: removeRequest(c.folders, requestId),
+              requests: c.requests.filter((r) => r.id !== requestId),
+            }
           : c,
       );
       // Close any tab pointing at the deleted request
@@ -492,9 +505,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
   updateEnvironment: (id, changes) => {
     set((s) => ({
-      environments: s.environments.map((e) =>
-        e.id === id ? { ...e, ...changes } : e,
-      ),
+      environments: s.environments.map((e) => (e.id === id ? { ...e, ...changes } : e)),
       // Keep any open environment tab's title in sync with the name
       tabs: changes.name
         ? s.tabs.map((t) =>
@@ -645,7 +656,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set((st) => ({
       tabs: [
         ...st.tabs,
-        { id: tabId, requestId: `env:${envId}`, envId, kind: "environment", name: env.name, isDirty: false },
+        {
+          id: tabId,
+          requestId: `env:${envId}`,
+          envId,
+          kind: "environment",
+          name: env.name,
+          isDirty: false,
+        },
       ],
       activeTabId: tabId,
     }));
@@ -703,6 +721,23 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }));
   },
 
+  openSettingsTab: () => {
+    const s = get();
+    const existing = s.tabs.find((t) => t.kind === "settings");
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return;
+    }
+    const tabId = createId("tab");
+    set((st) => ({
+      tabs: [
+        ...st.tabs,
+        { id: tabId, requestId: "settings", kind: "settings", name: "Settings", isDirty: false },
+      ],
+      activeTabId: tabId,
+    }));
+  },
+
   // ── Request Actions ──────────────────────────────────────────────────────
   updateRequest: (tabId, changes) =>
     set((s) => ({
@@ -721,9 +756,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         ...s.requests,
         [tabId]: { ...s.requests[tabId], method },
       },
-      tabs: s.tabs.map((t) =>
-        t.id === tabId ? { ...t, isDirty: true } : t,
-      ),
+      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, isDirty: true } : t)),
     })),
 
   updateRequestUrl: (tabId, url) =>
@@ -732,9 +765,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         ...s.requests,
         [tabId]: { ...s.requests[tabId], url },
       },
-      tabs: s.tabs.map((t) =>
-        t.id === tabId ? { ...t, isDirty: true } : t,
-      ),
+      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, isDirty: true } : t)),
     })),
 
   updateRequestHeaders: (tabId, headers) =>
@@ -805,7 +836,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-    recordCollectionRun: (run) => {
+  recordCollectionRun: (run) => {
     set((s) => ({ collectionRuns: [run, ...s.collectionRuns].slice(0, 20) }));
   },
 
@@ -834,7 +865,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setCodegenOpen: (open) => set({ codegenOpen: open }),
   setImportOpen: (open) => set({ importOpen: open }),
   setWebsocketOpen: (open) => set({ websocketOpen: open }),
-  setSettingsOpen: (open) => set({ settingsOpen: open }),
   toggleTheme: () => {
     const next = get().theme === "dark" ? "light" : "dark";
     get().setTheme(next);

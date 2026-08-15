@@ -138,3 +138,19 @@ User noted the Post-response script option was missing (only Pre-Request + Tests
 - Tests: 5 engine vitest cases (response access, var extraction, env read, error capture, empty). Engine 19 + format 15 + ui 19 all green; `pnpm --filter web build` green.
 - Note: `packages/plugin-host` typecheck has a PRE-EXISTING unused-var error at HEAD (src/index.ts:14 'config') â€” unrelated to scripting work.
 
+
+## 11 · Session 2026-08-16 (cont. #3): Settings as a full-area tab — committed
+
+User rejected the modal: "settings should not be a modal but rather a page rendered in the middle
+like other pages." Converted:
+
+- New `RequestTab.kind = "settings"`; `openSettingsTab()` action (singleton tab, focus-if-open).
+- `SettingsPage.tsx` renders as a full-area `kp-settings-page` panel with Appearance / Transport /
+  Requests sections (same controls the modal had; Escape no longer dismisses it — it's a tab).
+- Deleted `SettingsModal.tsx` + `settingsOpen`/`setSettingsOpen`; removed the modal from the
+  AppShell tree and from the Ctrl+Enter/Escape guard chain. Tab icon = `lucide` `Settings`.
+- Gear button (topbar) + sidebar Settings nav now call `openSettingsTab()`.
+- Gotcha: running `biome check --fix` on a CSS file reformats EVERY single-line rule
+  multi-line, producing a large cosmetic diff in `globals.css`. Limit `--fix` to files with
+  real changes; accept the whole-file churn when it lands.
+- 19 ui tests + `pnpm --filter web build` green.

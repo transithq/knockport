@@ -1,28 +1,19 @@
+import { createId } from "@knockport/core";
+import type { Request } from "@knockport/core";
+import { Boxes, Braces, ChevronDown, MoreHorizontal, Play, Plus, Settings, X } from "lucide-react";
 import { useEffect } from "react";
-import {
-  Plus,
-  MoreHorizontal,
-  Settings,
-  ChevronDown,
-  X,
-  Boxes,
-  Braces,
-  Play,
-} from "lucide-react";
 import { useAppStore } from "../../store/app-store";
-import { Sidebar } from "./Sidebar";
+import { CollectionEditor } from "../collections/CollectionEditor";
+import { CommandPalette } from "../command/CommandPalette";
+import { EnvironmentEditor } from "../environments/EnvironmentEditor";
+import { CodegenModal, ImportModal } from "../modals/Modals";
 import { RequestEditor, handleSend } from "../request/RequestEditor";
 import { ResponseBody } from "../response/ResponseBody";
 import { ResponseSummary } from "../response/ResponseSummary";
-import { CommandPalette } from "../command/CommandPalette";
-import { CodegenModal, ImportModal } from "../modals/Modals";
-import { SettingsModal } from "../settings/SettingsModal";
 import { RunnerTab } from "../runner/RunnerTab";
+import { SettingsPage } from "../settings/SettingsPage";
 import { WebSocketModal } from "../websocket/WebSocketModal";
-import { EnvironmentEditor } from "../environments/EnvironmentEditor";
-import { CollectionEditor } from "../collections/CollectionEditor";
-import { createId } from "@knockport/core";
-import type { Request } from "@knockport/core";
+import { Sidebar } from "./Sidebar";
 
 const methodColor: Record<string, string> = {
   GET: "var(--kp-method-get)",
@@ -77,8 +68,13 @@ function TabBar() {
                 <Braces size={12} className="kp-env-tab-icon" />
               ) : tab.kind === "runner" ? (
                 <Play size={12} className="kp-env-tab-icon" />
+              ) : tab.kind === "settings" ? (
+                <Settings size={12} className="kp-env-tab-icon" />
               ) : (
-                <span className="kp-method-tag" style={{ color: methodColor[req?.method ?? "GET"] }}>
+                <span
+                  className="kp-method-tag"
+                  style={{ color: methodColor[req?.method ?? "GET"] }}
+                >
                   {req?.method}
                 </span>
               )}
@@ -124,7 +120,9 @@ function EnvironmentSelector() {
       >
         {environments.length === 0 && <option value="">No Environment</option>}
         {environments.map((e) => (
-          <option key={e.id} value={e.id}>{e.name}</option>
+          <option key={e.id} value={e.id}>
+            {e.name}
+          </option>
         ))}
       </select>
       <ChevronDown size={14} />
@@ -154,7 +152,9 @@ function WelcomeScreen() {
   return (
     <div className="kp-welcome">
       <div className="kp-welcome-logo">
-        <span className="kp-logo-mark large"><Boxes size={28} /></span>
+        <span className="kp-logo-mark large">
+          <Boxes size={28} />
+        </span>
       </div>
       <h1>KnockPort</h1>
       <p>The fast, light API client. Select a request from the sidebar or create a new one.</p>
@@ -162,7 +162,11 @@ function WelcomeScreen() {
         <button type="button" className="kp-btn primary" onClick={newRequest}>
           <Plus size={15} /> New Request
         </button>
-        <button type="button" className="kp-btn secondary" onClick={() => setCommandPaletteOpen(true)}>
+        <button
+          type="button"
+          className="kp-btn secondary"
+          onClick={() => setCommandPaletteOpen(true)}
+        >
           Command Palette
         </button>
       </div>
@@ -196,7 +200,7 @@ export function AppShell() {
       // suppressed while any modal or the command palette is open)
       if ((e.ctrlKey || e.metaKey) && (e.key === "Enter" || e.key.toLowerCase() === "s")) {
         const s = useAppStore.getState();
-        if (s.commandPaletteOpen || s.codegenOpen || s.importOpen || s.websocketOpen || s.settingsOpen) return;
+        if (s.commandPaletteOpen || s.codegenOpen || s.importOpen || s.websocketOpen) return;
         const tab = s.tabs.find((t) => t.id === s.activeTabId);
         if (!tab || (tab.kind && tab.kind !== "request")) return;
         e.preventDefault();
@@ -208,7 +212,6 @@ export function AppShell() {
         if (s.codegenOpen) s.setCodegenOpen(false);
         else if (s.importOpen) s.setImportOpen(false);
         else if (s.websocketOpen) s.setWebsocketOpen(false);
-        else if (s.settingsOpen) s.setSettingsOpen(false);
       }
     };
     window.addEventListener("keydown", handler);
@@ -227,7 +230,7 @@ export function AppShell() {
               type="button"
               className="kp-icon-btn"
               title="Settings"
-              onClick={() => useAppStore.getState().setSettingsOpen(true)}
+              onClick={() => useAppStore.getState().openSettingsTab()}
             >
               <Settings size={16} />
             </button>
@@ -241,6 +244,8 @@ export function AppShell() {
             <CollectionEditor collectionId={activeTab.collectionId ?? ""} />
           ) : activeTab.kind === "runner" ? (
             <RunnerTab collectionId={activeTab.collectionId ?? ""} />
+          ) : activeTab.kind === "settings" ? (
+            <SettingsPage />
           ) : (
             <div className="kp-workspace-grid">
               <div className="kp-col-left">
@@ -260,7 +265,6 @@ export function AppShell() {
       <CodegenModal />
       <ImportModal />
       <WebSocketModal />
-      <SettingsModal />
     </div>
   );
 }
