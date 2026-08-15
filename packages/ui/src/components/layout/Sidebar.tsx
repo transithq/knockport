@@ -43,7 +43,7 @@ function MethodTag({ method }: { method: string }) {
 
 // ── Nav items ────────────────────────────────────────────────────────────────
 interface NavItem {
-  id: SidebarTab | "placeholder";
+  id: SidebarTab | "placeholder" | "websocket";
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }
@@ -55,7 +55,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "history", label: "History", icon: HistoryIcon },
   { id: "placeholder", label: "APIs", icon: Plug },
   { id: "placeholder", label: "Mock Servers", icon: Server },
-  { id: "placeholder", label: "WebSockets", icon: Radio },
+  { id: "websocket", label: "WebSockets", icon: Radio },
   { id: "placeholder", label: "Settings", icon: Settings },
 ];
 
@@ -151,6 +151,7 @@ export function Sidebar() {
   const history = useAppStore((s) => s.history);
   const openCommandPalette = useAppStore((s) => s.setCommandPaletteOpen);
   const toggleTheme = useAppStore((s) => s.toggleTheme);
+  const setWebsocketOpen = useAppStore((s) => s.setWebsocketOpen);
 
   return (
     <aside className="kp-sidebar">
@@ -186,7 +187,10 @@ export function Sidebar() {
               key={item.label}
               type="button"
               className={`kp-nav-item${active ? " active" : ""}`}
-              onClick={() => item.id !== "placeholder" && setSidebarTab(item.id as SidebarTab)}
+              onClick={() => {
+                if (item.id === "websocket") setWebsocketOpen(true);
+                else if (item.id !== "placeholder") setSidebarTab(item.id as SidebarTab);
+              }}
             >
               <Icon size={15} />
               <span>{item.label}</span>

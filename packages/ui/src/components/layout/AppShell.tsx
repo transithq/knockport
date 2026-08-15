@@ -14,6 +14,8 @@ import { ResponseBody } from "../response/ResponseBody";
 import { ResponseSummary } from "../response/ResponseSummary";
 import { CommandPalette } from "../command/CommandPalette";
 import { CodegenModal, ImportModal } from "../modals/Modals";
+import { RunnerModal } from "../runner/RunnerModal";
+import { WebSocketModal } from "../websocket/WebSocketModal";
 import { createId } from "@knockport/core";
 import type { Request } from "@knockport/core";
 
@@ -212,6 +214,8 @@ export function AppShell() {
       <CommandPalette />
       <CodegenModal />
       <ImportModal />
+      <RunnerModal />
+      <WebSocketModal />
     </div>
   );
 }

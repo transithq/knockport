@@ -10,6 +10,7 @@ import {
   Sun,
   Download,
   Upload,
+  Play,
 } from "lucide-react";
 
 interface Command {
@@ -25,6 +26,7 @@ export function CommandPalette() {
   const open = useAppStore((s) => s.commandPaletteOpen);
   const setCommandPaletteOpen = useAppStore((s) => s.setCommandPaletteOpen);
   const setImportOpen = useAppStore((s) => s.setImportOpen);
+  const setRunnerOpen = useAppStore((s) => s.setRunnerOpen);
   const openTab = useAppStore((s) => s.openTab);
   const addCollection = useAppStore((s) => s.addCollection);
   const toggleTheme = useAppStore((s) => s.toggleTheme);
@@ -73,6 +75,7 @@ export function CommandPalette() {
     { id: "toggle-theme", label: `Switch to ${theme === "dark" ? "Light" : "Dark"} Theme`, icon: theme === "dark" ? <Sun size={14} /> : <Moon size={14} />, group: "Preferences", action: () => { toggleTheme(); setCommandPaletteOpen(false); } },
     { id: "clear-history", label: "Clear History", icon: <Trash2 size={14} />, group: "Actions", action: () => { clearHistory(); setCommandPaletteOpen(false); } },
     { id: "import-collection", label: "Import Collection", icon: <Download size={14} />, group: "Actions", action: () => { setCommandPaletteOpen(false); setImportOpen(true); } },
+    { id: "run-collection", label: "Run Collection", icon: <Play size={14} />, group: "Actions", action: () => { setCommandPaletteOpen(false); setRunnerOpen(true); } },
     { id: "export-collection", label: "Export Collection", icon: <Upload size={14} />, group: "Actions", action: () => setCommandPaletteOpen(false) },
   ];
 

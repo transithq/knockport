@@ -57,6 +57,8 @@ export interface AppStore {
   commandPaletteOpen: boolean;
   codegenOpen: boolean;
   importOpen: boolean;
+  runnerOpen: boolean;
+  websocketOpen: boolean;
   theme: "dark" | "light";
 
   // Actions — Sidebar
@@ -104,6 +106,8 @@ export interface AppStore {
   setCommandPaletteOpen: (open: boolean) => void;
   setCodegenOpen: (open: boolean) => void;
   setImportOpen: (open: boolean) => void;
+  setRunnerOpen: (open: boolean) => void;
+  setWebsocketOpen: (open: boolean) => void;
   toggleTheme: () => void;
 }
 
@@ -133,6 +137,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   commandPaletteOpen: false,
   codegenOpen: false,
   importOpen: false,
+  runnerOpen: false,
+  websocketOpen: false,
   theme: "dark",
 
   // ── Sidebar Actions ──────────────────────────────────────────────────────
@@ -310,6 +316,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   setCodegenOpen: (open) => set({ codegenOpen: open }),
   setImportOpen: (open) => set({ importOpen: open }),
+  setRunnerOpen: (open) => set({ runnerOpen: open }),
+  setWebsocketOpen: (open) => set({ websocketOpen: open }),
   toggleTheme: () =>
     set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
 }));

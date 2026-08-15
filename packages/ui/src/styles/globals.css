@@ -665,3 +665,28 @@ body {
 .kp-modal-code { margin: 0 14px; max-height: 320px; overflow: auto; }
 .kp-modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 0 14px; }
 .kp-import-error { padding: 0 14px; font-size: 12px; color: var(--kp-error); }
+
+/* ── Runner ───────────────────────────────────────────────────────────────── */
+.kp-runner-controls { display: flex; align-items: flex-end; gap: 12px; padding: 0 14px; }
+.kp-runner-controls label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: var(--kp-text-tertiary); }
+.kp-runner-controls select, .kp-runner-controls input { padding: 7px 10px; background: var(--kp-bg-tertiary); border: 1px solid var(--kp-border-primary); border-radius: var(--kp-radius-md); color: var(--kp-text-primary); font-size: 12.5px; outline: none; }
+.kp-runner-controls input[type="number"] { width: 80px; }
+.kp-runner-results { max-height: 300px; display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; }
+.kp-runner-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--kp-radius-sm); }
+.kp-runner-row:hover { background: var(--kp-bg-hover); }
+.kp-runner-status { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; }
+.kp-runner-status.ok { background: var(--kp-success-bg); color: var(--kp-success); }
+.kp-runner-status.fail { background: var(--kp-error-bg); color: var(--kp-error); }
+.kp-runner-name { flex: 1; font-size: 12.5px; color: var(--kp-text-primary); }
+.kp-runner-meta { font-size: 11px; color: var(--kp-text-tertiary); font-family: var(--kp-font-mono); }
+
+/* ── WebSocket ────────────────────────────────────────────────────────────── */
+.kp-ws-controls { display: flex; gap: 8px; padding: 0 14px; }
+.kp-ws-log { flex: 1; min-height: 200px; max-height: 320px; display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; background: var(--kp-bg-tertiary); margin: 0 14px; border-radius: var(--kp-radius-md); }
+.kp-ws-msg { display: flex; gap: 8px; font-size: 12px; }
+.kp-ws-time { color: var(--kp-text-muted); font-size: 10px; flex-shrink: 0; }
+.kp-ws-dir { flex-shrink: 0; }
+.kp-ws-msg.in .kp-ws-dir { color: var(--kp-success); }
+.kp-ws-msg.out .kp-ws-dir { color: var(--kp-accent); }
+.kp-ws-msg.sys .kp-ws-dir { color: var(--kp-text-muted); }
+.kp-ws-text { color: var(--kp-text-secondary); word-break: break-all; }
