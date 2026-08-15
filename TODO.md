@@ -82,7 +82,8 @@ packages/plugin-host, plugin-api/   Stubs only (M4).
   environments persisted too; active environment remembered (localStorage).
 - Environment editor: full-area tab (polymorphic tab kind "environment"), live edits.
 - Export: Postman v2.1 JSON download via command palette.
-- Escape closes any modal; Ctrl+K palette; Ctrl+W closes tab; Ctrl+Enter send; Ctrl+S save-to-collection; theme toggle (dark/light).
+- Escape closes any modal; Ctrl+K palette; Ctrl+W closes tab; Ctrl+Enter send; Ctrl+S save-to-collection; theme toggle (dark/light, persisted).
+- Settings modal: theme, relay toggle/URL, global request timeout (all localStorage-persisted); timeout aborts in-flight sends.
 
 ## 4 · apps/relay (Rust/Axum) — DONE, plus frontend wiring
 
@@ -134,7 +135,7 @@ Follow-ups (not blocking):
       `pm.collectionVariables.*` + `{{var}}` resolution wired into send/runner; env overrides collection.
 - [ ] Virtualized sidebar tree (perf, when collections get big).
 - [ ] Disk-backed collections via FileSystemAdapter (open folder → read/write YAML per §5a of the arch doc).
-- [ ] Settings modal (theme, relay URL, timeouts) instead of inline prompts.
+- [x] Settings modal (theme, relay URL, timeouts) instead of inline prompts. DONE: `components/settings/SettingsModal.tsx` (opened from topbar gear + sidebar Settings nav, Escape closes); theme dark/light + relay toggle/URL + global `timeoutMs` all persisted to localStorage (`kp-theme`, `kp-use-relay`, `kp-relay-url`, `kp-timeout-ms`). Timeout is enforced in `handleSend` + RunnerTab via an AbortSignal passed through `TransportOptions.signal`; AbortError renders "Request timed out after N ms". The per-request Settings tab now points to the global modal.
 - [x] Keyboard shortcuts: Ctrl+Enter send, Ctrl+S save-to-collection. DONE: global keydown in AppShell (skipped while any modal/palette is open, request tabs only); Ctrl+S uses new store action `saveRequestTab` (flushes dirty tab into owning collection + persistCollection without closing); `handleSend` in RequestEditor.tsx is exported for reuse.
 - [ ] Response preview tab (HTML render in sandboxed iframe), cookies tab data.
 

@@ -314,47 +314,21 @@ kp.test("fast enough", () => {
 }
 
 // ── Request Settings ─────────────────────────────────────────────────────────
+// Transport preferences (relay, timeout) are global — see SettingsModal.
 function RequestSettings() {
-  const useRelay = useAppStore((s) => s.useRelay);
-  const relayUrl = useAppStore((s) => s.relayUrl);
-  const setUseRelay = useAppStore((s) => s.setUseRelay);
-  const setRelayUrl = useAppStore((s) => s.setRelayUrl);
-
   return (
-    <div className="kp-settings">
-      <div className="kp-setting-row">
-        <label>Follow Redirects</label>
-        <input type="checkbox" className="kp-checkbox" defaultChecked />
-      </div>
-      <div className="kp-setting-row">
-        <label>Verify SSL</label>
-        <input type="checkbox" className="kp-checkbox" defaultChecked />
-      </div>
-      <div className="kp-setting-row">
-        <label>Timeout (ms)</label>
-        <input type="number" defaultValue={30000} className="kp-num-input" />
-      </div>
-      <div className="kp-setting-row">
-        <label>Send via relay (bypasses CORS)</label>
-        <input
-          type="checkbox"
-          className="kp-checkbox"
-          checked={useRelay}
-          onChange={(e) => setUseRelay(e.target.checked)}
-        />
-      </div>
-      {useRelay && (
-        <div className="kp-setting-row">
-          <label>Relay URL</label>
-          <input
-            type="text"
-            className="kp-text-input"
-            value={relayUrl}
-            onChange={(e) => setRelayUrl(e.target.value)}
-            placeholder="http://localhost:8787"
-          />
-        </div>
-      )}
+    <div className="kp-hint-block">
+      <p>
+        Transport settings are global and live in <strong>Settings</strong> — relay toggle, relay
+        URL, theme, and the request timeout applied to every send.
+      </p>
+      <button
+        type="button"
+        className="kp-btn secondary"
+        onClick={() => useAppStore.getState().setSettingsOpen(true)}
+      >
+        Open Settings
+      </button>
     </div>
   );
 }
@@ -386,7 +360,16 @@ export async function handleSend(tabId: string) {
     }
     const resolved = resolveRequest(request, vars, collection);
     const transport = getTransport({ useRelay: store.useRelay, relayUrl: store.relayUrl });
-    const response = await transport.execute(resolved);
+    // Enforce the global timeout via an abort signal (transports link it to
+    // their own AbortController).
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), store.timeoutMs);
+    let response;
+    try {
+      response = await transport.execute(resolved, { signal: abort.signal });
+    } finally {
+      clearTimeout(timer);
+    }
     store.setResponse(tabId, response);
 
     // Run test scripts + assertions (interim TS runner; wasm engine in M3)
@@ -415,12 +398,17 @@ export async function handleSend(tabId: string) {
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
+    const timedOut = err instanceof DOMException && err.name === "AbortError";
     store.setTestResults(tabId, null);
     store.setResponse(tabId, {
       id: crypto.randomUUID(),
       requestId: request.id,
       status: 0,
-      statusText: err instanceof Error ? err.message : "Request failed",
+      statusText: timedOut
+        ? `Request timed out after ${store.timeoutMs} ms`
+        : err instanceof Error
+          ? err.message
+          : "Request failed",
       headers: {},
       body: "",
       bodySize: 0,

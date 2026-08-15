@@ -96,8 +96,12 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
         }
         const resolved = resolveRequest(req, vars, collection);
         const start = performance.now();
+        // Enforce the global timeout per request via an abort signal
+        const abort = new AbortController();
+        const timer = setTimeout(() => abort.abort(), state.timeoutMs);
         try {
-          const res = await transport.execute(resolved);
+          const res = await transport.execute(resolved, { signal: abort.signal });
+          clearTimeout(timer);
           let testsPassed: number | undefined;
           let testsTotal: number | undefined;
           let testsOk = true;
@@ -130,6 +134,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
             testSummary,
           });
         } catch (err) {
+          clearTimeout(timer);
           all.push({
             name: req.name,
             method: req.method,

@@ -184,11 +184,15 @@ export interface AppStore {
   codegenOpen: boolean;
   importOpen: boolean;
   websocketOpen: boolean;
+  settingsOpen: boolean;
   theme: "dark" | "light";
 
   // Transport settings (relay)
   useRelay: boolean;
   relayUrl: string;
+
+  // Global request timeout (ms) applied to every send
+  timeoutMs: number;
 
   // Actions — Sidebar
   setSidebarTab: (tab: SidebarTab) => void;
@@ -252,9 +256,12 @@ export interface AppStore {
   setCodegenOpen: (open: boolean) => void;
   setImportOpen: (open: boolean) => void;
   setWebsocketOpen: (open: boolean) => void;
+  setSettingsOpen: (open: boolean) => void;
   toggleTheme: () => void;
+  setTheme: (theme: "dark" | "light") => void;
   setUseRelay: (on: boolean) => void;
   setRelayUrl: (url: string) => void;
+  setTimeoutMs: (ms: number) => void;
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -288,12 +295,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
   codegenOpen: false,
   importOpen: false,
   websocketOpen: false,
-  theme: "dark",
+  settingsOpen: false,
+  theme: typeof localStorage !== "undefined" && localStorage.getItem("kp-theme") === "light" ? "light" : "dark",
 
   useRelay: typeof localStorage !== "undefined" && localStorage.getItem("kp-use-relay") === "1",
   relayUrl:
     (typeof localStorage !== "undefined" && localStorage.getItem("kp-relay-url")) ||
     "http://localhost:8787",
+
+  timeoutMs:
+    (typeof localStorage !== "undefined" && Number.parseInt(localStorage.getItem("kp-timeout-ms") ?? "", 10)) ||
+    30000,
 
   // ── Sidebar Actions ──────────────────────────────────────────────────────
   setSidebarTab: (tab) => set({ sidebarTab: tab }),
@@ -798,8 +810,19 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setCodegenOpen: (open) => set({ codegenOpen: open }),
   setImportOpen: (open) => set({ importOpen: open }),
   setWebsocketOpen: (open) => set({ websocketOpen: open }),
-  toggleTheme: () =>
-    set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
+  setSettingsOpen: (open) => set({ settingsOpen: open }),
+  toggleTheme: () => {
+    const next = get().theme === "dark" ? "light" : "dark";
+    get().setTheme(next);
+  },
+  setTheme: (theme) => {
+    set({ theme });
+    try {
+      localStorage.setItem("kp-theme", theme);
+    } catch {
+      // ignore
+    }
+  },
 
   setUseRelay: (on) => {
     set({ useRelay: on });
@@ -814,6 +837,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ relayUrl: url });
     try {
       localStorage.setItem("kp-relay-url", url);
+    } catch {
+      // ignore
+    }
+  },
+
+  setTimeoutMs: (ms) => {
+    set({ timeoutMs: ms });
+    try {
+      localStorage.setItem("kp-timeout-ms", String(ms));
     } catch {
       // ignore
     }

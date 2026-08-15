@@ -16,6 +16,7 @@ import { ResponseBody } from "../response/ResponseBody";
 import { ResponseSummary } from "../response/ResponseSummary";
 import { CommandPalette } from "../command/CommandPalette";
 import { CodegenModal, ImportModal } from "../modals/Modals";
+import { SettingsModal } from "../settings/SettingsModal";
 import { RunnerTab } from "../runner/RunnerTab";
 import { WebSocketModal } from "../websocket/WebSocketModal";
 import { EnvironmentEditor } from "../environments/EnvironmentEditor";
@@ -195,7 +196,7 @@ export function AppShell() {
       // suppressed while any modal or the command palette is open)
       if ((e.ctrlKey || e.metaKey) && (e.key === "Enter" || e.key.toLowerCase() === "s")) {
         const s = useAppStore.getState();
-        if (s.commandPaletteOpen || s.codegenOpen || s.importOpen || s.websocketOpen) return;
+        if (s.commandPaletteOpen || s.codegenOpen || s.importOpen || s.websocketOpen || s.settingsOpen) return;
         const tab = s.tabs.find((t) => t.id === s.activeTabId);
         if (!tab || (tab.kind && tab.kind !== "request")) return;
         e.preventDefault();
@@ -207,6 +208,7 @@ export function AppShell() {
         if (s.codegenOpen) s.setCodegenOpen(false);
         else if (s.importOpen) s.setImportOpen(false);
         else if (s.websocketOpen) s.setWebsocketOpen(false);
+        else if (s.settingsOpen) s.setSettingsOpen(false);
       }
     };
     window.addEventListener("keydown", handler);
@@ -221,7 +223,12 @@ export function AppShell() {
           <TabBar />
           <div className="kp-main-topbar-right">
             <EnvironmentSelector />
-            <button type="button" className="kp-icon-btn" title="Settings">
+            <button
+              type="button"
+              className="kp-icon-btn"
+              title="Settings"
+              onClick={() => useAppStore.getState().setSettingsOpen(true)}
+            >
               <Settings size={16} />
             </button>
           </div>
@@ -253,6 +260,7 @@ export function AppShell() {
       <CodegenModal />
       <ImportModal />
       <WebSocketModal />
+      <SettingsModal />
     </div>
   );
 }
