@@ -25,6 +25,20 @@
 - [x] Install deps + verify build (173 packages, pnpm + Turborepo)
 - [x] Git init + initial commit (57 files, 9067 insertions, no AI attribution)
 
+## M2 · Collections, Import/Export, Run
+
+- [x] UI redesign to match reference layout (sidebar logo/nav/tree, tab bar, 2-col request+response)
+- [x] Seed data — sample E-Commerce collection + Dev/Prod environments on first load
+- [x] Variable resolution — `{{var}}` with collection < environment precedence, applied to url/params/headers/body/auth
+- [x] Environments UI — selector in top bar, list in sidebar, active highlighting
+- [x] Importers — cURL, Postman v2.1, HAR (+ auto-detect) with import modal
+- [x] Codegen — cURL / JavaScript fetch / Python requests with codegen modal + copy
+- [x] Collection runner — sequential run with iterations, per-request pass/fail + timing
+- [x] WebSocket client — connect/send/message log modal
+- [x] History persistence — IndexedDB-backed, entries reopenable in tabs
+- [x] CodeMirror 6 — JSON/JS editors for body + pre-request/test scripts
+- [x] Collection management — create (palette), rename + delete (tree hover actions)
+
 ## Not Started
 
 - [ ] `apps/relay` — transport-relay service (Rust/Axum)
@@ -32,12 +46,10 @@
 - [ ] `apps/desktop` — Tauri 2 shell
 - [ ] `packages/plugin-host` — Worker sandbox + capability broker
 - [ ] `packages/plugin-api` — published plugin SDK
-- [ ] Importers as plugins (Postman, OpenAPI, cURL, HAR, Bruno)
-- [ ] CodeMirror 6 integration for request/response editors
+- [ ] Scripting engine — real @tropel/runtime-wasm integration (M3)
 - [ ] TanStack Virtual for collection tree
-- [ ] WebSocket, SSE, Socket.IO, MQTT support
+- [ ] SSE, Socket.IO, MQTT support
 - [ ] gRPC support
-- [ ] Collection runner
 - [ ] Load testing UI
 - [ ] Diff view (CodeMirror merge)
 - [ ] Response snapshots
