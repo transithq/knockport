@@ -82,7 +82,7 @@ packages/plugin-host, plugin-api/   Stubs only (M4).
   environments persisted too; active environment remembered (localStorage).
 - Environment editor: full-area tab (polymorphic tab kind "environment"), live edits.
 - Export: Postman v2.1 JSON download via command palette.
-- Escape closes any modal; Ctrl+K palette; Ctrl+W closes tab; theme toggle (dark/light).
+- Escape closes any modal; Ctrl+K palette; Ctrl+W closes tab; Ctrl+Enter send; Ctrl+S save-to-collection; theme toggle (dark/light).
 
 ## 4 · apps/relay (Rust/Axum) — DONE, plus frontend wiring
 
@@ -135,7 +135,7 @@ Follow-ups (not blocking):
 - [ ] Virtualized sidebar tree (perf, when collections get big).
 - [ ] Disk-backed collections via FileSystemAdapter (open folder → read/write YAML per §5a of the arch doc).
 - [ ] Settings modal (theme, relay URL, timeouts) instead of inline prompts.
-- [ ] Keyboard shortcuts: Ctrl+Enter send, Ctrl+S save-to-collection.
+- [x] Keyboard shortcuts: Ctrl+Enter send, Ctrl+S save-to-collection. DONE: global keydown in AppShell (skipped while any modal/palette is open, request tabs only); Ctrl+S uses new store action `saveRequestTab` (flushes dirty tab into owning collection + persistCollection without closing); `handleSend` in RequestEditor.tsx is exported for reuse.
 - [ ] Response preview tab (HTML render in sandboxed iframe), cookies tab data.
 
 ## 5a · Importers — shared via Tropel input adapters (DECIDED)

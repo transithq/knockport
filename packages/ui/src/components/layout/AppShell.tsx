@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useAppStore } from "../../store/app-store";
 import { Sidebar } from "./Sidebar";
-import { RequestEditor } from "../request/RequestEditor";
+import { RequestEditor, handleSend } from "../request/RequestEditor";
 import { ResponseBody } from "../response/ResponseBody";
 import { ResponseSummary } from "../response/ResponseSummary";
 import { CommandPalette } from "../command/CommandPalette";
@@ -190,6 +190,17 @@ export function AppShell() {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "w" && activeTabId) {
         e.preventDefault();
         closeTab(activeTabId);
+      }
+      // Ctrl+Enter send / Ctrl+S save-to-collection (request tabs only,
+      // suppressed while any modal or the command palette is open)
+      if ((e.ctrlKey || e.metaKey) && (e.key === "Enter" || e.key.toLowerCase() === "s")) {
+        const s = useAppStore.getState();
+        if (s.commandPaletteOpen || s.codegenOpen || s.importOpen || s.websocketOpen) return;
+        const tab = s.tabs.find((t) => t.id === s.activeTabId);
+        if (!tab || (tab.kind && tab.kind !== "request")) return;
+        e.preventDefault();
+        if (e.key === "Enter") handleSend(tab.id);
+        else s.saveRequestTab(tab.id);
       }
       if (e.key === "Escape") {
         const s = useAppStore.getState();

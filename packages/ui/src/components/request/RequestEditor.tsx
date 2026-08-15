@@ -69,6 +69,7 @@ export function RequestEditor({ tabId }: { tabId: string }) {
         <button
           type="button"
           className="kp-send-btn"
+          title="Send (Ctrl+Enter)"
           disabled={loading || !request.url}
           onClick={() => handleSend(tabId)}
         >
@@ -359,7 +360,7 @@ function RequestSettings() {
 }
 
 // ── Send ─────────────────────────────────────────────────────────────────────
-async function handleSend(tabId: string) {
+export async function handleSend(tabId: string) {
   const store = useAppStore.getState();
   const request = store.requests[tabId];
   if (!request) return;

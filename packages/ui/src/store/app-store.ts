@@ -128,6 +128,12 @@ function replaceRequestInFolders(folders: Folder[], requestId: string, req: Requ
   }));
 }
 
+function findOwningCollection(collections: Collection[], requestId: string): Collection | undefined {
+  return collections.find(
+    (c) => c.requests.some((r) => r.id === requestId) || containsRequest(c.folders, requestId),
+  );
+}
+
 // ── Persistence helpers (fire-and-forget) ───────────────────────────────────
 function persistCollection(c: Collection) {
   dbCollections.save(c as any).catch(() => {});
@@ -214,6 +220,7 @@ export interface AppStore {
   openCollectionTab: (collectionId: string) => void;
   openRunnerTab: (collectionId: string) => void;
   closeTab: (tabId: string) => void;
+  saveRequestTab: (tabId: string) => void;
   setActiveTab: (tabId: string | null) => void;
 
   // Actions — Request
@@ -512,11 +519,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (tab && (!tab.kind || tab.kind === "request") && tab.isDirty) {
       const edited = prev.requests[tabId];
       if (edited) {
-        const col = prev.collections.find(
-          (c) =>
-            c.requests.some((r) => r.id === tab.requestId) ||
-            containsRequest(c.folders, tab.requestId),
-        );
+        const col = findOwningCollection(prev.collections, tab.requestId);
         if (col) {
           const updated: Collection = {
             ...col,
@@ -564,6 +567,34 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   setActiveTab: (tabId) => set({ activeTabId: tabId }),
+
+  // Ctrl+S: flush dirty request-tab edits into the owning collection without
+  // closing the tab (shared flush semantics with closeTab).
+  saveRequestTab: (tabId) => {
+    const prev = get();
+    const tab = prev.tabs.find((t) => t.id === tabId);
+    if (!tab || (tab.kind && tab.kind !== "request")) return;
+    const edited = prev.requests[tabId];
+    if (!edited || !tab.isDirty) return;
+    const col = findOwningCollection(prev.collections, tab.requestId);
+    if (col) {
+      const updated: Collection = {
+        ...col,
+        requests: col.requests.map((r) => (r.id === edited.id ? edited : r)),
+        folders: replaceRequestInFolders(col.folders, edited.id, edited),
+      };
+      set((st) => ({
+        collections: st.collections.map((c) => (c.id === col.id ? updated : c)),
+        tabs: st.tabs.map((t) => (t.id === tabId ? { ...t, isDirty: false } : t)),
+      }));
+      persistCollection(updated);
+    } else {
+      // Standalone request not owned by any collection — just clear the flag
+      set((st) => ({
+        tabs: st.tabs.map((t) => (t.id === tabId ? { ...t, isDirty: false } : t)),
+      }));
+    }
+  },
 
   openEnvironmentTab: (envId) => {
     const s = get();
