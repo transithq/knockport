@@ -13,6 +13,7 @@ import { RequestEditor } from "../request/RequestEditor";
 import { ResponseBody } from "../response/ResponseBody";
 import { ResponseSummary } from "../response/ResponseSummary";
 import { CommandPalette } from "../command/CommandPalette";
+import { CodegenModal, ImportModal } from "../modals/Modals";
 import { createId } from "@knockport/core";
 import type { Request } from "@knockport/core";
 
@@ -209,6 +210,8 @@ export function AppShell() {
         )}
       </main>
       <CommandPalette />
+      <CodegenModal />
+      <ImportModal />
     </div>
   );
 }

@@ -646,3 +646,22 @@ body {
 .kp-cmdk-icon { color: var(--kp-text-muted); display: inline-flex; }
 .kp-cmdk-label { flex: 1; }
 .kp-cmdk-shortcut { font-size: 10px; color: var(--kp-text-muted); }
+
+/* ── Generic modal ──────────────────────────────────────────────────────── */
+.kp-modal {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--kp-bg-secondary);
+  border: 1px solid var(--kp-border-primary);
+  border-radius: var(--kp-radius-lg);
+  box-shadow: var(--kp-shadow-lg);
+  overflow: hidden;
+  padding-bottom: 14px;
+}
+.kp-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--kp-border-primary); font-size: 13.5px; font-weight: 600; color: var(--kp-text-primary); }
+.kp-modal-code { margin: 0 14px; max-height: 320px; overflow: auto; }
+.kp-modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 0 14px; }
+.kp-import-error { padding: 0 14px; font-size: 12px; color: var(--kp-error); }

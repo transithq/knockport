@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@knockport/core": "workspace:*",
+    "@knockport/format": "workspace:*",
     "@knockport/transport": "workspace:*",
     "@knockport/storage": "workspace:*",
     "@knockport/engine": "workspace:*",

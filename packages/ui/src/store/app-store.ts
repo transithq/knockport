@@ -55,6 +55,8 @@ export interface AppStore {
   activeRequestPanel: ActivePanel;
   activeResponsePanel: ResponsePanel;
   commandPaletteOpen: boolean;
+  codegenOpen: boolean;
+  importOpen: boolean;
   theme: "dark" | "light";
 
   // Actions — Sidebar
@@ -100,6 +102,8 @@ export interface AppStore {
   setActiveRequestPanel: (panel: ActivePanel) => void;
   setActiveResponsePanel: (panel: ResponsePanel) => void;
   setCommandPaletteOpen: (open: boolean) => void;
+  setCodegenOpen: (open: boolean) => void;
+  setImportOpen: (open: boolean) => void;
   toggleTheme: () => void;
 }
 
@@ -127,6 +131,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   activeRequestPanel: "params",
   activeResponsePanel: "pretty",
   commandPaletteOpen: false,
+  codegenOpen: false,
+  importOpen: false,
   theme: "dark",
 
   // ── Sidebar Actions ──────────────────────────────────────────────────────
@@ -302,6 +308,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setActiveRequestPanel: (panel) => set({ activeRequestPanel: panel }),
   setActiveResponsePanel: (panel) => set({ activeResponsePanel: panel }),
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
+  setCodegenOpen: (open) => set({ codegenOpen: open }),
+  setImportOpen: (open) => set({ importOpen: open }),
   toggleTheme: () =>
     set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
 }));

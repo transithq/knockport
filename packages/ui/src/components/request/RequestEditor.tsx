@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Send, Loader2, ChevronDown, MoreHorizontal, Copy } from "lucide-react";
+import { Send, Loader2, ChevronDown, MoreHorizontal, Copy, Code2 } from "lucide-react";
 import { clsx } from "clsx";
 import { useAppStore, type ActivePanel } from "../../store/app-store";
 import { HTTP_METHODS, type HttpMethod, type KeyValuePair, type BodyContent, type AuthConfig } from "@knockport/core";
@@ -74,6 +74,14 @@ export function RequestEditor({ tabId }: { tabId: string }) {
         </button>
         <button type="button" className="kp-send-caret" title="Send options">
           <ChevronDown size={14} />
+        </button>
+        <button
+          type="button"
+          className="kp-icon-btn"
+          title="Generate code"
+          onClick={() => useAppStore.getState().setCodegenOpen(true)}
+        >
+          <Code2 size={15} />
         </button>
       </div>
 

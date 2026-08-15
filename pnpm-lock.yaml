@@ -183,6 +183,9 @@ importers:
       '@knockport/engine':
         specifier: workspace:*
         version: link:../engine
+      '@knockport/format':
+        specifier: workspace:*
+        version: link:../format
       '@knockport/storage':
         specifier: workspace:*
         version: link:../storage
