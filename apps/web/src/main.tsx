@@ -31,6 +31,9 @@ function seed() {
     store.openTab(getProfile);
     store.setActiveRequestPanel("params");
   }
+
+  // Load persisted history from IndexedDB.
+  store.loadHistory();
 }
 
 seed();

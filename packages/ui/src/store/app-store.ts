@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { history as dbHistory } from "@knockport/storage";
 import type {
   Request,
   Response,
@@ -99,6 +100,7 @@ export interface AppStore {
   // Actions — History
   addHistoryEntry: (entry: HistoryEntry) => void;
   clearHistory: () => void;
+  loadHistory: () => Promise<void>;
 
   // Actions — UI
   setActiveRequestPanel: (panel: ActivePanel) => void;
@@ -303,12 +305,24 @@ export const useAppStore = create<AppStore>((set, get) => ({
     })),
 
   // ── History Actions ──────────────────────────────────────────────────────
-  addHistoryEntry: (entry) =>
-    set((s) => ({
-      history: [entry, ...s.history].slice(0, 200),
-    })),
+  addHistoryEntry: (entry) => {
+    set((s) => ({ history: [entry, ...s.history].slice(0, 200) }));
+    dbHistory.create(entry as any).catch(() => {});
+  },
 
-  clearHistory: () => set({ history: [] }),
+  clearHistory: () => {
+    set({ history: [] });
+    dbHistory.clear().catch(() => {});
+  },
+
+  loadHistory: async () => {
+    try {
+      const records = await dbHistory.getRecent(200);
+      set({ history: records as unknown as HistoryEntry[] });
+    } catch {
+      // storage unavailable
+    }
+  },
 
   // ── UI Actions ───────────────────────────────────────────────────────────
   setActiveRequestPanel: (panel) => set({ activeRequestPanel: panel }),

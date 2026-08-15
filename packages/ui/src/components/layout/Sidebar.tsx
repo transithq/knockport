@@ -242,10 +242,16 @@ export function Sidebar() {
               <div className="kp-empty-hint">No history yet</div>
             ) : (
               history.map((h) => (
-                <div key={h.id} className="kp-tree-item kp-history-item">
+                <button
+                  key={h.id}
+                  type="button"
+                  className="kp-tree-item"
+                  onClick={() => useAppStore.getState().openTab(h.request)}
+                  title={h.request.url}
+                >
                   <MethodTag method={h.request.method} />
                   <span className="kp-truncate kp-history-url">{h.request.url}</span>
-                </div>
+                </button>
               ))
             ))}
         </div>
