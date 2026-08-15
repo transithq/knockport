@@ -39,3 +39,7 @@ Cargo.lock.bak
 
 # Tauri
 apps/desktop/src-tauri/target/
+
+# temp screenshots
+ss*.png
+knockport_initial_*.png
