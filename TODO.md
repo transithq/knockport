@@ -236,6 +236,14 @@ embeds, ShimBundle::default()) so scripts are byte-compatible with the M3 wasm r
       @codemirror/autocomplete override that offers members after `kp.` / `pm.` / `bru.`
       and nested members after `kp.response.` etc., with signatures + info text. Wired into
       every JavaScript CodeMirror editor via `languageExtension`. 5 vitest cases.
+- [x] Full JS editor intelligence: syntax linting + generic JS completions. DONE:
+      `script-lint.ts` — @codemirror/lint source over lezer "⚠" error nodes with
+      bracket/string-context message inference ("Expecting ')' here.", "Unterminated
+      string — …"); `script-snippets.ts` — keywords, browser globals (console/JSON/Math…),
+      and snippets (console.log, kp.test, response.json) offered outside API chains,
+      {{var}} placeholders skipped; both wired into `languageExtension`. 9 vitest cases
+      in script-editor.test.ts. Deps added to packages/ui: @codemirror/language,
+      @codemirror/lint.
 
 ## 7 · M4 · Plugin host
 

@@ -5,13 +5,14 @@ import { json } from "@codemirror/lang-json";
 import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { scriptCompletions } from "./script-completions";
+import { scriptLinter } from "./script-lint";
 
 type Language = "json" | "javascript" | "text";
 
 function languageExtension(lang: Language) {
   if (lang === "json") return json();
   // JS editors are script contexts (request/collection pre + test scripts)
-  if (lang === "javascript") return [javascript(), scriptCompletions()];
+  if (lang === "javascript") return [javascript(), scriptCompletions(), scriptLinter()];
   return [];
 }
 

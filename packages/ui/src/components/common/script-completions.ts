@@ -1,4 +1,5 @@
 import { autocompletion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
+import { jsCompletions } from "./script-snippets";
 
 // ── Script API completions (kp.* / pm.* / bru.*) ─────────────────────────────
 // Kept in sync with the engine bridges in packages/engine/src/test-runner.ts:
@@ -148,9 +149,9 @@ function kpCompletions(context: CompletionContext): CompletionResult | null {
   };
 }
 
-/** CodeMirror extension that adds kp/pm/bru completions to a script editor. */
+/** CodeMirror extension that adds kp/pm/bru + standard JS completions. */
 export function scriptCompletions() {
-  return autocompletion({ override: [kpCompletions] });
+  return autocompletion({ override: [kpCompletions, jsCompletions] });
 }
 
 /** Test hook: raw completion provider (normally only used via autocompletion). */
