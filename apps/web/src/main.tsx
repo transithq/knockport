@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { AppShell } from "@knockport/ui";
-import "@knockport/ui/styles";
+import "@knockport/ui/styles/globals.css";
 import "./styles.css";
 
 const root = document.getElementById("root")!;
