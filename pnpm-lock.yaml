@@ -87,6 +87,9 @@ importers:
       '@knockport/core':
         specifier: workspace:*
         version: link:../core
+      '@tropel/shims':
+        specifier: 0.1.0
+        version: 0.1.0
     devDependencies:
       typescript:
         specifier: ^5.7.3
@@ -973,6 +976,10 @@ packages:
     resolution: {integrity: sha512-yYU8cogLeSh/ms2jh8Fj7jaba/EWa7Ja6GoUqYZaraEuCI5YS6ms6ObZgjjedm+jm6XZjdNRWBpPP6Z86oOxcw==}
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
+
+  '@tropel/shims@0.1.0':
+    resolution: {integrity: sha512-3z5hqtdLdEPaRAsp+s15P9pFQVpfuTbDtbYp+u/rUkHTSgoYuit5vVSidwwnVuzqtaT28U+7/tJP7HvuY/JM2w==}
+    engines: {node: '>=18'}
 
   '@turbo/darwin-64@2.10.10':
     resolution: {integrity: sha512-gFDD+wRP5hWxBRghGyEbjpbLOY7aIU/wvsnKdMM7odQcp/wHMrnI83p0FyxxMRZnFH9ZD+S59MvcpOC5b+nrCA==}
@@ -2213,6 +2220,8 @@ snapshots:
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
       vite: 6.4.3(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
+
+  '@tropel/shims@0.1.0': {}
 
   '@turbo/darwin-64@2.10.10':
     optional: true

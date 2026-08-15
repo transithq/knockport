@@ -389,7 +389,7 @@ pm.test("Response has data", () => {
 
 // response CODE is numeric; pm.response.status is the reason text
 kp.test("fast enough", () => {
-  chai.expect(kp.response.responseTime).to.be.below(2000);
+  kp.expect(kp.response.responseTime < 2000).to.eql(true);
 });`}</pre>
     </div>
   );

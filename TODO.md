@@ -39,9 +39,8 @@ packages/transport/  Transport interface + DirectTransport + RelayTransport + ge
                      Request Settings panel toggles relay vs direct.
 packages/storage/    Dexie schema (collections, environments, history, workspaces) with
                      create/save/update/delete per table; OPFS BodyStore; FileSystemAdapter.
-packages/engine/     Test/assertion runtime (see §5b): vendored Tropel shims (pm/bru/chai)
-                     over TS bridge host. M3 swaps the host for @tropel/runtime-wasm;
-                     the shim files stay identical.
+packages/engine/     Test/assertion runtime (see §5b): @tropel/shims npm package (pm/bru/
+                     chai) over TS bridge host. M3 swaps the host for @tropel/runtime-wasm;
 packages/ui/         ALL UI. Zustand store (store/app-store.ts) — tabs are polymorphic:
                      kind "request" | "environment". Variable resolution in store/variables.ts
                      ({{var}} with collection < environment precedence). Components:
@@ -106,7 +105,7 @@ Follow-ups (not blocking):
 
 ## 5 · After relay — UI completeness (M2 remainder)
 
-- [x] Assertions/tests executed client-side — DONE via vendored Tropel shims (see §5b).
+- [x] Assertions/tests executed client-side — DONE via @tropel/shims (see §5b).
       `request.assertions` (declarative) + `scripts.test` both run; results render in the
       response Tests tab and gate the runner verdict.
 - [ ] Importers — **decided: reuse Tropel input adapters, do NOT rewrite in TS** (see §5a).
@@ -146,41 +145,46 @@ One implementation for every surface (web wasm, extension, desktop native, CLI):
      (bruno.json marks the root), one adapter call per file, assemble folders from paths.
 - Until the wasm slice lands, TS importers for cURL/Postman/HAR remain the web path.
 
-## 5b · Test scripting — vendored Tropel shims over a TS bridge host (DONE)
+## 5b · Test scripting — @tropel/shims over a TS bridge host (DONE)
 
-Decision (user-directed): do NOT hand-roll assertions in TS — reuse Tropel's existing
-scripting shims verbatim so scripts are byte-compatible with the M3 wasm runtime.
+Decision (user-directed): do NOT hand-roll assertions in TS and do NOT vendor copies —
+consume the PUBLISHED `@tropel/shims` npm package (the same sources the tropel runtime
+embeds, ShimBundle::default()) so scripts are byte-compatible with the M3 wasm runtime.
 
-- Vendored (DO NOT EDIT, re-vendor from `D:\tropel` when upstream changes):
-  `packages/engine/shims/chai-shim.js` ← `D:\tropel\js\chai\chai-shim.js` (full chai,
-  ES5, Proxy guard throws on unknown assertion props), `shims/pm.js` ←
-  `D:\tropel\js\scripting-api\pm.js` (pm.* over ~60 `__tropel_pm_*` bridges),
-  `shims/bru.js` ← same dir (bru/req/res Bruno compat). Each carries a provenance header.
+- Dependency: `@tropel/shims@0.1.0` in packages/engine. API: `defaultBundle` /
+  `k6Bundle` (arrays of `{name, source}`) + `render(entries?)`. test-runner.ts subsets
+  defaultBundle to pm-shim/chai-shim/bru-shim (filter keeps the canonical engine order
+  pm → chai → … → bru); lodash/cryptojs/exec need bridges KnockPort doesn't host yet.
 - `packages/engine/src/test-runner.ts` is the HOST: `buildBridges()` implements the
   `__tropel_pm_*` bridges in TS (response code/status/time/headers/body/json/cookies,
   env/variables/collectionVariables stores, pm.test recording). A realm factory compiles
-  `chai-shim + pm + bru + prelude` ONCE via `new Function`; every run gets a fresh sandbox
-  (shims install non-configurable globalThis bindings) and direct-evals the user script in
-  prelude scope. `__tropel_sandbox_config = {namespace: 'kp'}` → canonical namespace is
-  `kp.*`; `pm.*` and `bru.*` are compat peers.
+  `render(subset) + prelude` ONCE via `new Function`; every run gets a fresh sandbox
+  (shims install non-configurable globalThis bindings) and direct-evals the user script
+  in prelude scope. `__tropel_sandbox_config = {namespace: 'kp'}` → canonical namespace
+  is `kp.*`; `pm.*` and `bru.*` are compat peers.
+- KNOWN GAP: published 0.1.0 is STALE vs D:\tropel\js (cut before the chai
+  above/below/oneOf additions and the pm.js AssertChain rewrite). Tests + the TestsPanel
+  hint are written against the 0.1.0 MINIMUM surface (eql/include/equal/property,
+  head-of-chain `.not`, res.getStatus() = status TEXT) so they stay green when 0.1.1
+  ships. Local rebuild of D:\tropel\packages\shims (shim/ + dist/) is done and smoke
+  PASSES — publishing 0.1.1 needs `npm login` (this session was 401). After publish:
+  bump the dep and restore the richer assertions (above/oneOf) in tests.
 - Semantics to remember: `pm.response.code` is the NUMERIC status, `pm.response.status`
-  is the reason TEXT; `pm.expect` is a lightweight chain (eql/equal/include/property/...),
-  full chai lives at global `chai.expect`; `pm.test` records one check, thrown errors
-  become `<name> (error)` failed checks; variable stores JSON-encode on set / parse on get.
+  is the reason TEXT; `pm.expect` is a lightweight chain, full chai lives at global
+  `chai.expect`; `pm.test` records one check, thrown errors become `<name> (error)`
+  failed checks; variable stores JSON-encode on set / parse on get.
 - Security: this host is NOT a sandbox — it executes user-authored scripts in the user's
   own browser (documented in test-runner.ts). Real isolation arrives in M3 (QuickJS wasm).
 - M3 swap path: replace `createRealmWithHost` with wasm realm; bridges become Rust
-  functions; shims unchanged. Assertions data is passed as a JSON literal, never
+  functions; shim sources unchanged. Assertions data is passed as a JSON literal, never
   string-concatenated into the script.
-- Vite `?raw` imports embed the shim sources; `raw.d.ts` needed in BOTH packages/engine
-  and packages/ui (ui's tsc compiles engine transitively).
 - Tests: `packages/engine/src/test-runner.test.ts` — 13 vitest cases (kp/pm/bru surfaces,
   declarative assertions, error paths, runPreScript). Run: `cd packages/engine; npx vitest run`.
 
 ## 6 · M3 · Scripting engine
 
 - [ ] `packages/engine`: @tropel/runtime-wasm in a Web Worker, postcard ABI (see D:/tropel).
-      Replace the TS bridge host in test-runner.ts; keep the same vendored shim files.
+      Replace the TS bridge host in test-runner.ts; keep the @tropel/shims sources.
 - [ ] Lazy-load wasm after first paint.
 - [ ] Script editor type hints (CodeMirror completions) for kp.*/pm.*/bru.*.
 

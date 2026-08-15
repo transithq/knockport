@@ -1,7 +1,7 @@
 /**
  * Interim script runner: hosts the REAL Tropel scripting shims
- * (vendored from D:/tropel — pm.js / bru.js / chai-shim.js) over a
- * TS-implemented `__tropel_pm_*` bridge.
+ * (@tropel/shims — the published bundle of the same sources the tropel
+ * runtime embeds) over a TS-implemented `__tropel_pm_*` bridge.
  *
  * Scripts written against kp.* / pm.* / bru.* / chai today are byte-
  * compatible with the M3 wasm runtime, which runs the very same shim
@@ -10,9 +10,14 @@
  * browser); true isolation arrives with QuickJS wasm in M3.
  */
 import type { Assertion, Request, Response } from "@knockport/core";
-import chaiShim from "../shims/chai-shim.js?raw";
-import pmShim from "../shims/pm.js?raw";
-import bruShim from "../shims/bru.js?raw";
+import { defaultBundle, render } from "@tropel/shims";
+
+// Subset of the engine's ShimBundle::default() — pm/chai/bru only; the
+// lodash/cryptojs/exec shims need bridges KnockPort doesn't host yet.
+// Filter preserves the canonical bundle order (pm → chai → … → bru).
+const SHIM_SOURCE = render(
+  defaultBundle.filter((s) => s.name === "pm-shim" || s.name === "chai-shim" || s.name === "bru-shim"),
+);
 
 export interface TestResult {
   name: string;
@@ -175,7 +180,7 @@ function buildBridges(host: Host, tests: TestResult[]): Record<string, (...args:
 }
 
 // ── Realm factory (compiled once) ────────────────────────────────────────────
-// The prelude evals the vendored shims inside a function scope whose
+// The prelude evals the @tropel/shims sources inside a function scope whose
 // `globalThis` parameter is a per-run sandbox object, then hands back a
 // runner that direct-evals user code in that same scope (kp/pm/bru/chai
 // all in scope).
@@ -199,7 +204,7 @@ function getRealmFactory() {
       "globalThis",
       "__tropel_sandbox_config",
       ...bridgeNames,
-      chaiShim + "\n" + pmShim + "\n" + bruShim + "\n" + PRELUDE_TRAILER,
+      SHIM_SOURCE + "\n" + PRELUDE_TRAILER,
     ) as (...args: unknown[]) => (script: string) => unknown;
   }
   return realmFactory;

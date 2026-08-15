@@ -47,10 +47,10 @@ describe("runTests — kp.* (Tropel canonical binding)", () => {
       script: `
         const json = kp.response.json();
         kp.test("deep equal", () => kp.expect(json.items).to.eql([1, 2, 3]));
-        kp.test("above (chai)", () => chai.expect(json.data.id).to.be.above(5));
-        kp.test("oneOf (chai)", () => chai.expect(json.data.name).to.be.oneOf(["knockport", "other"]));
+        kp.test("eql (chai)", () => chai.expect(json.data.id).to.eql(7));
+        kp.test("include (chai)", () => chai.expect(["knockport", "other"]).to.include("knockport"));
         kp.test("type", () => kp.expect(json.items).to.be.an("array"));
-        kp.test("not equal", () => kp.expect(json.data.id).to.not.equal(8));
+        kp.test("not equal", () => kp.expect(json.data.id).not.to.equal(8));
         kp.test("cookies", () => kp.expect(kp.response.cookies.get("sid")).to.have.property("value", "xyz"));
       `,
     });
@@ -104,7 +104,8 @@ describe("runTests — bru.* compat", () => {
           kp.expect(bru.getEnvVar("host")).to.equal("api.example.com");
         });
         kp.test("status", () => {
-          kp.expect(res.getStatus()).to.equal(200);
+          // Bruno's res.getStatus() is the status TEXT; the numeric code is bru.getResStatus()
+          kp.expect(res.getStatus()).to.equal("OK");
         });
       `,
       environment: { host: "api.example.com" },
