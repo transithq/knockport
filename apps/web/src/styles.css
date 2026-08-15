@@ -1,0 +1,4 @@
+@import "tailwindcss";
+
+/* Import KnockPort global styles */
+/* Note: globals.css is imported from @knockport/ui/styles in main.tsx */

@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "paths": {
+      "@knockport/core": ["../../packages/core/src"],
+      "@knockport/core/*": ["../../packages/core/src/*"],
+      "@knockport/format": ["../../packages/format/src"],
+      "@knockport/format/*": ["../../packages/format/src/*"],
+      "@knockport/transport": ["../../packages/transport/src"],
+      "@knockport/transport/*": ["../../packages/transport/src/*"],
+      "@knockport/storage": ["../../packages/storage/src"],
+      "@knockport/storage/*": ["../../packages/storage/src/*"],
+      "@knockport/engine": ["../../packages/engine/src"],
+      "@knockport/engine/*": ["../../packages/engine/src/*"],
+      "@knockport/ui": ["../../packages/ui/src"],
+      "@knockport/ui/*": ["../../packages/ui/src/*"]
+    }
+  },
+  "include": ["src/**/*", "vite-env.d.ts"],
+  "exclude": ["node_modules", "dist"]
+}

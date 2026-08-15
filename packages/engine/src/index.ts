@@ -1,0 +1,168 @@
+/**
+ * @knockport/engine
+ *
+ * Wrapper for @tropel/runtime-wasm (the Tropel execution engine compiled to WASM).
+ * This module handles:
+ * - Lazy-loading the wasm after first paint
+ * - Running the engine in a Web Worker
+ * - postcard ABI communication (not JSON)
+ * - kp.* alias wiring
+ *
+ * In M0, this provides the interface. The actual wasm integration lands in M3
+ * once @tropel/runtime-wasm is published.
+ */
+
+export type EngineStatus = "idle" | "loading" | "ready" | "error";
+
+export interface EngineConfig {
+  wasmUrl?: string;
+  workerUrl?: string;
+  namespace?: string;
+}
+
+export interface ScriptExecutionResult {
+  success: boolean;
+  variables: Record<string, string>;
+  assertions: AssertionResult[];
+  error?: string;
+  duration: number;
+}
+
+export interface AssertionResult {
+  expression: string;
+  passed: boolean;
+  message?: string;
+}
+
+/**
+ * The scripting engine interface.
+ * Responsible for executing pre-request and test scripts.
+ *
+ * In the browser, scripts run in a Web Worker with QuickJS (via tropel wasm).
+ * On desktop (Tauri), scripts run in the native tropel-runtime.
+ */
+export class ScriptEngine {
+  private status: EngineStatus = "idle";
+  private config: EngineConfig;
+  private worker: Worker | undefined;
+
+  constructor(config: EngineConfig = {}) {
+    this.config = {
+      namespace: "kp",
+      ...config,
+    };
+  }
+
+  getStatus(): EngineStatus {
+    return this.status;
+  }
+
+  /**
+   * Initialize the engine. Call this after first paint to avoid blocking UI.
+   */
+  async init(): Promise<void> {
+    if (this.status === "ready") return;
+
+    this.status = "loading";
+    try {
+      // M3: Load wasm in a Worker
+      // For now, the engine is a stub that uses the browser's JS engine
+      this.status = "ready";
+    } catch (err) {
+      this.status = "error";
+      throw err;
+    }
+  }
+
+  /**
+   * Execute a pre-request script.
+   */
+  async executePreScript(
+    script: string,
+    variables: Record<string, string>,
+    request: any,
+  ): Promise<ScriptExecutionResult> {
+    const start = performance.now();
+    try {
+      // M3: Send to Worker via postcard ABI
+      // For now, stub execution
+      return {
+        success: true,
+        variables,
+        assertions: [],
+        duration: performance.now() - start,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        variables,
+        assertions: [],
+        error: err instanceof Error ? err.message : String(err),
+        duration: performance.now() - start,
+      };
+    }
+  }
+
+  /**
+   * Execute a test script.
+   */
+  async executeTestScript(
+    script: string,
+    variables: Record<string, string>,
+    response: any,
+  ): Promise<ScriptExecutionResult> {
+    const start = performance.now();
+    try {
+      return {
+        success: true,
+        variables,
+        assertions: [],
+        duration: performance.now() - start,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        variables,
+        assertions: [],
+        error: err instanceof Error ? err.message : String(err),
+        duration: performance.now() - start,
+      };
+    }
+  }
+
+  /**
+   * Evaluate declarative assertions against a response.
+   */
+  evaluateAssertions(
+    assertions: string[],
+    response: any,
+  ): AssertionResult[] {
+    return assertions.map((expr) => {
+      try {
+        // M3: Delegate to engine
+        return { expression: expr, passed: true };
+      } catch {
+        return { expression: expr, passed: false, message: "Not implemented" };
+      }
+    });
+  }
+
+  /**
+   * Dispose the engine and worker.
+   */
+  dispose(): void {
+    this.worker?.terminate();
+    this.worker = undefined;
+    this.status = "idle";
+  }
+}
+
+// Singleton
+let engineInstance: ScriptEngine | undefined;
+
+export function getEngine(config?: EngineConfig): ScriptEngine {
+  if (!engineInstance) {
+    engineInstance = new ScriptEngine(config);
+  }
+  return engineInstance;
+}

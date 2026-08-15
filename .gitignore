@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+.turbo/
+.turbo/**
+
+# IDE
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Testing
+coverage/
+
+# Misc
+*.log
+*.tsbuildinfo
+
+# Rust (for future Tauri/relay builds)
+target/
+Cargo.lock.bak
+
+# WASM
+*.wasm
+!src/**/*.wasm
+
+# Tauri
+apps/desktop/src-tauri/target/
