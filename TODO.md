@@ -130,7 +130,10 @@ Follow-ups (not blocking):
       (`exportJson` → `.knockport.json`), collection YAML (`serializeCollection` →
       `.yaml`, text/yaml), and environment YAML (`serializeEnvironment` → `.yaml`).
       Verified in browser via Blob capture. Round-trip import of the native formats is
-      NOT wired yet (importAuto doesn't detect them) — add when needed.
+      DONE too: `importAuto` now detects native collection/request/environment JSON +
+      YAML (ids persisted in the YAML docs and regenerated on import via
+      `assignCollectionIds`, order lists remapped); ImportModal routes environments to
+      the environments store. 10 vitest round-trip cases in packages/format.
 - [x] Collection variables editing UI — DONE: full-area tab (Braces button on collection row),
       `pm.collectionVariables.*` + `{{var}}` resolution wired into send/runner; env overrides collection.
 - [ ] Virtualized sidebar tree (perf, when collections get big).

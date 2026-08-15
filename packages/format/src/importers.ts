@@ -1,5 +1,7 @@
-import type { Collection, Folder, Request, KeyValuePair, HttpMethod, AuthConfig, BodyContent } from "@knockport/core";
+import type { Collection, Folder, Request, KeyValuePair, HttpMethod, AuthConfig, BodyContent, Environment } from "@knockport/core";
 import { createId } from "@knockport/core";
+import { parse } from "yaml";
+import { collectionFromRaw, requestFromRaw, environmentFromRaw, assignCollectionIds } from "./yaml";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function baseRequest(partial: Partial<Request> & Pick<Request, "name" | "method" | "url">): Request {
@@ -78,7 +80,7 @@ export function importCurl(input: string): Request {
         user = tokens[++i] ?? null;
         break;
       default:
-        if (!t.startsWith("-") && !url) url = t;
+        if (!t.startsWith("-") && t.toLowerCase() !== "curl" && !url) url = t;
     }
   }
 
@@ -276,15 +278,77 @@ export function importHar(json: string): Collection {
 }
 
 // ── Auto-detect importer ─────────────────────────────────────────────────────
-export function importAuto(input: string): Collection | Request {
+export function importAuto(input: string): Collection | Request | Environment {
   const trimmed = input.trim();
   if (trimmed.startsWith("curl ") || trimmed.startsWith("curl\n")) return importCurl(trimmed);
   try {
     const doc = JSON.parse(trimmed);
-    if (doc.log?.entries) return importHar(trimmed);
-    if (doc.info?.schema?.includes("postman") || doc.item) return importPostman(trimmed);
+    if (doc?.log?.entries) return importHar(trimmed);
+    if (doc?.info?.schema?.includes("postman") || Array.isArray(doc?.item)) return importPostman(trimmed);
+    if (doc && typeof doc === "object") return importNativeObject(doc);
   } catch {
-    // not JSON — treat as curl
+    // not JSON — try native YAML below
   }
-  return importCurl(trimmed);
+  return importNativeYaml(trimmed);
+}
+
+// ── Native KnockPort format importers ────────────────────────────────────────
+/**
+ * Import a native KnockPort collection, single request, or environment from
+ * its JSON export (round-trip counterpart of `exportJson`).
+ */
+export function importKnockportJson(json: string): Collection | Request | Environment {
+  return importNativeObject(JSON.parse(json));
+}
+
+/**
+ * Import a native KnockPort collection, single request, or environment from
+ * YAML (round-trip counterpart of `serializeCollection` / `serializeEnvironment`).
+ */
+export function importKnockportYaml(yamlText: string): Collection | Request | Environment {
+  const doc = parse(yamlText);
+  if (!doc || typeof doc === "string" || Array.isArray(doc)) {
+    throw new Error("Invalid KnockPort YAML — expected a mapping document");
+  }
+  return importNativeObject(doc);
+}
+
+function looksLikeNativeDoc(doc: any): boolean {
+  if (!doc || typeof doc !== "object" || Array.isArray(doc)) return false;
+  return (
+    Array.isArray(doc.requests) ||
+    Array.isArray(doc.folders) ||
+    Array.isArray(doc.order) ||
+    Array.isArray(doc.variables) ||
+    (typeof doc.method === "string" && doc.url !== undefined)
+  );
+}
+
+/**
+ * Parse a non-JSON input as native YAML. Falls back to the cURL importer when
+ * the text is not a recognizable native document.
+ */
+function importNativeYaml(input: string): Collection | Request | Environment {
+  try {
+    const doc = parse(input);
+    if (looksLikeNativeDoc(doc)) return importNativeObject(doc);
+  } catch {
+    // fall through to cURL
+  }
+  return importCurl(input);
+}
+
+function importNativeObject(doc: any): Collection | Request | Environment {
+  if (Array.isArray(doc.requests) || Array.isArray(doc.folders) || Array.isArray(doc.order)) {
+    // Regenerate IDs on import so re-importing an export never overwrites the
+    // original records (Dexie keys by id).
+    return assignCollectionIds(collectionFromRaw(doc));
+  }
+  if (Array.isArray(doc.variables)) {
+    return { ...environmentFromRaw(doc), id: createId("env") };
+  }
+  if (typeof doc.method === "string" && doc.url !== undefined) {
+    return { ...requestFromRaw(doc), id: createId("req") };
+  }
+  throw new Error("Unrecognized KnockPort file — expected a collection, request, or environment");
 }

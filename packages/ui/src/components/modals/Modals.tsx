@@ -146,8 +146,12 @@ export function ImportModal() {
       if ("folders" in result) {
         store.addCollection(result);
         store.setSidebarTab("collections");
-      } else {
+      } else if ("method" in result) {
         store.openTab(result);
+      } else {
+        // Environment
+        store.addEnvironment(result);
+        store.setSidebarTab("environments");
       }
       setText("");
       setError("");
