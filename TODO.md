@@ -231,7 +231,11 @@ embeds, ShimBundle::default()) so scripts are byte-compatible with the M3 wasm r
 - [ ] `packages/engine`: @tropel/runtime-wasm in a Web Worker, postcard ABI (see D:/tropel).
       Replace the TS bridge host in test-runner.ts; keep the @tropel/shims sources.
 - [ ] Lazy-load wasm after first paint.
-- [ ] Script editor type hints (CodeMirror completions) for kp.*/pm.*/bru.*.
+- [x] Script editor type hints (CodeMirror completions) for kp.*/pm.*/bru.*. DONE:
+      `packages/ui/src/components/common/script-completions.ts` provides an
+      @codemirror/autocomplete override that offers members after `kp.` / `pm.` / `bru.`
+      and nested members after `kp.response.` etc., with signatures + info text. Wired into
+      every JavaScript CodeMirror editor via `languageExtension`. 5 vitest cases.
 
 ## 7 · M4 · Plugin host
 
