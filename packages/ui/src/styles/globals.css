@@ -334,6 +334,17 @@ body {
 .kp-tree-actions { display: none; align-items: center; gap: 2px; }
 .kp-tree-item:hover .kp-tree-actions { display: inline-flex; }
 .kp-tree-collection:hover .kp-count-badge { display: none; }
+.kp-env-name-input {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--kp-text-primary);
+  background: var(--kp-bg-tertiary);
+  border: 1px solid var(--kp-border);
+  border-radius: 6px;
+  outline: none;
+}
+.kp-env-name-input:focus { border-color: var(--kp-border-focus); }
 .kp-icon-btn.kp-danger:hover { color: var(--kp-error); background: var(--kp-error-bg); }
 .kp-active-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--kp-accent); }
 .kp-empty-hint { padding: 12px; font-size: 12px; color: var(--kp-text-muted); text-align: center; }
@@ -506,6 +517,7 @@ body {
 }
 .kp-kv-head { border-bottom: 1px solid var(--kp-border-secondary); }
 .kp-kv-head span { font-size: 11px; color: var(--kp-text-tertiary); }
+.kp-modal .kp-kv-row { grid-template-columns: 28px 1fr 1fr 32px; }
 .kp-kv-row input[type="text"] {
   padding: 6px 8px;
   background: transparent;

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../../store/app-store";
 import { createId } from "@knockport/core";
+import { exportPostman } from "@knockport/format";
 import {
   Search,
   FilePlus,
@@ -20,6 +21,16 @@ interface Command {
   shortcut?: string;
   group: string;
   action: () => void;
+}
+
+function downloadFile(filename: string, content: string) {
+  const blob = new Blob([content], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export function CommandPalette() {
@@ -76,7 +87,12 @@ export function CommandPalette() {
     { id: "clear-history", label: "Clear History", icon: <Trash2 size={14} />, group: "Actions", action: () => { clearHistory(); setCommandPaletteOpen(false); } },
     { id: "import-collection", label: "Import Collection", icon: <Download size={14} />, group: "Actions", action: () => { setCommandPaletteOpen(false); setImportOpen(true); } },
     { id: "run-collection", label: "Run Collection", icon: <Play size={14} />, group: "Actions", action: () => { setCommandPaletteOpen(false); setRunnerOpen(true); } },
-    { id: "export-collection", label: "Export Collection", icon: <Upload size={14} />, group: "Actions", action: () => setCommandPaletteOpen(false) },
+    { id: "export-collection", label: "Export Collection (Postman v2.1)", icon: <Upload size={14} />, group: "Actions", action: () => {
+      const s = useAppStore.getState();
+      const col = s.collections.find((c) => c.id === s.activeCollectionId) ?? s.collections[0];
+      if (col) downloadFile(`${col.name.replace(/\s+/g, "_")}.postman_collection.json`, exportPostman(col));
+      setCommandPaletteOpen(false);
+    } },
   ];
 
   const filtered = query ? commands.filter((c) => c.label.toLowerCase().includes(query.toLowerCase())) : commands;

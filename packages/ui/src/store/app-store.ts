@@ -108,6 +108,7 @@ export interface AppStore {
   importOpen: boolean;
   runnerOpen: boolean;
   websocketOpen: boolean;
+  envEditorId: string | null;
   theme: "dark" | "light";
 
   // Actions — Sidebar
@@ -165,6 +166,7 @@ export interface AppStore {
   setImportOpen: (open: boolean) => void;
   setRunnerOpen: (open: boolean) => void;
   setWebsocketOpen: (open: boolean) => void;
+  setEnvEditor: (id: string | null) => void;
   toggleTheme: () => void;
 }
 
@@ -196,6 +198,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   importOpen: false,
   runnerOpen: false,
   websocketOpen: false,
+  envEditorId: null,
   theme: "dark",
 
   // ── Sidebar Actions ──────────────────────────────────────────────────────
@@ -519,6 +522,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setImportOpen: (open) => set({ importOpen: open }),
   setRunnerOpen: (open) => set({ runnerOpen: open }),
   setWebsocketOpen: (open) => set({ websocketOpen: open }),
+  setEnvEditor: (id) => set({ envEditorId: id }),
   toggleTheme: () =>
     set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
 }));

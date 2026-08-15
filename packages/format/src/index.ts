@@ -275,5 +275,6 @@ function deserializeVariable(raw: any): Variable {
 // ── Importers & codegen ──────────────────────────────────────────────────────
 export { importCurl, importPostman, importHar, importAuto } from "./importers";
 export { generateCode, generateCurl, generateJsFetch, generatePython, type CodegenTarget } from "./codegen";
+export { exportJson, exportPostman } from "./exporters";
 
 

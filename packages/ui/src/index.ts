@@ -5,7 +5,7 @@ export { RequestEditor } from "./components/request/RequestEditor";
 export { ResponseBody } from "./components/response/ResponseBody";
 export { ResponseSummary } from "./components/response/ResponseSummary";
 export { CommandPalette } from "./components/command/CommandPalette";
-export { CodegenModal, ImportModal } from "./components/modals/Modals";
+export { CodegenModal, ImportModal, EnvironmentEditorModal } from "./components/modals/Modals";
 export { RunnerModal } from "./components/runner/RunnerModal";
 export { WebSocketModal } from "./components/websocket/WebSocketModal";
 

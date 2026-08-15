@@ -1,6 +1,7 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { Copy, X, Download } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Copy, X, Download, Trash2, Plus } from "lucide-react";
 import { clsx } from "clsx";
+import type { Variable } from "@knockport/core";
 import { useAppStore } from "../../store/app-store";
 import { buildVariableMap, resolveRequest } from "../../store/variables";
 import { generateCode, importAuto, type CodegenTarget } from "@knockport/format";
@@ -179,6 +180,99 @@ export function ImportModal() {
         <div className="kp-modal-footer">
           <button type="button" className="kp-btn primary" onClick={doImport} disabled={!text.trim()}>
             <Download size={14} /> Import
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Environment Editor Modal ───────────────────────────────────────────────────
+export function EnvironmentEditorModal() {
+  const envId = useAppStore((s) => s.envEditorId);
+  const setEnvEditor = useAppStore((s) => s.setEnvEditor);
+  const environments = useAppStore((s) => s.environments);
+  const updateEnvironment = useAppStore((s) => s.updateEnvironment);
+  const env = environments.find((e) => e.id === envId);
+
+  const [name, setName] = useState("");
+  const [vars, setVars] = useState<Variable[]>([]);
+
+  useEffect(() => {
+    if (env) {
+      setName(env.name);
+      setVars(env.variables.map((v) => ({ ...v })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [envId]);
+
+  if (!env) return null;
+
+  const update = (i: number, field: keyof Variable, value: string | boolean) =>
+    setVars((vs) => vs.map((v, idx) => (idx === i ? { ...v, [field]: value } : v)));
+
+  const save = () => {
+    updateEnvironment(env.id, {
+      name: name.trim() || env.name,
+      variables: vars.filter((v) => v.key.trim()),
+    });
+    setEnvEditor(null);
+  };
+
+  return (
+    <div className="kp-cmdk-overlay" onClick={() => setEnvEditor(null)}>
+      <div className="kp-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="kp-modal-header">
+          <span>Edit Environment</span>
+          <button type="button" className="kp-icon-btn" onClick={() => setEnvEditor(null)}><X size={14} /></button>
+        </div>
+        <div style={{ padding: "10px 14px 0" }}>
+          <input
+            type="text"
+            className="kp-env-name-input"
+            value={name}
+            placeholder="Environment name"
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+        <div className="kp-kv-table" style={{ margin: "10px 14px" }}>
+          <div className="kp-kv-row kp-kv-head">
+            <span />
+            <span>Variable</span>
+            <span>Value</span>
+            <span />
+          </div>
+          {vars.map((v, i) => (
+            <div className="kp-kv-row" key={i}>
+              <input
+                type="checkbox"
+                className="kp-checkbox"
+                checked={v.enabled !== false}
+                onChange={(e) => update(i, "enabled", e.target.checked)}
+              />
+              <input type="text" value={v.key} placeholder="variable_name" onChange={(e) => update(i, "key", e.target.value)} />
+              <input type="text" value={v.value} placeholder="value" onChange={(e) => update(i, "value", e.target.value)} />
+              <button
+                type="button"
+                className="kp-icon-btn kp-danger"
+                title="Remove"
+                onClick={() => setVars((vs) => vs.filter((_, idx) => idx !== i))}
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="kp-modal-footer">
+          <button
+            type="button"
+            className="kp-btn"
+            onClick={() => setVars((vs) => [...vs, { key: "", value: "", enabled: true }])}
+          >
+            <Plus size={14} /> Add Variable
+          </button>
+          <button type="button" className="kp-btn primary" onClick={save}>
+            Save
           </button>
         </div>
       </div>

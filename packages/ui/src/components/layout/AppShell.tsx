@@ -13,7 +13,7 @@ import { RequestEditor } from "../request/RequestEditor";
 import { ResponseBody } from "../response/ResponseBody";
 import { ResponseSummary } from "../response/ResponseSummary";
 import { CommandPalette } from "../command/CommandPalette";
-import { CodegenModal, ImportModal } from "../modals/Modals";
+import { CodegenModal, ImportModal, EnvironmentEditorModal } from "../modals/Modals";
 import { RunnerModal } from "../runner/RunnerModal";
 import { WebSocketModal } from "../websocket/WebSocketModal";
 import { createId } from "@knockport/core";
@@ -184,6 +184,7 @@ export function AppShell() {
         else if (s.importOpen) s.setImportOpen(false);
         else if (s.runnerOpen) s.setRunnerOpen(false);
         else if (s.websocketOpen) s.setWebsocketOpen(false);
+        else if (s.envEditorId) s.setEnvEditor(null);
       }
     };
     window.addEventListener("keydown", handler);
@@ -223,6 +224,7 @@ export function AppShell() {
       <ImportModal />
       <RunnerModal />
       <WebSocketModal />
+      <EnvironmentEditorModal />
     </div>
   );
 }

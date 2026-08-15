@@ -330,15 +330,43 @@ export function Sidebar() {
               <div className="kp-empty-hint">No environments yet</div>
             ) : (
               environments.map((e) => (
-                <button
+                <div
                   key={e.id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   className={`kp-tree-item${e.id === activeEnvironmentId ? " active" : ""}`}
                   onClick={() => setActiveEnvironment(e.id)}
+                  onKeyDown={(ev) => ev.key === "Enter" && setActiveEnvironment(e.id)}
                 >
                   <span className="kp-truncate" style={{ flex: 1 }}>{e.name}</span>
                   {e.id === activeEnvironmentId && <span className="kp-active-dot" />}
-                </button>
+                  <span className="kp-tree-actions">
+                    <button
+                      type="button"
+                      className="kp-icon-btn"
+                      title="Edit variables"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        useAppStore.getState().setEnvEditor(e.id);
+                      }}
+                    >
+                      <MoreHorizontal size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      className="kp-icon-btn kp-danger"
+                      title="Delete environment"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        if (window.confirm(`Delete environment "${e.name}"?`)) {
+                          useAppStore.getState().deleteEnvironment(e.id);
+                        }
+                      }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </span>
+                </div>
               ))
             ))}
 
