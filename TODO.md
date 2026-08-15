@@ -124,8 +124,12 @@ Follow-ups (not blocking):
       Existing TS importers (cURL/Postman/HAR) stay as the fallback until the wasm import
       slice lands; new formats (OpenAPI/Swagger/Bruno/Insomnia/.http) are implemented in
       Tropel only.
-- [ ] Export: native KnockPort JSON + YAML (serializeCollection already exists) from palette;
-      export environment too.
+- [x] Export — DONE: command palette has four export commands (active collection,
+      fallback first): Postman v2.1 (`.postman_collection.json`), native KnockPort JSON
+      (`exportJson` → `.knockport.json`), collection YAML (`serializeCollection` →
+      `.yaml`, text/yaml), and environment YAML (`serializeEnvironment` → `.yaml`).
+      Verified in browser via Blob capture. Round-trip import of the native formats is
+      NOT wired yet (importAuto doesn't detect them) — add when needed.
 - [x] Collection variables editing UI — DONE: full-area tab (Braces button on collection row),
       `pm.collectionVariables.*` + `{{var}}` resolution wired into send/runner; env overrides collection.
 - [ ] Virtualized sidebar tree (perf, when collections get big).

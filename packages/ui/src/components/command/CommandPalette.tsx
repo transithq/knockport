@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../../store/app-store";
 import { createId } from "@knockport/core";
-import { exportPostman } from "@knockport/format";
+import { exportPostman, exportJson, serializeCollection, serializeEnvironment } from "@knockport/format";
 import {
   Search,
   FilePlus,
@@ -23,8 +23,8 @@ interface Command {
   action: () => void;
 }
 
-function downloadFile(filename: string, content: string) {
-  const blob = new Blob([content], { type: "application/json" });
+function downloadFile(filename: string, content: string, mime = "application/json") {
+  const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -96,6 +96,24 @@ export function CommandPalette() {
       const s = useAppStore.getState();
       const col = s.collections.find((c) => c.id === s.activeCollectionId) ?? s.collections[0];
       if (col) downloadFile(`${col.name.replace(/\s+/g, "_")}.postman_collection.json`, exportPostman(col));
+      setCommandPaletteOpen(false);
+    } },
+    { id: "export-collection-json", label: "Export Collection (KnockPort JSON)", icon: <Upload size={14} />, group: "Actions", action: () => {
+      const s = useAppStore.getState();
+      const col = s.collections.find((c) => c.id === s.activeCollectionId) ?? s.collections[0];
+      if (col) downloadFile(`${col.name.replace(/\s+/g, "_")}.knockport.json`, exportJson(col));
+      setCommandPaletteOpen(false);
+    } },
+    { id: "export-collection-yaml", label: "Export Collection (YAML)", icon: <Upload size={14} />, group: "Actions", action: () => {
+      const s = useAppStore.getState();
+      const col = s.collections.find((c) => c.id === s.activeCollectionId) ?? s.collections[0];
+      if (col) downloadFile(`${col.name.replace(/\s+/g, "_")}.yaml`, serializeCollection(col), "text/yaml");
+      setCommandPaletteOpen(false);
+    } },
+    { id: "export-environment", label: "Export Environment (YAML)", icon: <Upload size={14} />, group: "Actions", action: () => {
+      const s = useAppStore.getState();
+      const env = s.environments.find((e) => e.id === s.activeEnvironmentId) ?? s.environments[0];
+      if (env) downloadFile(`${env.name.replace(/\s+/g, "_")}.yaml`, serializeEnvironment(env), "text/yaml");
       setCommandPaletteOpen(false);
     } },
   ];
