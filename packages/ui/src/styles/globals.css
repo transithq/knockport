@@ -332,7 +332,7 @@ body {
   color: var(--kp-text-tertiary);
 }
 .kp-tree-actions { display: none; align-items: center; gap: 2px; }
-.kp-tree-collection:hover .kp-tree-actions { display: inline-flex; }
+.kp-tree-item:hover .kp-tree-actions { display: inline-flex; }
 .kp-tree-collection:hover .kp-count-badge { display: none; }
 .kp-icon-btn.kp-danger:hover { color: var(--kp-error); background: var(--kp-error-bg); }
 .kp-active-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--kp-accent); }

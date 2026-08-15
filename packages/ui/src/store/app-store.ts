@@ -1,5 +1,9 @@
 import { create } from "zustand";
-import { history as dbHistory } from "@knockport/storage";
+import {
+  history as dbHistory,
+  collections as dbCollections,
+  environments as dbEnvironments,
+} from "@knockport/storage";
 import type {
   Request,
   Response,
@@ -10,6 +14,7 @@ import type {
   BodyContent,
   AuthConfig,
   HttpMethod,
+  Folder,
 } from "@knockport/core";
 import { createId } from "@knockport/core";
 
@@ -24,6 +29,49 @@ export interface RequestTab {
 export type ActivePanel = "params" | "headers" | "auth" | "body" | "scripts" | "tests" | "settings";
 export type ResponsePanel = "pretty" | "raw" | "preview" | "headers" | "timings" | "cookies";
 export type SidebarTab = "collections" | "environments" | "history";
+
+// ── Folder tree helpers ─────────────────────────────────────────────────────
+function makeFolder(name: string): Folder {
+  return { id: createId("folder"), name, folders: [], requests: [], order: [] };
+}
+
+function insertFolder(folders: Folder[], parentId: string | null, folder: Folder): Folder[] {
+  if (parentId === null) return [...folders, folder];
+  return folders.map((f) =>
+    f.id === parentId
+      ? { ...f, folders: [...f.folders, folder] }
+      : { ...f, folders: insertFolder(f.folders, parentId, folder) },
+  );
+}
+
+function mapFolderTree(folders: Folder[], folderId: string, fn: (f: Folder) => Folder): Folder[] {
+  return folders.map((f) =>
+    f.id === folderId ? fn(f) : { ...f, folders: mapFolderTree(f.folders, folderId, fn) },
+  );
+}
+
+function removeFolder(folders: Folder[], folderId: string): Folder[] {
+  return folders
+    .filter((f) => f.id !== folderId)
+    .map((f) => ({ ...f, folders: removeFolder(f.folders, folderId) }));
+}
+
+function removeRequest(folders: Folder[], requestId: string): Folder[] {
+  return folders.map((f) => ({
+    ...f,
+    requests: f.requests.filter((r) => r.id !== requestId),
+    folders: removeRequest(f.folders, requestId),
+  }));
+}
+
+// ── Persistence helpers (fire-and-forget) ───────────────────────────────────
+function persistCollection(c: Collection) {
+  dbCollections.save(c as any).catch(() => {});
+}
+
+function persistEnvironment(e: Environment) {
+  dbEnvironments.save(e as any).catch(() => {});
+}
 
 // ── App Store ────────────────────────────────────────────────────────────────
 export interface AppStore {
@@ -72,12 +120,19 @@ export interface AppStore {
   setActiveCollection: (id: string | null) => void;
   updateCollection: (id: string, changes: Partial<Collection>) => void;
   deleteCollection: (id: string) => void;
+  addFolder: (collectionId: string, parentFolderId: string | null, name: string) => void;
+  renameFolder: (collectionId: string, folderId: string, name: string) => void;
+  deleteFolder: (collectionId: string, folderId: string) => void;
+  addRequest: (collectionId: string, folderId: string | null, name?: string) => void;
+  deleteRequest: (collectionId: string, requestId: string) => void;
+  loadCollections: () => Promise<void>;
 
   // Actions — Environments
   addEnvironment: (env: Environment) => void;
   setActiveEnvironment: (id: string | null) => void;
   updateEnvironment: (id: string, changes: Partial<Environment>) => void;
   deleteEnvironment: (id: string) => void;
+  loadEnvironments: () => Promise<void>;
 
   // Actions — Tabs
   openTab: (request: Request) => void;
@@ -149,36 +204,168 @@ export const useAppStore = create<AppStore>((set, get) => ({
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 
   // ── Collection Actions ───────────────────────────────────────────────────
-  addCollection: (collection) =>
-    set((s) => ({ collections: [...s.collections, collection] })),
+  addCollection: (collection) => {
+    set((s) => ({ collections: [...s.collections, collection] }));
+    persistCollection(collection);
+  },
   setActiveCollection: (id) => set({ activeCollectionId: id }),
-  updateCollection: (id, changes) =>
+  updateCollection: (id, changes) => {
     set((s) => ({
       collections: s.collections.map((c) =>
         c.id === id ? { ...c, ...changes } : c,
       ),
-    })),
-  deleteCollection: (id) =>
+    }));
+    const c = get().collections.find((x) => x.id === id);
+    if (c) persistCollection(c);
+  },
+  deleteCollection: (id) => {
     set((s) => ({
       collections: s.collections.filter((c) => c.id !== id),
       activeCollectionId: s.activeCollectionId === id ? null : s.activeCollectionId,
-    })),
+    }));
+    dbCollections.delete(id).catch(() => {});
+  },
+
+  addFolder: (collectionId, parentFolderId, name) => {
+    set((s) => ({
+      collections: s.collections.map((c) =>
+        c.id === collectionId
+          ? { ...c, folders: insertFolder(c.folders, parentFolderId, makeFolder(name)) }
+          : c,
+      ),
+    }));
+    const c = get().collections.find((x) => x.id === collectionId);
+    if (c) persistCollection(c);
+  },
+
+  renameFolder: (collectionId, folderId, name) => {
+    set((s) => ({
+      collections: s.collections.map((c) =>
+        c.id === collectionId
+          ? { ...c, folders: mapFolderTree(c.folders, folderId, (f) => ({ ...f, name })) }
+          : c,
+      ),
+    }));
+    const c = get().collections.find((x) => x.id === collectionId);
+    if (c) persistCollection(c);
+  },
+
+  deleteFolder: (collectionId, folderId) => {
+    set((s) => ({
+      collections: s.collections.map((c) =>
+        c.id === collectionId
+          ? { ...c, folders: removeFolder(c.folders, folderId) }
+          : c,
+      ),
+    }));
+    const c = get().collections.find((x) => x.id === collectionId);
+    if (c) persistCollection(c);
+  },
+
+  addRequest: (collectionId, folderId, name = "New Request") => {
+    const request: Request = {
+      id: createId("req"),
+      name,
+      method: "GET",
+      url: "",
+      headers: [],
+      params: [],
+      body: { type: "none" },
+      auth: { type: "inherit" },
+      metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    };
+    set((s) => ({
+      collections: s.collections.map((c) =>
+        c.id === collectionId
+          ? folderId
+            ? { ...c, folders: mapFolderTree(c.folders, folderId, (f) => ({ ...f, requests: [...f.requests, request] })) }
+            : { ...c, requests: [...c.requests, request] }
+          : c,
+      ),
+    }));
+    const c = get().collections.find((x) => x.id === collectionId);
+    if (c) persistCollection(c);
+    get().openTab(request);
+  },
+
+  deleteRequest: (collectionId, requestId) =>
+    set((s) => {
+      const collections = s.collections.map((c) =>
+        c.id === collectionId
+          ? { ...c, folders: removeRequest(c.folders, requestId), requests: c.requests.filter((r) => r.id !== requestId) }
+          : c,
+      );
+      // Close any tab pointing at the deleted request
+      const doomed = s.tabs.filter((t) => t.requestId === requestId).map((t) => t.id);
+      let { tabs, activeTabId, requests, responses, isLoading } = s;
+      if (doomed.length > 0) {
+        tabs = tabs.filter((t) => t.requestId !== requestId);
+        if (activeTabId && doomed.includes(activeTabId)) activeTabId = tabs[0]?.id ?? null;
+        requests = { ...requests };
+        responses = { ...responses };
+        isLoading = { ...isLoading };
+        for (const id of doomed) {
+          delete requests[id];
+          delete responses[id];
+          delete isLoading[id];
+        }
+      }
+      const c = collections.find((x) => x.id === collectionId);
+      if (c) persistCollection(c);
+      return { collections, tabs, activeTabId, requests, responses, isLoading };
+    }),
+
+  loadCollections: async () => {
+    try {
+      const records = await dbCollections.getAll();
+      set({ collections: records as unknown as Collection[] });
+    } catch {
+      // storage unavailable
+    }
+  },
 
   // ── Environment Actions ──────────────────────────────────────────────────
-  addEnvironment: (env) =>
-    set((s) => ({ environments: [...s.environments, env] })),
-  setActiveEnvironment: (id) => set({ activeEnvironmentId: id }),
-  updateEnvironment: (id, changes) =>
+  addEnvironment: (env) => {
+    set((s) => ({ environments: [...s.environments, env] }));
+    persistEnvironment(env);
+  },
+  setActiveEnvironment: (id) => {
+    set({ activeEnvironmentId: id });
+    try {
+      if (id) localStorage.setItem("kp-active-env", id);
+      else localStorage.removeItem("kp-active-env");
+    } catch {
+      // ignore
+    }
+  },
+  updateEnvironment: (id, changes) => {
     set((s) => ({
       environments: s.environments.map((e) =>
         e.id === id ? { ...e, ...changes } : e,
       ),
-    })),
-  deleteEnvironment: (id) =>
+    }));
+    const e = get().environments.find((x) => x.id === id);
+    if (e) persistEnvironment(e);
+  },
+  deleteEnvironment: (id) => {
     set((s) => ({
       environments: s.environments.filter((e) => e.id !== id),
       activeEnvironmentId: s.activeEnvironmentId === id ? null : s.activeEnvironmentId,
-    })),
+    }));
+    dbEnvironments.delete(id).catch(() => {});
+  },
+
+  loadEnvironments: async () => {
+    try {
+      const records = await dbEnvironments.getAll();
+      const envs = records as unknown as Environment[];
+      let active = localStorage.getItem("kp-active-env");
+      if (!active || !envs.some((e) => e.id === active)) active = envs[0]?.id ?? null;
+      set({ environments: envs, activeEnvironmentId: active });
+    } catch {
+      // storage unavailable
+    }
+  },
 
   // ── Tab Actions ──────────────────────────────────────────────────────────
   openTab: (request) => {

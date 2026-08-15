@@ -37,7 +37,10 @@
 - [x] WebSocket client — connect/send/message log modal
 - [x] History persistence — IndexedDB-backed, entries reopenable in tabs
 - [x] CodeMirror 6 — JSON/JS editors for body + pre-request/test scripts
-- [x] Collection management — create (palette), rename + delete (tree hover actions)
+- [x] Collection management — create (palette/sidebar), rename + delete (tree hover actions)
+- [x] Folder support — nested folders with create/rename/delete + new request in folder/collection
+- [x] Persistence — collections/environments saved to IndexedDB, restored on load (active env remembered)
+- [x] Codegen modal — syntax highlighting for cURL/JavaScript/Python output
 
 ## Not Started
 

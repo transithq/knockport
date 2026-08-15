@@ -11,10 +11,14 @@ import "@knockport/ui/styles/globals.css";
 import "./styles.css";
 
 // Seed the store with a sample collection + environments on first load so the
-// UI reflects the reference design instead of being empty.
-function seed() {
+// UI reflects the reference design instead of being empty. On subsequent loads
+// collections/environments come from IndexedDB.
+async function seed() {
   const store = useAppStore.getState();
-  if (store.collections.length === 0) {
+  await store.loadCollections();
+  await store.loadEnvironments();
+
+  if (useAppStore.getState().collections.length === 0) {
     const collection = createSeedCollection();
     store.addCollection(collection);
 

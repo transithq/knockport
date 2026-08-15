@@ -89,6 +89,10 @@ export const collections = {
     return getDB().collections.add(record);
   },
 
+  async save(record: CollectionRecord): Promise<string> {
+    return getDB().collections.put(record);
+  },
+
   async update(id: string, changes: Partial<CollectionRecord>): Promise<number> {
     return getDB().collections.update(id, {
       ...changes,
@@ -122,6 +126,10 @@ export const environments = {
 
   async create(record: EnvironmentRecord): Promise<string> {
     return getDB().environments.add(record);
+  },
+
+  async save(record: EnvironmentRecord): Promise<string> {
+    return getDB().environments.put(record);
   },
 
   async update(id: string, changes: Partial<EnvironmentRecord>): Promise<number> {
@@ -169,7 +177,7 @@ export const history = {
     await getDB().history.delete(id);
   },
 
-  async clear(): Promise<number> {
+  async clear(): Promise<void> {
     return getDB().history.clear();
   },
 };

@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   LayoutDashboard,
   FolderClosed,
+  FolderPlus,
   Boxes,
   History as HistoryIcon,
   Plug,
@@ -18,6 +19,7 @@ import {
   Aperture,
 } from "lucide-react";
 import type { Collection, Folder, Request } from "@knockport/core";
+import { createId } from "@knockport/core";
 import { useAppStore, type SidebarTab } from "../../store/app-store";
 
 // ── Method color helper ──────────────────────────────────────────────────────
@@ -61,45 +63,91 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 // ── Collection tree ──────────────────────────────────────────────────────────
-function RequestRow({ request }: { request: Request }) {
+function RequestRow({ request, collectionId }: { request: Request; collectionId: string }) {
   const openTab = useAppStore((s) => s.openTab);
   const activeTabId = useAppStore((s) => s.activeTabId);
   const tabs = useAppStore((s) => s.tabs);
+  const deleteRequest = useAppStore((s) => s.deleteRequest);
   const isActive = tabs.find((t) => t.id === activeTabId)?.requestId === request.id;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       className={`kp-tree-item kp-tree-request${isActive ? " active" : ""}`}
       onClick={() => openTab(request)}
+      onKeyDown={(e) => e.key === "Enter" && openTab(request)}
     >
       <MethodTag method={request.method} />
       <span className="kp-truncate">{request.name}</span>
-    </button>
+      <span className="kp-tree-actions">
+        <button
+          type="button"
+          className="kp-icon-btn kp-danger"
+          title="Delete request"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (window.confirm(`Delete request "${request.name}"?`)) deleteRequest(collectionId, request.id);
+          }}
+        >
+          <Trash2 size={12} />
+        </button>
+      </span>
+    </div>
   );
 }
 
-function FolderNode({ folder, depth }: { folder: Folder; depth: number }) {
+function FolderNode({ folder, collectionId, depth }: { folder: Folder; collectionId: string; depth: number }) {
   const [open, setOpen] = useState(true);
+  const addFolder = useAppStore((s) => s.addFolder);
+  const renameFolder = useAppStore((s) => s.renameFolder);
+  const deleteFolder = useAppStore((s) => s.deleteFolder);
+  const addRequest = useAppStore((s) => s.addRequest);
+
+  const newRequest = () => {
+    const name = window.prompt("New request name", "New Request");
+    if (name && name.trim()) {
+      setOpen(true);
+      addRequest(collectionId, folder.id, name.trim());
+    }
+  };
+  const newFolder = () => {
+    const name = window.prompt("New folder name", "New Folder");
+    if (name && name.trim()) {
+      setOpen(true);
+      addFolder(collectionId, folder.id, name.trim());
+    }
+  };
+  const rename = () => {
+    const name = window.prompt("Rename folder", folder.name);
+    if (name && name.trim()) renameFolder(collectionId, folder.id, name.trim());
+  };
+  const remove = () => {
+    if (window.confirm(`Delete folder "${folder.name}" and everything inside?`)) deleteFolder(collectionId, folder.id);
+  };
+
   return (
     <div>
-      <button
-        type="button"
-        className="kp-tree-item kp-tree-folder"
-        style={{ paddingLeft: `${12 + depth * 14}px` }}
-        onClick={() => setOpen(!open)}
-      >
-        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        <span className="kp-truncate">{folder.name}</span>
-      </button>
+      <div className="kp-tree-item kp-tree-folder" style={{ paddingLeft: `${12 + depth * 14}px` }}>
+        <button type="button" className="kp-tree-toggle" onClick={() => setOpen(!open)}>
+          {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        </button>
+        <span className="kp-truncate" style={{ flex: 1 }}>{folder.name}</span>
+        <span className="kp-tree-actions">
+          <button type="button" className="kp-icon-btn" title="New request" onClick={newRequest}><Plus size={12} /></button>
+          <button type="button" className="kp-icon-btn" title="New folder" onClick={newFolder}><FolderPlus size={12} /></button>
+          <button type="button" className="kp-icon-btn" title="Rename" onClick={rename}><MoreHorizontal size={12} /></button>
+          <button type="button" className="kp-icon-btn kp-danger" title="Delete" onClick={remove}><Trash2 size={12} /></button>
+        </span>
+      </div>
       {open && (
         <div>
           {folder.folders.map((f) => (
-            <FolderNode key={f.id} folder={f} depth={depth + 1} />
+            <FolderNode key={f.id} folder={f} collectionId={collectionId} depth={depth + 1} />
           ))}
           {folder.requests.map((r) => (
             <div key={r.id} style={{ paddingLeft: `${(depth + 1) * 14}px` }}>
-              <RequestRow request={r} />
+              <RequestRow request={r} collectionId={collectionId} />
             </div>
           ))}
         </div>
@@ -118,6 +166,8 @@ function CollectionNode({ collection }: { collection: Collection }) {
   const [open, setOpen] = useState(true);
   const updateCollection = useAppStore((s) => s.updateCollection);
   const deleteCollection = useAppStore((s) => s.deleteCollection);
+  const addFolder = useAppStore((s) => s.addFolder);
+  const addRequest = useAppStore((s) => s.addRequest);
 
   const rename = () => {
     const name = window.prompt("Rename collection", collection.name);
@@ -125,6 +175,20 @@ function CollectionNode({ collection }: { collection: Collection }) {
   };
   const remove = () => {
     if (window.confirm(`Delete collection "${collection.name}"?`)) deleteCollection(collection.id);
+  };
+  const newRequest = () => {
+    const name = window.prompt("New request name", "New Request");
+    if (name && name.trim()) {
+      setOpen(true);
+      addRequest(collection.id, null, name.trim());
+    }
+  };
+  const newFolder = () => {
+    const name = window.prompt("New folder name", "New Folder");
+    if (name && name.trim()) {
+      setOpen(true);
+      addFolder(collection.id, null, name.trim());
+    }
   };
 
   return (
@@ -136,18 +200,20 @@ function CollectionNode({ collection }: { collection: Collection }) {
         <span className="kp-truncate" style={{ flex: 1 }}>{collection.name}</span>
         <span className="kp-count-badge">{countRequests(collection)}</span>
         <span className="kp-tree-actions">
-          <button type="button" className="kp-icon-btn" title="Rename" onClick={rename}><MoreHorizontal size={13} /></button>
-          <button type="button" className="kp-icon-btn kp-danger" title="Delete" onClick={remove}><Trash2 size={13} /></button>
+          <button type="button" className="kp-icon-btn" title="New request" onClick={newRequest}><Plus size={12} /></button>
+          <button type="button" className="kp-icon-btn" title="New folder" onClick={newFolder}><FolderPlus size={12} /></button>
+          <button type="button" className="kp-icon-btn" title="Rename" onClick={rename}><MoreHorizontal size={12} /></button>
+          <button type="button" className="kp-icon-btn kp-danger" title="Delete" onClick={remove}><Trash2 size={12} /></button>
         </span>
       </div>
       {open && (
         <div>
           {collection.folders.map((f) => (
-            <FolderNode key={f.id} folder={f} depth={1} />
+            <FolderNode key={f.id} folder={f} collectionId={collection.id} depth={1} />
           ))}
           {collection.requests.map((r) => (
             <div key={r.id} style={{ paddingLeft: "14px" }}>
-              <RequestRow request={r} />
+              <RequestRow request={r} collectionId={collection.id} />
             </div>
           ))}
         </div>
@@ -168,6 +234,29 @@ export function Sidebar() {
   const openCommandPalette = useAppStore((s) => s.setCommandPaletteOpen);
   const toggleTheme = useAppStore((s) => s.toggleTheme);
   const setWebsocketOpen = useAppStore((s) => s.setWebsocketOpen);
+  const addCollection = useAppStore((s) => s.addCollection);
+  const addEnvironment = useAppStore((s) => s.addEnvironment);
+
+  const createNew = () => {
+    if (sidebarTab === "collections") {
+      const name = window.prompt("New collection name", "New Collection");
+      if (!name || !name.trim()) return;
+      addCollection({
+        id: createId("col"),
+        name: name.trim(),
+        variables: [],
+        folders: [],
+        requests: [],
+        order: [],
+        auth: { type: "none" },
+        metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      });
+    } else if (sidebarTab === "environments") {
+      const name = window.prompt("New environment name", "New Environment");
+      if (!name || !name.trim()) return;
+      addEnvironment({ id: createId("env"), name: name.trim(), variables: [] });
+    }
+  };
 
   return (
     <aside className="kp-sidebar">
@@ -223,7 +312,7 @@ export function Sidebar() {
             {sidebarTab === "environments" && "Environments"}
             {sidebarTab === "history" && "History"}
           </span>
-          <button type="button" className="kp-icon-btn" title="New">
+          <button type="button" className="kp-icon-btn" title="New" onClick={createNew}>
             <Plus size={14} />
           </button>
         </div>
