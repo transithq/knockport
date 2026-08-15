@@ -1,22 +1,26 @@
-import { useState } from "react";
-import { Boxes, Play, Trash2 } from "lucide-react";
-import { clsx } from "clsx";
 import type { Collection, Folder, Variable } from "@knockport/core";
+import { clsx } from "clsx";
+import { Boxes, Play, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { useAppStore } from "../../store/app-store";
-import { CodeEditor } from "../common/CodeEditor";
-import { AuthEditor } from "../common/AuthEditor";
 import { AssertionsEditor } from "../common/AssertionsEditor";
+import { AuthEditor } from "../common/AuthEditor";
+import { CodeEditor } from "../common/CodeEditor";
 
 type SubTab = "overview" | "auth" | "scripts" | "tests" | "variables" | "runs";
+type CollectionScriptPhase = "pre" | "postResponse" | "test";
 
 function countRequests(collection: Collection): number {
   const countFolder = (f: Folder): number =>
     f.requests.length + f.folders.reduce((acc, x) => acc + countFolder(x), 0);
-  return collection.requests.length + collection.folders.reduce((acc, f) => acc + countFolder(f), 0);
+  return (
+    collection.requests.length + collection.folders.reduce((acc, f) => acc + countFolder(f), 0)
+  );
 }
 
 function countFolders(collection: Collection): number {
-  const countFolder = (f: Folder): number => 1 + f.folders.reduce((acc, x) => acc + countFolder(x), 0);
+  const countFolder = (f: Folder): number =>
+    1 + f.folders.reduce((acc, x) => acc + countFolder(x), 0);
   return collection.folders.reduce((acc, f) => acc + countFolder(f), 0);
 }
 
@@ -31,7 +35,7 @@ export function CollectionEditor({ collectionId }: { collectionId: string }) {
   const openRunnerTab = useAppStore((s) => s.openRunnerTab);
   const runs = useAppStore((s) => s.collectionRuns);
   const [sub, setSub] = useState<SubTab>("overview");
-  const [which, setWhich] = useState<"pre" | "test">("pre");
+  const [which, setWhich] = useState<CollectionScriptPhase>("pre");
   const [newKey, setNewKey] = useState("");
   const collection = collections.find((c) => c.id === collectionId);
 
@@ -58,19 +62,31 @@ export function CollectionEditor({ collectionId }: { collectionId: string }) {
     { id: "runs", label: "Runs" },
   ];
   const colRuns = runs.filter((r) => r.collectionId === collectionId);
-  const scriptValue = which === "pre" ? collection.scripts?.pre ?? "" : collection.scripts?.test ?? "";
+  const scripts = collection.scripts ?? {};
+  const scriptValue =
+    which === "pre"
+      ? (scripts.pre ?? "")
+      : which === "test"
+        ? (scripts.test ?? "")
+        : (scripts.postResponse ?? "");
 
   return (
     <div className="kp-collection-editor kp-scroll">
       <div className="kp-collection-head">
-        <span className="kp-collection-icon"><Boxes size={17} /></span>
+        <span className="kp-collection-icon">
+          <Boxes size={17} />
+        </span>
         <input
           className="kp-collection-name"
           value={collection.name}
           onChange={(e) => set({ name: e.target.value })}
           aria-label="Collection name"
         />
-        <button type="button" className="kp-btn primary" onClick={() => openRunnerTab(collection.id)}>
+        <button
+          type="button"
+          className="kp-btn primary"
+          onClick={() => openRunnerTab(collection.id)}
+        >
           <Play size={13} /> Run
         </button>
       </div>
@@ -79,7 +95,9 @@ export function CollectionEditor({ collectionId }: { collectionId: string }) {
         <span>·</span>
         <span>{countFolders(collection)} folders</span>
         <span>·</span>
-        <span>updated {new Date(collection.metadata?.updatedAt ?? Date.now()).toLocaleString()}</span>
+        <span>
+          updated {new Date(collection.metadata?.updatedAt ?? Date.now()).toLocaleString()}
+        </span>
       </div>
 
       <div className="kp-req-tabs">
@@ -102,7 +120,9 @@ export function CollectionEditor({ collectionId }: { collectionId: string }) {
             <textarea
               className="kp-textarea"
               rows={10}
-              placeholder={"Describe this collection…\n\nMarkdown is supported: # headings, **bold**, `code`, lists, links."}
+              placeholder={
+                "Describe this collection…\n\nMarkdown is supported: # headings, **bold**, `code`, lists, links."
+              }
               value={collection.description ?? ""}
               onChange={(e) => set({ description: e.target.value })}
             />
@@ -115,28 +135,48 @@ export function CollectionEditor({ collectionId }: { collectionId: string }) {
               Applied to every request whose Authorization type is <code>inherit</code> (the default
               for new requests in this collection).
             </p>
-            <AuthEditor auth={collection.auth ?? { type: "none" }} onChange={(a) => set({ auth: a })} />
+            <AuthEditor
+              auth={collection.auth ?? { type: "none" }}
+              onChange={(a) => set({ auth: a })}
+            />
           </div>
         )}
 
         {sub === "scripts" && (
           <div className="kp-collection-section">
             <div className="kp-seg-row">
-              <button type="button" className={clsx("kp-seg", which === "pre" && "active")} onClick={() => setWhich("pre")}>
+              <button
+                type="button"
+                className={clsx("kp-seg", which === "pre" && "active")}
+                onClick={() => setWhich("pre")}
+              >
                 Pre-request
               </button>
-              <button type="button" className={clsx("kp-seg", which === "test" && "active")} onClick={() => setWhich("test")}>
+              <button
+                type="button"
+                className={clsx("kp-seg", which === "postResponse" && "active")}
+                onClick={() => setWhich("postResponse")}
+              >
+                Post-response
+              </button>
+              <button
+                type="button"
+                className={clsx("kp-seg", which === "test" && "active")}
+                onClick={() => setWhich("test")}
+              >
                 Tests
               </button>
             </div>
             <p className="kp-hint">
               {which === "pre"
                 ? "Runs before every request in this collection, ahead of the request's own pre-request script."
-                : "Runs after every request in this collection, together with the request's own test script."}
+                : which === "postResponse"
+                  ? "Runs after every request in this collection, ahead of the request's own post-response script."
+                  : "Runs after every request in this collection, together with the request's own test script."}
             </p>
             <CodeEditor
               value={scriptValue}
-              onChange={(v) => set({ scripts: { ...collection.scripts, [which]: v } })}
+              onChange={(v) => set({ scripts: { ...scripts, [which]: v } })}
               language="javascript"
               height="220px"
             />
@@ -146,19 +186,23 @@ export function CollectionEditor({ collectionId }: { collectionId: string }) {
         {sub === "tests" && (
           <div className="kp-collection-section">
             <p className="kp-hint">
-              Quick assertions evaluated against <code className="kp-mono kp-accent-text">response</code> for
-              every request in this collection — must return <code className="kp-mono kp-accent-text">true</code> to pass.
+              Quick assertions evaluated against{" "}
+              <code className="kp-mono kp-accent-text">response</code> for every request in this
+              collection — must return <code className="kp-mono kp-accent-text">true</code> to pass.
             </p>
-            <AssertionsEditor assertions={collection.assertions ?? []} onChange={(a) => set({ assertions: a })} />
+            <AssertionsEditor
+              assertions={collection.assertions ?? []}
+              onChange={(a) => set({ assertions: a })}
+            />
           </div>
         )}
 
         {sub === "variables" && (
           <div className="kp-collection-section">
             <p className="kp-hint">
-              Available in every request of this collection as <code>{"{{variable_name}}"}</code> and as{" "}
-              <code>pm.collectionVariables.*</code> in scripts. Environment variables override collection
-              variables with the same key.
+              Available in every request of this collection as <code>{"{{variable_name}}"}</code>{" "}
+              and as <code>pm.collectionVariables.*</code> in scripts. Environment variables
+              override collection variables with the same key.
             </p>
             <div className="kp-kv-table">
               <div className="kp-kv-row kp-kv-head">
@@ -220,27 +264,35 @@ export function CollectionEditor({ collectionId }: { collectionId: string }) {
         {sub === "runs" && (
           <div className="kp-collection-section kp-collection-runs">
             {colRuns.length === 0 ? (
-              <p className="kp-hint">No runs yet. Use the collection runner (▶ Run) to execute this collection.</p>
+              <p className="kp-hint">
+                No runs yet. Use the collection runner (▶ Run) to execute this collection.
+              </p>
             ) : (
               colRuns.map((run) => {
                 const passed = run.results.filter((r) => r.ok).length;
                 return (
                   <div className="kp-card" key={run.id}>
                     <div className="kp-card-title">
-                      {new Date(run.startedAt).toLocaleString()} · {run.iterations} iteration{run.iterations === 1 ? "" : "s"} ·{" "}
-                      {passed}/{run.results.length} passed
+                      {new Date(run.startedAt).toLocaleString()} · {run.iterations} iteration
+                      {run.iterations === 1 ? "" : "s"} · {passed}/{run.results.length} passed
                     </div>
                     {run.results.map((r, i) => (
                       <div className="kp-runner-row" key={i}>
-                        <span className={`kp-runner-status ${r.ok ? "ok" : "fail"}`}>{r.ok ? "PASS" : "FAIL"}</span>
+                        <span className={`kp-runner-status ${r.ok ? "ok" : "fail"}`}>
+                          {r.ok ? "PASS" : "FAIL"}
+                        </span>
                         <span className="kp-runner-name">
                           {r.method} {r.name}
                           {r.error ? ` — ${r.error}` : ""}
                         </span>
                         {r.testsTotal !== undefined && (
-                          <span className="kp-runner-meta">{r.testsPassed}/{r.testsTotal} tests</span>
+                          <span className="kp-runner-meta">
+                            {r.testsPassed}/{r.testsTotal} tests
+                          </span>
                         )}
-                        <span className="kp-runner-meta">{r.status} · {r.time}ms</span>
+                        <span className="kp-runner-meta">
+                          {r.status} · {r.time}ms
+                        </span>
                       </div>
                     ))}
                   </div>

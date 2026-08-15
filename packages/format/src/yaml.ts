@@ -1,16 +1,16 @@
-import { parse, stringify, type DocumentOptions, type ToStringOptions } from "yaml";
 import type {
-  Collection,
-  Folder,
-  Request,
-  Environment,
-  Variable,
   AuthConfig,
-  KeyValuePair,
   BodyContent,
+  Collection,
+  Environment,
+  Folder,
   HttpMethod,
+  KeyValuePair,
+  Request,
+  Variable,
 } from "@knockport/core";
 import { createId } from "@knockport/core";
+import { type DocumentOptions, type ToStringOptions, parse, stringify } from "yaml";
 
 // ── Byte-stable YAML serialization ───────────────────────────────────────────
 // Three rules that make or break the git story:
@@ -183,7 +183,7 @@ function collectionToYamlDoc(c: Collection): Record<string, any> {
     description: c.description,
     auth: c.auth?.type !== "none" ? serializeAuth(c.auth) : undefined,
     scripts: c.scripts
-      ? { pre: c.scripts.pre, test: c.scripts.test }
+      ? { pre: c.scripts.pre, test: c.scripts.test, postResponse: c.scripts.postResponse }
       : undefined,
     variables: c.variables.map(serializeVariable),
     order: c.order,
@@ -199,7 +199,7 @@ function folderToYamlDoc(f: Folder): Record<string, any> {
     description: f.description,
     auth: f.auth?.type !== "none" ? serializeAuth(f.auth) : undefined,
     scripts: f.scripts
-      ? { pre: f.scripts.pre, test: f.scripts.test }
+      ? { pre: f.scripts.pre, test: f.scripts.test, postResponse: f.scripts.postResponse }
       : undefined,
     order: f.order,
     folders: f.folders.map(folderToYamlDoc),
@@ -218,7 +218,7 @@ function requestToYamlDoc(r: Request): Record<string, any> {
     body: serializeBody(r.body),
     auth: r.auth?.type !== "inherit" ? serializeAuth(r.auth) : undefined,
     scripts: r.scripts
-      ? { pre: r.scripts.pre, test: r.scripts.test }
+      ? { pre: r.scripts.pre, test: r.scripts.test, postResponse: r.scripts.postResponse }
       : undefined,
     assertions: r.assertions?.length ? r.assertions : undefined,
     load: r.load
@@ -278,7 +278,7 @@ interface RawCollection {
   name: string;
   description?: string;
   auth?: any;
-  scripts?: { pre?: string; test?: string };
+  scripts?: { pre?: string; test?: string; postResponse?: string };
   variables?: any[];
   order?: string[];
   folders?: any[];
@@ -327,7 +327,12 @@ function rawToRequest(raw: any): Request {
     params: (raw.params ?? []).map(deserializePair),
     body:
       body && typeof body === "object"
-        ? { type: body.type ?? "none", content: body.content, formData: body.formData, graphql: body.graphql }
+        ? {
+            type: body.type ?? "none",
+            content: body.content,
+            formData: body.formData,
+            graphql: body.graphql,
+          }
         : body && typeof body === "string"
           ? { type: "text", content: body }
           : { type: "none" },

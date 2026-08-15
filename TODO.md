@@ -244,6 +244,15 @@ embeds, ShimBundle::default()) so scripts are byte-compatible with the M3 wasm r
       {{var}} placeholders skipped; both wired into `languageExtension`. 9 vitest cases
       in script-editor.test.ts. Deps added to packages/ui: @codemirror/language,
       @codemirror/lint.
+- [x] Post-response script phase (third script slot alongside pre-request + tests). DONE:
+      `scripts.postResponse` on RequestScripts (core types); engine
+      `runPostResponseScript(response, script, vars, opts)` + `mergeTestSummaries`
+      (test-runner.ts — never throws, full kp.response access, returns mutated runtime
+      vars + TestRunSummary); YAML exporter + RawCollection carry the field (disk format
+      passes scripts through unchanged); UI third segment in request ScriptEditor +
+      collection editor Scripts subtab; wiring in handleSend and the RunnerTab loop with
+      Bruno's ordering — post-response runs AFTER the response, BEFORE tests, and its
+      variable mutations carry into the NEXT request in runner iterations. 5 vitest cases.
 
 ## 7 · M4 · Plugin host
 

@@ -12,10 +12,16 @@
  * once @tropel/runtime-wasm is published.
  */
 
-export { runTests, runPreScript } from "./test-runner";
-export type { TestResult, TestRunSummary, RunTestsOptions, PreScriptResult } from "./test-runner";
+export { runTests, runPreScript, runPostResponseScript, mergeTestSummaries } from "./test-runner";
+export type {
+  TestResult,
+  TestRunSummary,
+  RunTestsOptions,
+  PreScriptResult,
+  PostResponseResult,
+} from "./test-runner";
 
-import { runTests, runPreScript } from "./test-runner";
+import { runPostResponseScript, runPreScript, runTests } from "./test-runner";
 
 export type EngineStatus = "idle" | "loading" | "ready" | "error";
 
@@ -113,6 +119,39 @@ export class ScriptEngine {
   }
 
   /**
+   * Execute a post-response script against a response.
+   */
+  async executePostResponseScript(
+    response: any,
+    script: string,
+    variables: Record<string, string> = {},
+  ): Promise<ScriptExecutionResult> {
+    const start = performance.now();
+    try {
+      const result = await runPostResponseScript(response, script, variables);
+      return {
+        success: !result.summary.scriptError && result.summary.failed === 0,
+        variables: result.variables,
+        assertions: result.summary.tests.map((t) => ({
+          expression: t.name,
+          passed: t.passed,
+          message: t.message,
+        })),
+        error: result.summary.scriptError,
+        duration: performance.now() - start,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        variables,
+        assertions: [],
+        error: err instanceof Error ? err.message : String(err),
+        duration: performance.now() - start,
+      };
+    }
+  }
+
+  /**
    * Execute a test script.
    */
   async executeTestScript(
@@ -126,7 +165,11 @@ export class ScriptEngine {
       return {
         success: !summary.scriptError && summary.failed === 0,
         variables,
-        assertions: summary.tests.map((t) => ({ expression: t.name, passed: t.passed, message: t.message })),
+        assertions: summary.tests.map((t) => ({
+          expression: t.name,
+          passed: t.passed,
+          message: t.message,
+        })),
         error: summary.scriptError,
         duration: performance.now() - start,
       };
@@ -144,17 +187,16 @@ export class ScriptEngine {
   /**
    * Evaluate declarative assertions against a response.
    */
-  evaluateAssertions(
-    assertions: string[],
-    response: any,
-  ): AssertionResult[] {
+  evaluateAssertions(assertions: string[], response: any): AssertionResult[] {
     // Fire-and-forget shim: callers that need results should use runTests()
     // directly (async). Kept for interface compatibility.
     const results: AssertionResult[] = [];
     void runTests(response, {
       assertions: assertions.map((expression) => ({ expression })),
     }).then((summary) => {
-      results.push(...summary.tests.map((t) => ({ expression: t.name, passed: t.passed, message: t.message })));
+      results.push(
+        ...summary.tests.map((t) => ({ expression: t.name, passed: t.passed, message: t.message })),
+      );
     });
     return results;
   }

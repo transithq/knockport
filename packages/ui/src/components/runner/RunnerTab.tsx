@@ -1,14 +1,19 @@
-import { useState } from "react";
-import { Play, Loader2, RotateCcw, CheckCircle2, XCircle, X } from "lucide-react";
-import { clsx } from "clsx";
 import type { Collection, Folder, Request } from "@knockport/core";
+import { clsx } from "clsx";
+import { CheckCircle2, Loader2, Play, RotateCcw, X, XCircle } from "lucide-react";
+import { useState } from "react";
 import {
-  useAppStore,
-  DEFAULT_RUNNER_STATE,
   type CollectionRunEntry,
+  DEFAULT_RUNNER_STATE,
   type RunnerTabState,
+  useAppStore,
 } from "../../store/app-store";
-import { buildVariableMap, collectionVariablesMap, environmentVariableMap, resolveRequest } from "../../store/variables";
+import {
+  buildVariableMap,
+  collectionVariablesMap,
+  environmentVariableMap,
+  resolveRequest,
+} from "../../store/variables";
 
 type Filter = "all" | "passed" | "failed";
 type DetailTab = "response" | "headers" | "tests";
@@ -66,13 +71,18 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
     if (included.length === 0) return;
     patch({ phase: "running", results: [], selectedIdx: null });
     const { getTransport } = await import("@knockport/transport");
-    const { runTests, runPreScript } = await import("@knockport/engine");
+    const { runTests, runPreScript, runPostResponseScript, mergeTestSummaries } = await import(
+      "@knockport/engine"
+    );
     const transport = getTransport({
       useRelay: useAppStore.getState().useRelay,
       relayUrl: useAppStore.getState().relayUrl,
     });
     const all: CollectionRunEntry[] = [];
     const startedAt = new Date().toISOString();
+    // Post-response variable mutations carry into the next request's runtime
+    // scope (Bruno-style). Reset per outer run.
+    let carryVars: Record<string, string> = {};
 
     for (let it = 0; it < iterations; it++) {
       for (const collectionCopy of included) {
@@ -82,7 +92,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           (t) => (!t.kind || t.kind === "request") && t.requestId === collectionCopy.id,
         );
         const req = (liveTab && state.requests[liveTab.id]) || collectionCopy;
-        let vars = buildVariableMap(state);
+        let vars = { ...buildVariableMap(state), ...carryVars };
         const opts = {
           environment: environmentVariableMap(state),
           collectionVariables: collectionVariablesMap(state),
@@ -102,11 +112,26 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
         try {
           const res = await transport.execute(resolved, { signal: abort.signal });
           clearTimeout(timer);
+
+          // Post-response phase (Bruno ordering): runs before the test
+          // phase. Its variable mutations carry into the next request.
+          const postScript = [collection.scripts?.postResponse, req.scripts?.postResponse]
+            .filter((s) => s?.trim())
+            .join("\n");
+          let postSummary = null;
+          if (postScript.trim()) {
+            const post = await runPostResponseScript(res, postScript, vars, opts);
+            carryVars = post.variables;
+            postSummary = post.summary;
+          }
+
           let testsPassed: number | undefined;
           let testsTotal: number | undefined;
           let testsOk = true;
           let testSummary = null;
-          const testScript = [collection.scripts?.test, req.scripts?.test].filter((s) => s?.trim()).join("\n");
+          const testScript = [collection.scripts?.test, req.scripts?.test]
+            .filter((s) => s?.trim())
+            .join("\n");
           const assertions = [...(collection.assertions ?? []), ...(req.assertions ?? [])];
           if (testScript.trim() || assertions.length) {
             const summary = await runTests(res, {
@@ -120,6 +145,12 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
             testsPassed = summary.passed;
             testsTotal = summary.tests.length;
             testsOk = summary.failed === 0 && !summary.scriptError;
+          }
+          if (postSummary) {
+            testSummary = testSummary ? mergeTestSummaries(postSummary, testSummary) : postSummary;
+            testsPassed = testSummary.passed;
+            testsTotal = testSummary.tests.length;
+            testsOk = testsOk && postSummary.failed === 0 && !postSummary.scriptError;
           }
           all.push({
             name: req.name,
@@ -178,7 +209,9 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
   return (
     <div className="kp-runner-tab">
       <div className="kp-runner-head">
-        <span className="kp-collection-icon"><Play size={15} /></span>
+        <span className="kp-collection-icon">
+          <Play size={15} />
+        </span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="kp-runner-title">Runner · {collection.name}</div>
           <div className="kp-runner-sub">
@@ -209,7 +242,12 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
                 onChange={(e) => patch({ delay: Number(e.target.value) || 0 })}
               />
             </label>
-            <button type="button" className="kp-btn primary" onClick={run} disabled={phase !== "config" && included.length === 0}>
+            <button
+              type="button"
+              className="kp-btn primary"
+              onClick={run}
+              disabled={phase !== "config" && included.length === 0}
+            >
               <Play size={13} /> {phase === "done" ? "Run Again" : "Run"}
             </button>
             {phase === "done" && (
@@ -220,7 +258,9 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           </>
         )}
         {phase === "running" && (
-          <span className="kp-runner-running"><Loader2 size={14} className="animate-spin" /> Running…</span>
+          <span className="kp-runner-running">
+            <Loader2 size={14} className="animate-spin" /> Running…
+          </span>
         )}
       </div>
 
@@ -241,43 +281,45 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
 
       <div className="kp-runner-main">
         <div className="kp-runner-list kp-scroll">
-          {phase === "config" ? (
-            requests.map((r) => (
-              <label className="kp-runner-list-row" key={r.id}>
-                <input
-                  type="checkbox"
-                  className="kp-checkbox"
-                  checked={!excluded.has(r.id)}
-                  onChange={() => toggle(r.id)}
-                />
-                <span className="kp-method-tag">{r.method}</span>
-                <span className="kp-truncate" style={{ flex: 1 }}>{r.name}</span>
-              </label>
-            ))
-          ) : (
-            visible.map(({ r, i }) => (
-              <button
-                type="button"
-                key={i}
-                className={clsx("kp-runner-list-row", selectedIdx === i && "active")}
-                onClick={() => {
-                  patch({ selectedIdx: i });
-                  setDetailTab("response");
-                }}
-              >
-                {r.ok ? (
-                  <CheckCircle2 size={15} className="kp-runner-icon ok" />
-                ) : (
-                  <XCircle size={15} className="kp-runner-icon fail" />
-                )}
-                <span className="kp-method-tag">{r.method}</span>
-                <span className="kp-truncate" style={{ flex: 1 }}>{r.name}</span>
-                <span className="kp-runner-meta">
-                  {r.status || "—"} · {r.time} ms
-                </span>
-              </button>
-            ))
-          )}
+          {phase === "config"
+            ? requests.map((r) => (
+                <label className="kp-runner-list-row" key={r.id}>
+                  <input
+                    type="checkbox"
+                    className="kp-checkbox"
+                    checked={!excluded.has(r.id)}
+                    onChange={() => toggle(r.id)}
+                  />
+                  <span className="kp-method-tag">{r.method}</span>
+                  <span className="kp-truncate" style={{ flex: 1 }}>
+                    {r.name}
+                  </span>
+                </label>
+              ))
+            : visible.map(({ r, i }) => (
+                <button
+                  type="button"
+                  key={i}
+                  className={clsx("kp-runner-list-row", selectedIdx === i && "active")}
+                  onClick={() => {
+                    patch({ selectedIdx: i });
+                    setDetailTab("response");
+                  }}
+                >
+                  {r.ok ? (
+                    <CheckCircle2 size={15} className="kp-runner-icon ok" />
+                  ) : (
+                    <XCircle size={15} className="kp-runner-icon fail" />
+                  )}
+                  <span className="kp-method-tag">{r.method}</span>
+                  <span className="kp-truncate" style={{ flex: 1 }}>
+                    {r.name}
+                  </span>
+                  <span className="kp-runner-meta">
+                    {r.status || "—"} · {r.time} ms
+                  </span>
+                </button>
+              ))}
           {phase === "config" && requests.length === 0 && (
             <p className="kp-hint">This collection has no requests yet.</p>
           )}
@@ -293,7 +335,11 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           {phase !== "config" && !selected && (
             <div className="kp-runner-empty">
               <Play size={40} strokeWidth={1.2} />
-              <p>{results.length === 0 ? "Waiting for results…" : "Select a request to inspect its response."}</p>
+              <p>
+                {results.length === 0
+                  ? "Waiting for results…"
+                  : "Select a request to inspect its response."}
+              </p>
             </div>
           )}
           {selected && (
@@ -301,7 +347,12 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
               <div className="kp-runner-detail-head">
                 <span className="kp-method-tag">{selected.method}</span>
                 <span className="kp-runner-detail-name">{selected.name}</span>
-                <button type="button" className="kp-icon-btn" title="Close" onClick={() => patch({ selectedIdx: null })}>
+                <button
+                  type="button"
+                  className="kp-icon-btn"
+                  title="Close"
+                  onClick={() => patch({ selectedIdx: null })}
+                >
                   <X size={13} />
                 </button>
               </div>
@@ -314,7 +365,9 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
                 <span>{selected.time} ms</span>
                 {selected.response && <span>{selected.response.bodySize} B</span>}
                 {selected.testsTotal !== undefined && (
-                  <span>tests {selected.testsPassed}/{selected.testsTotal}</span>
+                  <span>
+                    tests {selected.testsPassed}/{selected.testsTotal}
+                  </span>
                 )}
               </div>
 
@@ -364,7 +417,9 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
                       {t.message && <span className="kp-test-msg">{t.message}</span>}
                     </div>
                   ))}
-                  {!selected.testSummary && <p className="kp-hint">No tests ran for this request.</p>}
+                  {!selected.testSummary && (
+                    <p className="kp-hint">No tests ran for this request.</p>
+                  )}
                 </div>
               )}
             </>

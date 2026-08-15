@@ -113,6 +113,14 @@ export interface Request {
 export interface RequestScripts {
   pre?: string;
   test?: string;
+  /**
+   * Post-response script: runs after the response arrives, with full
+   * `kp.response` access. Intended for side effects (extracting tokens,
+   * preparing the next request) rather than assertions — assertions belong
+   * in `test`. Mutated runtime variables carry into the next request in the
+   * collection runner.
+   */
+  postResponse?: string;
 }
 
 export interface Assertion {

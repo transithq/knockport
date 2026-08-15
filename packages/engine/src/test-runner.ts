@@ -16,7 +16,9 @@ import { defaultBundle, render } from "@tropel/shims";
 // lodash/cryptojs/exec shims need bridges KnockPort doesn't host yet.
 // Filter preserves the canonical bundle order (pm → chai → … → bru).
 const SHIM_SOURCE = render(
-  defaultBundle.filter((s) => s.name === "pm-shim" || s.name === "chai-shim" || s.name === "bru-shim"),
+  defaultBundle.filter(
+    (s) => s.name === "pm-shim" || s.name === "chai-shim" || s.name === "bru-shim",
+  ),
 );
 
 export interface TestResult {
@@ -173,7 +175,9 @@ function buildBridges(host: Host, tests: TestResult[]): Record<string, (...args:
     __tropel_pm_request_header_get: (k: string) =>
       headerLookup(requestHeadersMap(host.request), k) ?? null,
     __tropel_pm_request_body: () =>
-      host.request?.body && "content" in host.request.body && typeof host.request.body.content === "string"
+      host.request?.body &&
+      "content" in host.request.body &&
+      typeof host.request.body.content === "string"
         ? host.request.body.content
         : "",
   };
@@ -219,7 +223,11 @@ interface Realm {
   host: Host;
 }
 
-function createRealm(opts: RunTestsOptions, tests: TestResult[], variables: Record<string, string>): Realm {
+function createRealm(
+  opts: RunTestsOptions,
+  tests: TestResult[],
+  variables: Record<string, string>,
+): Realm {
   const host: Host = {
     vars: { ...variables },
     env: { ...(opts.environment ?? {}) },
@@ -269,14 +277,23 @@ const ASSERTION_LOOP = `
 function assertionPreamble(assertions: Assertion[]): string {
   // The list is passed as a JSON literal — expressions are evaluated at
   // runtime via eval, never string-concatenated into code here.
-  return "var __kp_assertions = " + JSON.stringify(assertions.map((a) => ({ expression: a.expression, description: a.description }))) + ";\n";
+  return (
+    "var __kp_assertions = " +
+    JSON.stringify(
+      assertions.map((a) => ({ expression: a.expression, description: a.description })),
+    ) +
+    ";\n"
+  );
 }
 
 /**
  * Run the test script (if any) and declarative assertions against a response.
  * Never throws — every problem is reported as a failed test or scriptError.
  */
-export async function runTests(response: Response, opts: RunTestsOptions = {}): Promise<TestRunSummary> {
+export async function runTests(
+  response: Response,
+  opts: RunTestsOptions = {},
+): Promise<TestRunSummary> {
   const start = performance.now();
   const tests: TestResult[] = [];
   const host = emptyHost();
@@ -317,7 +334,11 @@ export async function runTests(response: Response, opts: RunTestsOptions = {}): 
  * Run a pre-request script. Exposes kp.env.* / pm.* / bru.* for variable
  * capture; returns the mutated runtime variables for {{var}} resolution.
  */
-export function runPreScript(script: string, variables: Record<string, string>, opts: RunTestsOptions = {}): PreScriptResult {
+export function runPreScript(
+  script: string,
+  variables: Record<string, string>,
+  opts: RunTestsOptions = {},
+): PreScriptResult {
   const trimmed = script.trim();
   if (!trimmed) return { variables: { ...variables } };
 
@@ -343,4 +364,72 @@ function decodeVars(store: Record<string, string>): Record<string, string> {
     }
   }
   return out;
+}
+
+// ── Post-response scripts ────────────────────────────────────────────────────
+/**
+ * Result of a post-response script run: mutated runtime variables (carried
+ * into the next request in a runner loop) plus the usual test summary
+ * (post-response scripts may record kp.test checks too).
+ */
+export interface PostResponseResult {
+  variables: Record<string, string>;
+  summary: TestRunSummary;
+}
+
+/**
+ * Run a post-response script against a response. Has full response access
+ * and may record tests; runs AFTER the request, before test scripts (Bruno's
+ * script ordering). Returns the mutated runtime variables so callers can
+ * carry them into the following request. Never throws.
+ */
+export async function runPostResponseScript(
+  response: Response,
+  script: string,
+  variables: Record<string, string> = {},
+  opts: RunTestsOptions = {},
+): Promise<PostResponseResult> {
+  const start = performance.now();
+  const tests: TestResult[] = [];
+  const host = emptyHost();
+  host.response = response;
+  host.request = opts.request;
+  host.vars = { ...variables };
+  host.env = { ...(opts.environment ?? {}) };
+  host.colVars = { ...(opts.collectionVariables ?? {}) };
+  const { run } = createRealmWithHost(host, tests);
+
+  let scriptError: string | undefined;
+  if (script.trim()) {
+    try {
+      run(script);
+    } catch (e) {
+      scriptError = e instanceof Error ? e.message : String(e);
+    }
+    // Let async kp.test bodies settle (mirrors runTests).
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  const passed = tests.filter((t) => t.passed).length;
+  return {
+    variables: decodeVars(host.vars),
+    summary: {
+      tests,
+      passed,
+      failed: tests.length - passed,
+      duration: performance.now() - start,
+      scriptError,
+    },
+  };
+}
+
+/** Merge two test summaries (post-response + tests) for a single response. */
+export function mergeTestSummaries(a: TestRunSummary, b: TestRunSummary): TestRunSummary {
+  return {
+    tests: [...a.tests, ...b.tests],
+    passed: a.passed + b.passed,
+    failed: a.failed + b.failed,
+    duration: a.duration + b.duration,
+    scriptError: a.scriptError ?? b.scriptError,
+  };
 }

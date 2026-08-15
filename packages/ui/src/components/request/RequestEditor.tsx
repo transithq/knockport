@@ -1,12 +1,25 @@
-import { useState } from "react";
-import { Send, Loader2, ChevronDown, MoreHorizontal, Code2 } from "lucide-react";
+import {
+  type Assertion,
+  type BodyContent,
+  HTTP_METHODS,
+  type HttpMethod,
+  type KeyValuePair,
+} from "@knockport/core";
+import type { TestRunSummary } from "@knockport/engine";
 import { clsx } from "clsx";
-import { useAppStore, type ActivePanel } from "../../store/app-store";
-import { HTTP_METHODS, type HttpMethod, type KeyValuePair, type BodyContent, type Assertion } from "@knockport/core";
-import { buildVariableMap, collectionVariablesMap, environmentVariableMap, findCollectionOfRequest, resolveRequest } from "../../store/variables";
-import { CodeEditor } from "../common/CodeEditor";
-import { AuthEditor } from "../common/AuthEditor";
+import { ChevronDown, Code2, Loader2, MoreHorizontal, Send } from "lucide-react";
+import { useState } from "react";
+import { type ActivePanel, useAppStore } from "../../store/app-store";
+import {
+  buildVariableMap,
+  collectionVariablesMap,
+  environmentVariableMap,
+  findCollectionOfRequest,
+  resolveRequest,
+} from "../../store/variables";
 import { AssertionsEditor } from "../common/AssertionsEditor";
+import { AuthEditor } from "../common/AuthEditor";
+import { CodeEditor } from "../common/CodeEditor";
 
 const methodColor: Record<string, string> = {
   GET: "var(--kp-method-get)",
@@ -33,7 +46,11 @@ export function RequestEditor({ tabId }: { tabId: string }) {
 
   const requestTabs: { id: ActivePanel; label: string; dot?: boolean; count?: number }[] = [
     { id: "params", label: "Params", dot: request.params.some((p) => p.enabled) },
-    { id: "headers", label: "Headers", count: request.headers.filter((h) => h.enabled).length || undefined },
+    {
+      id: "headers",
+      label: "Headers",
+      count: request.headers.filter((h) => h.enabled).length || undefined,
+    },
     { id: "auth", label: "Authorization" },
     { id: "body", label: "Body" },
     { id: "scripts", label: "Scripts" },
@@ -52,7 +69,9 @@ export function RequestEditor({ tabId }: { tabId: string }) {
             style={{ color: methodColor[request.method] }}
           >
             {HTTP_METHODS.map((m) => (
-              <option key={m} value={m}>{m}</option>
+              <option key={m} value={m}>
+                {m}
+              </option>
             ))}
           </select>
           <ChevronDown size={13} className="kp-select-caret" />
@@ -122,10 +141,16 @@ export function RequestEditor({ tabId }: { tabId: string }) {
           />
         )}
         {activeRequestPanel === "auth" && (
-          <AuthEditor auth={request.auth} onChange={(a) => useAppStore.getState().updateRequestAuth(tabId, a)} />
+          <AuthEditor
+            auth={request.auth}
+            onChange={(a) => useAppStore.getState().updateRequestAuth(tabId, a)}
+          />
         )}
         {activeRequestPanel === "body" && (
-          <BodyEditor body={request.body} onChange={(b) => useAppStore.getState().updateRequestBody(tabId, b)} />
+          <BodyEditor
+            body={request.body}
+            onChange={(b) => useAppStore.getState().updateRequestBody(tabId, b)}
+          />
         )}
         {activeRequestPanel === "scripts" && <ScriptEditor tabId={tabId} />}
         {activeRequestPanel === "tests" && <TestsPanel tabId={tabId} />}
@@ -165,7 +190,9 @@ function KeyValueTable({
           <span>Key</span>
           <span>Value</span>
           <span>Description</span>
-          <span className="kp-kv-menu"><MoreHorizontal size={13} /></span>
+          <span className="kp-kv-menu">
+            <MoreHorizontal size={13} />
+          </span>
         </div>
 
         {pairs.map((pair, i) => (
@@ -220,9 +247,22 @@ function KeyValueTable({
 
 // ── Body Editor ──────────────────────────────────────────────────────────────
 function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyContent) => void }) {
-  const types: BodyContent["type"][] = ["none", "json", "text", "xml", "html", "form-urlencoded", "multipart-form", "graphql"];
+  const types: BodyContent["type"][] = [
+    "none",
+    "json",
+    "text",
+    "xml",
+    "html",
+    "form-urlencoded",
+    "multipart-form",
+    "graphql",
+  ];
   const label = (t: string) =>
-    t === "form-urlencoded" ? "Form" : t === "multipart-form" ? "Multipart" : t.charAt(0).toUpperCase() + t.slice(1);
+    t === "form-urlencoded"
+      ? "Form"
+      : t === "multipart-form"
+        ? "Multipart"
+        : t.charAt(0).toUpperCase() + t.slice(1);
 
   return (
     <div className="kp-body-editor">
@@ -254,27 +294,57 @@ function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyC
 // Moved to ../common/AuthEditor (shared with the collection Authorization subtab).
 
 // ── Script Editor ────────────────────────────────────────────────────────────
+type ScriptPhase = "pre" | "postResponse" | "test";
+
 function ScriptEditor({ tabId }: { tabId: string }) {
   const requests = useAppStore((s) => s.requests);
   const updateRequest = useAppStore((s) => s.updateRequest);
   const request = requests[tabId];
-  const [which, setWhich] = useState<"pre" | "test">("pre");
+  const [which, setWhich] = useState<ScriptPhase>("pre");
   if (!request) return null;
-  const value = which === "pre" ? request.scripts?.pre ?? "" : request.scripts?.test ?? "";
+  const scripts = request.scripts ?? {};
+  const value =
+    which === "pre"
+      ? (scripts.pre ?? "")
+      : which === "test"
+        ? (scripts.test ?? "")
+        : (scripts.postResponse ?? "");
 
   return (
     <div className="kp-body-editor">
       <div className="kp-seg-row">
-        <button type="button" className={clsx("kp-seg", which === "pre" && "active")} onClick={() => setWhich("pre")}>
+        <button
+          type="button"
+          className={clsx("kp-seg", which === "pre" && "active")}
+          onClick={() => setWhich("pre")}
+        >
           Pre-request
         </button>
-        <button type="button" className={clsx("kp-seg", which === "test" && "active")} onClick={() => setWhich("test")}>
+        <button
+          type="button"
+          className={clsx("kp-seg", which === "postResponse" && "active")}
+          onClick={() => setWhich("postResponse")}
+        >
+          Post-response
+        </button>
+        <button
+          type="button"
+          className={clsx("kp-seg", which === "test" && "active")}
+          onClick={() => setWhich("test")}
+        >
           Tests
         </button>
       </div>
+      <p className="kp-hint">
+        {which === "pre"
+          ? "Runs before the request is sent. Use kp.env.set / kp.variables.set to prepare variables."
+          : which === "postResponse"
+            ? "Runs after the response, before tests. Use it for side effects — extract tokens, prep the next request."
+            : "Runs after the response. Record checks with kp.test / pm.test."}
+      </p>
       <CodeEditor
         value={value}
-        onChange={(v) => updateRequest(tabId, { scripts: { ...request.scripts, [which]: v } })}
+        onChange={(v) => updateRequest(tabId, { scripts: { ...scripts, [which]: v } })}
         language="javascript"
         height="200px"
       />
@@ -293,9 +363,17 @@ function TestsPanel({ tabId }: { tabId: string }) {
 
   return (
     <div className="kp-hint-block">
-      <p>Quick assertions evaluated against <code className="kp-mono kp-accent-text">response</code> — must return <code className="kp-mono kp-accent-text">true</code> to pass:</p>
+      <p>
+        Quick assertions evaluated against <code className="kp-mono kp-accent-text">response</code>{" "}
+        — must return <code className="kp-mono kp-accent-text">true</code> to pass:
+      </p>
       <AssertionsEditor assertions={assertions} onChange={setAssertions} />
-      <p>For full control, write test scripts in the <strong>Scripts</strong> tab — <code className="kp-mono kp-accent-text">kp.*</code>, <code className="kp-mono kp-accent-text">pm.*</code> and <code className="kp-mono kp-accent-text">bru.*</code> are all supported:</p>
+      <p>
+        For full control, write test scripts in the <strong>Scripts</strong> tab —{" "}
+        <code className="kp-mono kp-accent-text">kp.*</code>,{" "}
+        <code className="kp-mono kp-accent-text">pm.*</code> and{" "}
+        <code className="kp-mono kp-accent-text">bru.*</code> are all supported:
+      </p>
       <pre className="kp-code-block kp-mono">{`kp.test("Status is 200", () => {
   kp.response.to.have.status(200);
 });
@@ -372,21 +450,46 @@ export async function handleSend(tabId: string) {
     }
     store.setResponse(tabId, response);
 
-    // Run test scripts + assertions (interim TS runner; wasm engine in M3)
-    // Collection-level scripts/assertions run before the request's own.
-    const testScript = [collection?.scripts?.test, request.scripts?.test].filter((s) => s?.trim()).join("\n");
-    const assertions = [...(collection?.assertions ?? []), ...(request.assertions ?? [])];
-    const hasTests = Boolean(testScript.trim() || assertions.length);
-    if (hasTests) {
-      const { runTests } = await import("@knockport/engine");
-      const summary = await runTests(response, {
-        script: testScript || undefined,
-        assertions,
+    // Script phases (Bruno ordering): post-response runs before tests. The
+    // runner loop carries post-response variable mutations into the next
+    // request; a single send has no follow-up so they are ephemeral.
+    const postScript = [collection?.scripts?.postResponse, request.scripts?.postResponse]
+      .filter((s) => s?.trim())
+      .join("\n");
+    let postSummary: TestRunSummary | null = null;
+    if (postScript.trim()) {
+      const { runPostResponseScript } = await import("@knockport/engine");
+      const post = await runPostResponseScript(response, postScript, vars, {
         environment: environmentVariableMap(store),
         collectionVariables: collectionVariablesMap(store),
         request: resolved,
       });
-      store.setTestResults(tabId, summary);
+      postSummary = post.summary;
+    }
+
+    // Run test scripts + assertions (interim TS runner; wasm engine in M3)
+    // Collection-level scripts/assertions run before the request's own.
+    const testScript = [collection?.scripts?.test, request.scripts?.test]
+      .filter((s) => s?.trim())
+      .join("\n");
+    const assertions = [...(collection?.assertions ?? []), ...(request.assertions ?? [])];
+    const hasTests = Boolean(testScript.trim() || assertions.length);
+    if (hasTests || postSummary) {
+      const { runTests, mergeTestSummaries } = await import("@knockport/engine");
+      const summary = hasTests
+        ? await runTests(response, {
+            script: testScript || undefined,
+            assertions,
+            environment: environmentVariableMap(store),
+            collectionVariables: collectionVariablesMap(store),
+            request: resolved,
+          })
+        : null;
+      if (postSummary && summary) {
+        store.setTestResults(tabId, mergeTestSummaries(postSummary, summary));
+      } else {
+        store.setTestResults(tabId, summary ?? postSummary);
+      }
     } else {
       store.setTestResults(tabId, null);
     }

@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { runTests, runPreScript } from "./test-runner";
 import type { Response } from "@knockport/core";
+import { describe, expect, it } from "vitest";
+import { mergeTestSummaries, runPostResponseScript, runPreScript, runTests } from "./test-runner";
 
 function makeResponse(overrides: Partial<Response> = {}): Response {
   return {
@@ -172,5 +172,68 @@ describe("runPreScript", () => {
   it("captures errors", () => {
     const r = runPreScript(`throw new Error("boom");`, {});
     expect(r.error).toBe("boom");
+  });
+});
+
+describe("runPostResponseScript", () => {
+  it("has full kp.response access and records tests", async () => {
+    const r = await runPostResponseScript(
+      makeResponse(),
+      `kp.test("code is 200", () => kp.expect(kp.response.code).to.eql(200));`,
+      {},
+    );
+    expect(r.summary.failed).toBe(0);
+    expect(r.summary.passed).toBe(1);
+  });
+
+  it("extracts a response value into runtime variables", async () => {
+    const r = await runPostResponseScript(
+      makeResponse(),
+      `kp.variables.set("dataName", kp.response.json().data.name);`,
+      { base: "x" },
+    );
+    expect(r.summary.scriptError).toBeUndefined();
+    expect(r.variables.dataName).toBe("knockport");
+    expect(r.variables.base).toBe("x");
+  });
+
+  it("reads environment variables", async () => {
+    const r = await runPostResponseScript(
+      makeResponse(),
+      `kp.variables.set("host", kp.environment.get("host"));`,
+      {},
+      { environment: { host: "example.org" } },
+    );
+    expect(r.variables.host).toBe("example.org");
+  });
+
+  it("captures script errors without throwing", async () => {
+    const r = await runPostResponseScript(makeResponse(), `throw new Error("post boom");`, {});
+    expect(r.summary.scriptError).toBe("post boom");
+    expect(r.summary.failed).toBe(0);
+  });
+
+  it("empty script yields an empty summary", async () => {
+    const r = await runPostResponseScript(makeResponse(), "   ", {});
+    expect(r.summary.tests).toHaveLength(0);
+    expect(r.summary.scriptError).toBeUndefined();
+  });
+});
+
+describe("mergeTestSummaries", () => {
+  it("combines counts and flags a script error from either side", () => {
+    const a = { tests: [{ name: "a", passed: true }], passed: 1, failed: 0, duration: 1 };
+    const b = {
+      tests: [{ name: "b", passed: false, message: "x" }],
+      passed: 0,
+      failed: 1,
+      duration: 2,
+      scriptError: "err",
+    };
+    const m = mergeTestSummaries(a, b as any);
+    expect(m.tests).toHaveLength(2);
+    expect(m.passed).toBe(1);
+    expect(m.failed).toBe(1);
+    expect(m.scriptError).toBe("err");
   });
 });
