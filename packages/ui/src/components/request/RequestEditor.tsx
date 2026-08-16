@@ -9,7 +9,7 @@ import {
 import type { TestRunSummary } from "@knockport/engine";
 import { clsx } from "clsx";
 import { ChevronDown, Code2, Loader2, MoreHorizontal, Paperclip, Send, X } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { type ActivePanel, useAppStore } from "../../store/app-store";
 import {
   buildVariableMap,
@@ -21,6 +21,7 @@ import {
 import { AssertionsEditor } from "../common/AssertionsEditor";
 import { AuthEditor } from "../common/AuthEditor";
 import { CodeEditor } from "../common/CodeEditor";
+import { displayUrl, parseQuery, splitQuery } from "./url-params";
 
 const methodColor: Record<string, string> = {
   GET: "var(--kp-method-get)",
@@ -38,10 +39,33 @@ export function RequestEditor({ tabId }: { tabId: string }) {
   const isLoading = useAppStore((s) => s.isLoading);
   const updateRequestMethod = useAppStore((s) => s.updateRequestMethod);
   const updateRequestUrl = useAppStore((s) => s.updateRequestUrl);
+  const updateRequestParams = useAppStore((s) => s.updateRequestParams);
   const activeRequestPanel = useAppStore((s) => s.activeRequestPanel);
   const setActiveRequestPanel = useAppStore((s) => s.setActiveRequestPanel);
 
+  // URL bar shows path + query merged (Postman-style sync). While the input
+  // is focused we keep a local draft so re-serialization can't move the
+  // caret; the parsed result commits on blur/Enter.
+  const [urlDraft, setUrlDraft] = useState<string | null>(null);
+  const hadQueryOnFocus = useRef(false);
+
   const request = requests[tabId];
+
+  /** Commit an edited URL bar value: path → url, query → params table.
+   * Removing the query clears params that existed when the field was focused
+   * (true delete), while typing a fresh URL without `?` keeps the table. */
+  const commitUrlValue = (value: string) => {
+    const req = useAppStore.getState().requests[tabId];
+    if (!req) return;
+    const [path, query] = splitQuery(value.trim());
+    if (path !== req.url) updateRequestUrl(tabId, path);
+    if (query !== null) {
+      updateRequestParams(tabId, parseQuery(query));
+    } else if (hadQueryOnFocus.current) {
+      updateRequestParams(tabId, []);
+    }
+  };
+
   if (!request) return null;
   const loading = isLoading[tabId] ?? false;
 
@@ -80,8 +104,27 @@ export function RequestEditor({ tabId }: { tabId: string }) {
 
         <input
           type="text"
-          value={request.url}
-          onChange={(e) => updateRequestUrl(tabId, e.target.value)}
+          value={urlDraft ?? displayUrl(request.url, request.params)}
+          onFocus={() => {
+            hadQueryOnFocus.current = splitQuery(displayUrl(request.url, request.params))[1] !== null;
+            setUrlDraft(displayUrl(request.url, request.params));
+          }}
+          onChange={(e) => setUrlDraft(e.target.value)}
+          onBlur={() => {
+            if (urlDraft === null) return;
+            const value = urlDraft;
+            setUrlDraft(null);
+            commitUrlValue(value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              const value = urlDraft ?? displayUrl(request.url, request.params);
+              setUrlDraft(null);
+              commitUrlValue(value);
+              handleSend(tabId);
+            }
+          }}
           placeholder="https://api.example.com/endpoint"
           className="kp-url-input kp-mono"
         />
