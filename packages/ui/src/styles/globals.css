@@ -2229,6 +2229,59 @@ body.kp-resizing-y .kp-resize-handle {
   gap: 6px;
 }
 
+/* ── Tab-completion suggestions ────────────────────────────────────────────── */
+.kp-suggest-wrap {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+.kp-suggest-wrap .kp-suggest-input {
+  width: 100%;
+  min-width: 0;
+}
+.kp-suggest-list {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0;
+  z-index: 60;
+  min-width: 260px;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--kp-bg-secondary);
+  border: 1px solid var(--kp-border-primary);
+  border-radius: var(--kp-radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.kp-suggest-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  background: none;
+  border: none;
+  border-radius: var(--kp-radius-sm);
+  color: var(--kp-text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.kp-suggest-item span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.kp-suggest-item.active {
+  background: var(--kp-bg-hover);
+}
+.kp-suggest-hint {
+  color: var(--kp-text-muted);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
 /* ── API specs / Mock servers ─────────────────────────────────────────────── */
 .kp-api-list {
   display: flex;

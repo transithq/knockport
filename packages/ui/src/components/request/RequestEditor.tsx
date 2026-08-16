@@ -9,7 +9,7 @@ import {
 import type { TestRunSummary } from "@knockport/engine";
 import { clsx } from "clsx";
 import { ChevronDown, Code2, Loader2, MoreHorizontal, Paperclip, Send, X } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { type ActivePanel, useAppStore } from "../../store/app-store";
 import {
   buildVariableMap,
@@ -21,6 +21,7 @@ import {
 import { AssertionsEditor } from "../common/AssertionsEditor";
 import { AuthEditor } from "../common/AuthEditor";
 import { CodeEditor } from "../common/CodeEditor";
+import { type Suggestion, SuggestInput } from "../common/SuggestInput";
 import { displayUrl, parseQuery, splitQuery } from "./url-params";
 
 const methodColor: Record<string, string> = {
@@ -49,7 +50,53 @@ export function RequestEditor({ tabId }: { tabId: string }) {
   const [urlDraft, setUrlDraft] = useState<string | null>(null);
   const hadQueryOnFocus = useRef(false);
 
+  const environments = useAppStore((s) => s.environments);
+  const activeEnvironmentId = useAppStore((s) => s.activeEnvironmentId);
+  const collections = useAppStore((s) => s.collections);
+
   const request = requests[tabId];
+
+  // Variable names for `{{…}}` Tab-completion in the URL bar.
+  const variableNames = useMemo(() => {
+    const env = environments.find((e) => e.id === activeEnvironmentId);
+    const collection = findCollectionOfRequest(collections, request?.id ?? "");
+    return new Set<string>([
+      ...(env?.variables ?? []).map((v) => v.key),
+      ...(collection?.variables ?? []).map((v) => v.key),
+    ]);
+  }, [environments, activeEnvironmentId, collections, request?.id]);
+
+  const urlSuggestions = useCallback(
+    (raw: string): Suggestion[] => {
+      const t = raw.trim();
+      if (!t) return [];
+      const out: Suggestion[] = [];
+      if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(t)) {
+        out.push({ label: `https://${t}`, insert: `https://${t}`, hint: "protocol" });
+        out.push({ label: `http://${t}`, insert: `http://${t}`, hint: "protocol" });
+      }
+      const host = t.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, "").split(/[/?#]/)[0];
+      if (host && !host.includes(".") && !host.startsWith("{{")) {
+        for (const tld of [".com", ".dev", ".io"]) {
+          out.push({ label: `${t}${tld}`, insert: `${t}${tld}`, hint: "domain" });
+        }
+      }
+      const partial = t.match(/\{\{([^}]*)$/);
+      if (partial) {
+        for (const name of variableNames) {
+          if (name.startsWith(partial[1])) {
+            out.push({
+              label: `{{${name}}}`,
+              insert: t.replace(/\{\{[^}]*$/, `{{${name}}}`),
+              hint: "variable",
+            });
+          }
+        }
+      }
+      return out;
+    },
+    [variableNames],
+  );
 
   /** Commit an edited URL bar value: path → url, query → params table.
    * Removing the query clears params that existed when the field was focused
@@ -102,31 +149,27 @@ export function RequestEditor({ tabId }: { tabId: string }) {
           <ChevronDown size={13} className="kp-select-caret" />
         </div>
 
-        <input
-          type="text"
+        <SuggestInput
+          className="kp-url-input kp-mono"
+          placeholder="https://api.example.com/endpoint"
           value={urlDraft ?? displayUrl(request.url, request.params)}
-          onFocus={() => {
-            hadQueryOnFocus.current = splitQuery(displayUrl(request.url, request.params))[1] !== null;
-            setUrlDraft(displayUrl(request.url, request.params));
+          suggestions={urlSuggestions}
+          onChange={(v) => {
+            if (urlDraft === null) {
+              hadQueryOnFocus.current = splitQuery(displayUrl(request.url, request.params))[1] !== null;
+            }
+            setUrlDraft(v);
           }}
-          onChange={(e) => setUrlDraft(e.target.value)}
-          onBlur={() => {
-            if (urlDraft === null) return;
-            const value = urlDraft;
+          onCommit={(v) => {
+            setUrlDraft(null);
+            commitUrlValue(v);
+          }}
+          onEnter={() => {
+            const value = urlDraft ?? displayUrl(request.url, request.params);
             setUrlDraft(null);
             commitUrlValue(value);
+            handleSend(tabId);
           }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              const value = urlDraft ?? displayUrl(request.url, request.params);
-              setUrlDraft(null);
-              commitUrlValue(value);
-              handleSend(tabId);
-            }
-          }}
-          placeholder="https://api.example.com/endpoint"
-          className="kp-url-input kp-mono"
         />
 
         <div className="kp-send-group">
