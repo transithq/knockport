@@ -194,6 +194,8 @@ export interface AppStore {
   sidebarTab: SidebarTab;
   sidebarWidth: number;
   sidebarCollapsed: boolean;
+  /** Nav menu section height in px (0 = auto, hug contents). */
+  navHeight: number;
 
   // Workspace layout (resizable panes, persisted)
   /** Right analytics column width in px. */
@@ -269,6 +271,7 @@ export interface AppStore {
   // Actions — Sidebar
   setSidebarTab: (tab: SidebarTab) => void;
   setSidebarWidth: (width: number) => void;
+  setNavHeight: (height: number) => void;
   toggleSidebar: () => void;
 
   // Actions — Layout panes
@@ -372,6 +375,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
       Number.parseInt(localStorage.getItem("kp-sidebar-width") ?? "", 10)) ||
     280,
   sidebarCollapsed: false,
+  navHeight:
+    (typeof localStorage !== "undefined" &&
+      Number.parseInt(localStorage.getItem("kp-nav-height") ?? "", 10)) ||
+    0,
 
   rightPaneWidth:
     (typeof localStorage !== "undefined" &&
@@ -448,6 +455,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ sidebarWidth: width });
     try {
       localStorage.setItem("kp-sidebar-width", String(width));
+    } catch {
+      /* storage unavailable */
+    }
+  },
+  setNavHeight: (height) => {
+    set({ navHeight: height });
+    try {
+      localStorage.setItem("kp-nav-height", String(height));
     } catch {
       /* storage unavailable */
     }

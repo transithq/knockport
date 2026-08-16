@@ -1,5 +1,5 @@
 import { createId } from "@knockport/core";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   Aperture,
   Boxes,
@@ -27,6 +27,10 @@ import { CollectionTree } from "./CollectionTree";
 const SIDEBAR_MIN = 200;
 const SIDEBAR_MAX = 560;
 const SIDEBAR_DEFAULT = 280;
+
+// ── Nav menu height (nav | contents vertical split) ─────────────────────────
+const NAV_MIN = 96;
+const NAV_RESERVED = 240; // top stack (logo/workspace/search) + footer stacks
 
 // ── Method color helper ──────────────────────────────────────────────────────
 const methodColor: Record<string, string> = {
@@ -75,10 +79,14 @@ export function Sidebar() {
   const sidebarTab = useAppStore((s) => s.sidebarTab);
   const setSidebarTab = useAppStore((s) => s.setSidebarTab);
   const sidebarWidth = useAppStore((s) => s.sidebarWidth);
+  const navHeight = useAppStore((s) => s.navHeight);
   const collections = useAppStore((s) => s.collections);
   const environments = useAppStore((s) => s.environments);
   const activeEnvironmentId = useAppStore((s) => s.activeEnvironmentId);
   const resizer = useResizer("x");
+  const navResizer = useResizer("y");
+  const asideRef = useRef<HTMLElement>(null);
+  const navPaneRef = useRef<HTMLDivElement>(null);
   const setActiveEnvironment = useAppStore((s) => s.setActiveEnvironment);
   const history = useAppStore((s) => s.history);
   const openCommandPalette = useAppStore((s) => s.setCommandPaletteOpen);
@@ -148,7 +156,11 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="kp-sidebar" style={{ width: `${sidebarWidth}px` }}>
+    <aside
+      className="kp-sidebar"
+      ref={asideRef}
+      style={{ width: `${sidebarWidth}px` }}
+    >
       {/* Logo */}
       <div className="kp-sidebar-logo">
         <span className="kp-logo-mark">
@@ -176,32 +188,65 @@ export function Sidebar() {
       {/* Nav — highlights follow the ACTIVE TAB (what the main area renders):
           request/collection/runner tabs → Collections, environment tabs →
           Environments, and the dedicated workspaces highlight their own item.
-          With no tab open, the selected sidebar section wins. */}
-      <nav className="kp-nav">
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon;
-          const active = item.id === activeNav;
-          return (
-            <button
-              key={item.label}
-              type="button"
-              className={`kp-nav-item${active ? " active" : ""}`}
-              onClick={() => {
-                if (item.id === "websocket") openWebSocketTab();
-                else if (item.id === "api") openApiTab();
-                else if (item.id === "mock") openMockTab();
-                else if (item.id === "sse") openSseTab();
-                else if (item.id === "mqtt") openMqttTab();
-                else if (item.id === "settings") openSettingsTab();
-                else if (item.id !== "placeholder") setSidebarTab(item.id as SidebarTab);
-              }}
-            >
-              <Icon size={15} />
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
-      </nav>
+          With no tab open, the selected sidebar section wins.
+
+          The nav pane is vertically resizable against the contents pane
+          below (drag the hairline; double-click resets to auto height). */}
+      <div
+        className="kp-nav-pane kp-scroll"
+        ref={navPaneRef}
+        style={
+          navHeight > 0
+            ? { height: `${navHeight}px`, flexShrink: 0 }
+            : { flexShrink: 0 }
+        }
+      >
+        <nav className="kp-nav">
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active = item.id === activeNav;
+            return (
+              <button
+                key={item.label}
+                type="button"
+                className={`kp-nav-item${active ? " active" : ""}`}
+                onClick={() => {
+                  if (item.id === "websocket") openWebSocketTab();
+                  else if (item.id === "api") openApiTab();
+                  else if (item.id === "mock") openMockTab();
+                  else if (item.id === "sse") openSseTab();
+                  else if (item.id === "mqtt") openMqttTab();
+                  else if (item.id === "settings") openSettingsTab();
+                  else if (item.id !== "placeholder") setSidebarTab(item.id as SidebarTab);
+                }}
+              >
+                <Icon size={15} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* Resize handle: nav menu | contents (drag to resize, dbl-click to reset) */}
+      <div
+        className="kp-resize-handle horizontal"
+        role="separator"
+        aria-orientation="horizontal"
+        onMouseDown={(e) =>
+          navResizer.start(e, {
+            getValue: () =>
+              navPaneRef.current?.getBoundingClientRect().height ??
+              useAppStore.getState().navHeight,
+            setValue: (h) => useAppStore.getState().setNavHeight(h),
+            min: NAV_MIN,
+            getMax: () =>
+              Math.max(NAV_MIN, (asideRef.current?.clientHeight ?? 600) - NAV_RESERVED),
+            defaultSize: 0,
+          })
+        }
+        onDoubleClick={() => useAppStore.getState().setNavHeight(0)}
+      />
 
       {/* Section */}
       <div className="kp-sidebar-section">

@@ -286,6 +286,18 @@ body {
   font-weight: 600;
 }
 
+/* ── Nav pane (vertically resizable against the contents pane) ───────────── */
+.kp-nav-pane {
+  min-height: 0;
+}
+.kp-sidebar > .kp-resize-handle.horizontal {
+  position: relative;
+  top: auto;
+  right: auto;
+  height: 5px;
+  width: 100%;
+}
+
 .kp-sidebar-section {
   flex: 1;
   display: flex;
