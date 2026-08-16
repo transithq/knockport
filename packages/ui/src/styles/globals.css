@@ -2242,6 +2242,31 @@ body.kp-resizing-y .kp-resize-handle {
   min-width: 0;
 }
 
+/* ── SSE log bits ──────────────────────────────────────────────────────────── */
+.kp-sse-event {
+  color: var(--kp-accent);
+  font-size: 11px;
+  flex-shrink: 0;
+  min-width: 52px;
+}
+.kp-sse-id {
+  color: var(--kp-text-muted);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+/* ── MQTT workspace ────────────────────────────────────────────────────────── */
+.kp-mqtt-subscribe {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.kp-mqtt-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 /* ── Dropdown menus ────────────────────────────────────────────────────────── */
 .kp-menu-wrap {
   position: relative;

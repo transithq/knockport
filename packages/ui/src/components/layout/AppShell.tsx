@@ -1,6 +1,6 @@
 import { createId } from "@knockport/core";
 import type { Request } from "@knockport/core";
-import { Boxes, Braces, ChevronDown, MoreHorizontal, Play, Plus, Radio, Server, Settings, X } from "lucide-react";
+import { Boxes, Braces, ChevronDown, Cloud, MoreHorizontal, Play, Plus, Radio, Server, Settings, X, Zap } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useAppStore } from "../../store/app-store";
 import { CollectionEditor } from "../collections/CollectionEditor";
@@ -17,6 +17,8 @@ import { SettingsPage } from "../settings/SettingsPage";
 import { WebSocketTab } from "../websocket/WebSocketTab";
 import { ApiTab } from "../api/ApiTab";
 import { MockTab } from "../mock/MockTab";
+import { SseTab } from "../sse/SseTab";
+import { MqttTab } from "../mqtt/MqttTab";
 import { Sidebar } from "./Sidebar";
 
 // ── Resizable workspace (request | response, with analytics rail) ────────────
@@ -166,6 +168,10 @@ function TabBar() {
                 <Braces size={12} className="kp-env-tab-icon" />
               ) : tab.kind === "mock" ? (
                 <Server size={12} className="kp-env-tab-icon" />
+              ) : tab.kind === "sse" ? (
+                <Zap size={12} className="kp-env-tab-icon" />
+              ) : tab.kind === "mqtt" ? (
+                <Cloud size={12} className="kp-env-tab-icon" />
               ) : (
                 <span
                   className="kp-method-tag"
@@ -363,6 +369,10 @@ export function AppShell() {
             <ApiTab />
           ) : activeTab.kind === "mock" ? (
             <MockTab />
+          ) : activeTab.kind === "sse" ? (
+            <SseTab />
+          ) : activeTab.kind === "mqtt" ? (
+            <MqttTab />
           ) : (
             <WorkspaceGrid tabId={activeTab.id} />
           )

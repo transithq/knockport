@@ -4,6 +4,7 @@ import {
   Aperture,
   Boxes,
   ChevronDown,
+  Cloud as CloudIcon,
   FolderClosed,
   History as HistoryIcon,
   LayoutDashboard,
@@ -16,6 +17,7 @@ import {
   Server,
   Settings,
   Trash2,
+  Zap as ZapIcon,
 } from "lucide-react";
 import { type SidebarTab, useAppStore } from "../../store/app-store";
 import { useResizer } from "../common/useResizer";
@@ -50,7 +52,7 @@ function MethodTag({ method }: { method: string }) {
 
 // ── Nav items ────────────────────────────────────────────────────────────────
 interface NavItem {
-  id: SidebarTab | "placeholder" | "websocket" | "api" | "mock" | "settings";
+  id: SidebarTab | "placeholder" | "websocket" | "api" | "mock" | "sse" | "mqtt" | "settings";
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }
@@ -63,6 +65,8 @@ const NAV_ITEMS: NavItem[] = [
   { id: "api", label: "APIs", icon: Plug },
   { id: "mock", label: "Mock Servers", icon: Server },
   { id: "websocket", label: "WebSockets", icon: Radio },
+  { id: "sse", label: "SSE", icon: ZapIcon },
+  { id: "mqtt", label: "MQTT", icon: CloudIcon },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -82,6 +86,8 @@ export function Sidebar() {
   const openWebSocketTab = useAppStore((s) => s.openWebSocketTab);
   const openApiTab = useAppStore((s) => s.openApiTab);
   const openMockTab = useAppStore((s) => s.openMockTab);
+  const openSseTab = useAppStore((s) => s.openSseTab);
+  const openMqttTab = useAppStore((s) => s.openMqttTab);
   const activeNav = useAppStore((s) => {
     const tab = s.tabs.find((t) => t.id === s.activeTabId);
     if (!tab) return s.sidebarTab;
@@ -94,6 +100,10 @@ export function Sidebar() {
         return "api" as const;
       case "mock":
         return "mock" as const;
+      case "sse":
+        return "sse" as const;
+      case "mqtt":
+        return "mqtt" as const;
       case "settings":
         return "settings" as const;
       default: // request | collection | runner
@@ -180,6 +190,8 @@ export function Sidebar() {
                 if (item.id === "websocket") openWebSocketTab();
                 else if (item.id === "api") openApiTab();
                 else if (item.id === "mock") openMockTab();
+                else if (item.id === "sse") openSseTab();
+                else if (item.id === "mqtt") openMqttTab();
                 else if (item.id === "settings") openSettingsTab();
                 else if (item.id !== "placeholder") setSidebarTab(item.id as SidebarTab);
               }}

@@ -33,7 +33,9 @@ export interface RequestTab {
     | "settings"
     | "websocket"
     | "api"
-    | "mock";
+    | "mock"
+    | "sse"
+    | "mqtt";
   envId?: string;
   collectionId?: string;
 }
@@ -50,6 +52,26 @@ export interface WsLogEntry {
   text: string;
   time: string;
   size?: number;
+}
+
+// ── Server-Sent Events workspace (single tab) ────────────────────────────────
+export type SseStatus = "idle" | "connecting" | "open" | "closed" | "error";
+
+export interface SseEventEntry {
+  event: string;
+  data: string;
+  id?: string;
+  time: string;
+}
+
+// ── MQTT workspace (single tab) ──────────────────────────────────────────────
+export type MqttStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
+
+export interface MqttLogEntry {
+  dir: "in" | "out" | "sys";
+  topic: string;
+  text: string;
+  time: string;
 }
 
 // ── Collection runner history (in-memory) ───────────────────────────────────
@@ -221,6 +243,18 @@ export interface AppStore {
   wsUrl: string;
   wsStatus: "idle" | "connecting" | "open" | "closed" | "error";
   wsLog: WsLogEntry[];
+
+  // ── SSE workspace ──
+  sseUrl: string;
+  sseStatus: SseStatus;
+  sseLog: SseEventEntry[];
+  sseLastEventId: string | null;
+
+  // ── MQTT workspace ──
+  mqttUrl: string;
+  mqttStatus: MqttStatus;
+  mqttLog: MqttLogEntry[];
+  mqttTopics: string[];
   theme: "dark" | "light";
 
   // Transport settings (relay)
@@ -308,6 +342,19 @@ export interface AppStore {
   setWsStatus: (status: "idle" | "connecting" | "open" | "closed" | "error") => void;
   pushWsLog: (entry: WsLogEntry) => void;
   clearWsLog: () => void;
+  openSseTab: () => void;
+  openMqttTab: () => void;
+  setSseUrl: (url: string) => void;
+  setSseStatus: (status: SseStatus) => void;
+  pushSseLog: (entry: SseEventEntry) => void;
+  clearSseLog: () => void;
+  setSseLastEventId: (id: string | null) => void;
+  setMqttUrl: (url: string) => void;
+  setMqttStatus: (status: MqttStatus) => void;
+  pushMqttLog: (entry: MqttLogEntry) => void;
+  clearMqttLog: () => void;
+  addMqttTopic: (topic: string) => void;
+  removeMqttTopic: (topic: string) => void;
   toggleTheme: () => void;
   setTheme: (theme: "dark" | "light") => void;
   setUseRelay: (on: boolean) => void;
@@ -364,6 +411,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
   wsUrl: (typeof localStorage !== "undefined" && localStorage.getItem("kp-ws-url")) || "wss://echo.websocket.org",
   wsStatus: "idle" as WsTabStatus,
   wsLog: [],
+
+  sseUrl:
+    (typeof localStorage !== "undefined" && localStorage.getItem("kp-sse-url")) ||
+    "https://stream.wikimedia.org/v2/stream/recentchange",
+  sseStatus: "idle" as SseStatus,
+  sseLog: [],
+  sseLastEventId: null,
+
+  mqttUrl:
+    (typeof localStorage !== "undefined" && localStorage.getItem("kp-mqtt-url")) ||
+    "wss://test.mosquitto.org:8081/mqtt",
+  mqttStatus: "idle" as MqttStatus,
+  mqttLog: [],
+  mqttTopics: [],
   theme:
     typeof localStorage !== "undefined" && localStorage.getItem("kp-theme") === "light"
       ? "light"
@@ -1047,6 +1108,72 @@ export const useAppStore = create<AppStore>((set, get) => ({
   pushWsLog: (entry) => set((s) => ({ wsLog: [...s.wsLog.slice(-499), entry] })),
 
   clearWsLog: () => set({ wsLog: [] }),
+
+  openSseTab: () => {
+    const s = get();
+    const existing = s.tabs.find((t) => t.kind === "sse");
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return;
+    }
+    const tabId = createId("tab");
+    set((st) => ({
+      tabs: [...st.tabs, { id: tabId, requestId: "sse", kind: "sse", name: "SSE", isDirty: false }],
+      activeTabId: tabId,
+    }));
+  },
+
+  openMqttTab: () => {
+    const s = get();
+    const existing = s.tabs.find((t) => t.kind === "mqtt");
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return;
+    }
+    const tabId = createId("tab");
+    set((st) => ({
+      tabs: [...st.tabs, { id: tabId, requestId: "mqtt", kind: "mqtt", name: "MQTT", isDirty: false }],
+      activeTabId: tabId,
+    }));
+  },
+
+  setSseUrl: (url) => {
+    set({ sseUrl: url });
+    try {
+      localStorage.setItem("kp-sse-url", url);
+    } catch {
+      // ignore
+    }
+  },
+
+  setSseStatus: (status) => set({ sseStatus: status }),
+
+  pushSseLog: (entry) => set((s) => ({ sseLog: [...s.sseLog.slice(-499), entry] })),
+
+  clearSseLog: () => set({ sseLog: [] }),
+
+  setSseLastEventId: (id) => set({ sseLastEventId: id }),
+
+  setMqttUrl: (url) => {
+    set({ mqttUrl: url });
+    try {
+      localStorage.setItem("kp-mqtt-url", url);
+    } catch {
+      // ignore
+    }
+  },
+
+  setMqttStatus: (status) => set({ mqttStatus: status }),
+
+  pushMqttLog: (entry) => set((s) => ({ mqttLog: [...s.mqttLog.slice(-499), entry] })),
+
+  clearMqttLog: () => set({ mqttLog: [] }),
+
+  addMqttTopic: (topic) =>
+    set((s) => (s.mqttTopics.includes(topic) ? s : { mqttTopics: [...s.mqttTopics, topic] })),
+
+  removeMqttTopic: (topic) =>
+    set((s) => ({ mqttTopics: s.mqttTopics.filter((t) => t !== topic) })),
   toggleTheme: () => {
     const next = get().theme === "dark" ? "light" : "dark";
     get().setTheme(next);
