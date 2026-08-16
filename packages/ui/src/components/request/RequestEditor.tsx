@@ -444,7 +444,11 @@ export async function handleSend(tabId: string) {
       }
     }
     const resolved = resolveRequest(request, vars, collection);
-    const transport = getTransport({ useRelay: store.useRelay, relayUrl: store.relayUrl });
+    const transport = getTransport({
+      useRelay: store.useRelay,
+      relayUrl: store.relayUrl,
+      relayToken: store.relayToken,
+    });
     // Enforce the global timeout via an abort signal (transports link it to
     // their own AbortController).
     const abort = new AbortController();

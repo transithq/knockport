@@ -12,6 +12,8 @@ export function SettingsPage() {
   const setUseRelay = useAppStore((s) => s.setUseRelay);
   const relayUrl = useAppStore((s) => s.relayUrl);
   const setRelayUrl = useAppStore((s) => s.setRelayUrl);
+  const relayToken = useAppStore((s) => s.relayToken);
+  const setRelayToken = useAppStore((s) => s.setRelayToken);
   const timeoutMs = useAppStore((s) => s.timeoutMs);
   const setTimeoutMs = useAppStore((s) => s.setTimeoutMs);
 
@@ -57,17 +59,31 @@ export function SettingsPage() {
         </div>
 
         {useRelay && (
-          <div className="kp-setting-row">
-            <label>Relay URL</label>
-            <input
-              type="text"
-              className="kp-text-input kp-mono"
-              style={{ flex: 1 }}
-              value={relayUrl}
-              onChange={(e) => setRelayUrl(e.target.value)}
-              placeholder="http://localhost:8787"
-            />
-          </div>
+          <>
+            <div className="kp-setting-row">
+              <label>Relay URL</label>
+              <input
+                type="text"
+                className="kp-text-input kp-mono"
+                style={{ flex: 1 }}
+                value={relayUrl}
+                onChange={(e) => setRelayUrl(e.target.value)}
+                placeholder="http://localhost:8787"
+              />
+            </div>
+            <div className="kp-setting-row">
+              <label>Relay token</label>
+              <input
+                type="password"
+                className="kp-text-input kp-mono"
+                style={{ flex: 1 }}
+                value={relayToken}
+                onChange={(e) => setRelayToken(e.target.value)}
+                placeholder="optional — only if the relay sets KP_RELAY_TOKEN"
+                autoComplete="off"
+              />
+            </div>
+          </>
         )}
 
         <p className="kp-hint">

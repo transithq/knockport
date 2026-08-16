@@ -93,6 +93,34 @@ struct AppState {
     metrics: Metrics,
     /// Fixed-window per-IP rate limiter: ip -> (window_start_unix, count).
     rate: Mutex<HashMap<IpAddr, (u64, u32)>>,
+    /// Session token (KP_RELAY_TOKEN). When set, /proxy and /metrics require
+    /// `Authorization: Bearer <token>`; /health stays public for status checks.
+    token: Option<String>,
+}
+
+/// Constant-time-ish comparison so token checks don't leak length/prefix timing.
+fn token_eq(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+fn check_token(
+    state: &AppState,
+    headers: &axum::http::HeaderMap,
+) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
+    let Some(expected) = &state.token else {
+        return Ok(());
+    };
+    let got = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "));
+    match got {
+        Some(g) if token_eq(g, expected) => Ok(()),
+        _ => Err(err(StatusCode::UNAUTHORIZED, "missing or invalid relay token")),
+    }
 }
 
 // ── SSRF protection ──────────────────────────────────────────────────────────
@@ -178,22 +206,28 @@ async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "ok": true, "service": "knockport-relay" }))
 }
 
-async fn metrics(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+async fn metrics(
+    State(state): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    check_token(&state, &headers)?;
     let m = &state.metrics;
-    Json(serde_json::json!({
+    Ok(Json(serde_json::json!({
         "requests": m.requests.load(Ordering::Relaxed),
         "failures": m.failures.load(Ordering::Relaxed),
         "bytes_in": m.bytes_in.load(Ordering::Relaxed),
         "bytes_out": m.bytes_out.load(Ordering::Relaxed),
         "total_ms_sum": m.total_ms.load(Ordering::Relaxed),
-    }))
+    })))
 }
 
 async fn proxy(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
     Json(payload): Json<ProxyRequest>,
 ) -> Result<Json<ProxyResponse>, (StatusCode, Json<serde_json::Value>)> {
+    check_token(&state, &headers)?;
     let ip = addr.ip();
     if rate_limited(&state, ip) {
         return Err(err(StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded"));
@@ -424,10 +458,16 @@ async fn main() {
         .build()
         .expect("failed to build http client");
 
+    let token = std::env::var("KP_RELAY_TOKEN")
+        .ok()
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty());
+
     let state = Arc::new(AppState {
         client,
         metrics: Metrics::default(),
         rate: Mutex::new(HashMap::new()),
+        token,
     });
 
     let app = Router::new()

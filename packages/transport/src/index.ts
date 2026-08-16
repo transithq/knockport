@@ -197,7 +197,10 @@ export class RelayTransport implements Transport {
   private activeRequests = new Map<string, AbortController>();
   private healthy: boolean | null = null;
 
-  constructor(private relayUrl: string = "http://localhost:8787") {}
+  constructor(
+    private relayUrl: string = "http://localhost:8787",
+    private token?: string,
+  ) {}
 
   /** Synchronous availability = last known health (call checkHealth() to probe). */
   isAvailable(): boolean {
@@ -239,7 +242,10 @@ export class RelayTransport implements Transport {
     try {
       const fetchResponse = await fetch(`${this.relayUrl}/proxy`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(this.token ? { authorization: `Bearer ${this.token}` } : {}),
+        },
         body: JSON.stringify({ method: request.method, url, headers, body }),
         signal,
       });
@@ -326,9 +332,13 @@ function decodeBase64ToBinaryText(b64: string): string {
  * Pick the transport for the current surface. Web defaults to relay when a
  * relay URL is configured; direct fetch stays available as a fallback toggle.
  */
-export function getTransport(opts: { useRelay: boolean; relayUrl?: string }): Transport {
+export function getTransport(opts: {
+  useRelay: boolean;
+  relayUrl?: string;
+  relayToken?: string;
+}): Transport {
   if (opts.useRelay && opts.relayUrl) {
-    return new RelayTransport(opts.relayUrl);
+    return new RelayTransport(opts.relayUrl, opts.relayToken || undefined);
   }
   return new DirectTransport();
 }

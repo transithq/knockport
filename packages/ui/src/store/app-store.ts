@@ -204,6 +204,7 @@ export interface AppStore {
   // Transport settings (relay)
   useRelay: boolean;
   relayUrl: string;
+  relayToken: string;
   relayHealth: "off" | "checking" | "up" | "down";
 
   // Global request timeout (ms) applied to every send
@@ -283,6 +284,7 @@ export interface AppStore {
   setUseRelay: (on: boolean) => void;
   setRelayUrl: (url: string) => void;
   setTimeoutMs: (ms: number) => void;
+  setRelayToken: (token: string) => void;
   probeRelay: () => Promise<void>;
 }
 
@@ -340,6 +342,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   relayUrl:
     (typeof localStorage !== "undefined" && localStorage.getItem("kp-relay-url")) ||
     "http://localhost:8787",
+  relayToken: (typeof localStorage !== "undefined" && localStorage.getItem("kp-relay-token")) || "",
   relayHealth: "off" as RelayHealth,
 
   timeoutMs:
@@ -970,6 +973,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ timeoutMs: ms });
     try {
       localStorage.setItem("kp-timeout-ms", String(ms));
+    } catch {
+      // ignore
+    }
+  },
+
+  setRelayToken: (token) => {
+    set({ relayToken: token });
+    try {
+      localStorage.setItem("kp-relay-token", token);
     } catch {
       // ignore
     }

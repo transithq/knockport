@@ -77,6 +77,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
     const transport = getTransport({
       useRelay: useAppStore.getState().useRelay,
       relayUrl: useAppStore.getState().relayUrl,
+      relayToken: useAppStore.getState().relayToken,
     });
     const all: CollectionRunEntry[] = [];
     const startedAt = new Date().toISOString();
