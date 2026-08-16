@@ -60,6 +60,23 @@ struct ProxyRequest {
     headers: Vec<HeaderPair>,
     #[serde(default)]
     body: Option<String>,
+    /// Multipart/form-data parts (files base64). When present the relay builds
+    /// the body and owns the boundary + content-type.
+    #[serde(default)]
+    multipart: Vec<MultipartPart>,
+}
+
+#[derive(Deserialize)]
+struct MultipartPart {
+    name: String,
+    #[serde(default)]
+    value: Option<String>,
+    #[serde(default)]
+    filename: Option<String>,
+    #[serde(default)]
+    content_type: Option<String>,
+    #[serde(default)]
+    data_base64: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -201,6 +218,87 @@ fn err(status: StatusCode, message: &str) -> (StatusCode, Json<serde_json::Value
     (status, Json(serde_json::json!({ "error": message })))
 }
 
+/// Minimal base64 decoder (standard alphabet, padding optional).
+fn base64_decode(s: &str) -> Result<Vec<u8>, ()> {
+    fn val(c: u8) -> Option<u8> {
+        match c {
+            b'A'..=b'Z' => Some(c - b'A'),
+            b'a'..=b'z' => Some(c - b'a' + 26),
+            b'0'..=b'9' => Some(c - b'0' + 52),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    }
+    let mut out = Vec::with_capacity(s.len() / 4 * 3);
+    let mut buf: u32 = 0;
+    let mut bits: u32 = 0;
+    for b in s.bytes().filter(|b| !b" \t\r\n".contains(b)) {
+        if b == b'=' {
+            break;
+        }
+        buf = (buf << 6) | val(b).ok_or(())? as u32;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buf >> bits) as u8);
+        }
+    }
+    Ok(out)
+}
+
+fn escape_quoted(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Assemble a multipart/form-data body from wire parts. Returns the body bytes
+/// plus the boundary so the caller can set the matching content-type header.
+fn build_multipart(
+    parts: &[MultipartPart],
+) -> Result<(Vec<u8>, String), (StatusCode, Json<serde_json::Value>)> {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as u64)
+        .unwrap_or(0);
+    let boundary = format!(
+        "knockport-{:x}-{:x}-{:x}",
+        std::process::id(),
+        nanos,
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    );
+
+    let mut body: Vec<u8> = Vec::new();
+    for part in parts {
+        let data: Vec<u8> = if let Some(b64) = &part.data_base64 {
+            base64_decode(b64)
+                .map_err(|_| err(StatusCode::BAD_REQUEST, "invalid base64 in multipart part"))?
+        } else if let Some(v) = &part.value {
+            v.clone().into_bytes()
+        } else {
+            Vec::new()
+        };
+        if body.len() + data.len() > MAX_REQUEST_BODY {
+            return Err(err(StatusCode::PAYLOAD_TOO_LARGE, "request body too large"));
+        }
+
+        body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+        let mut cd = format!("form-data; name=\"{}\"", escape_quoted(&part.name));
+        if let Some(fname) = &part.filename {
+            cd.push_str(&format!("; filename=\"{}\"", escape_quoted(fname)));
+        }
+        body.extend_from_slice(format!("content-disposition: {cd}\r\n").as_bytes());
+        if let Some(ct) = &part.content_type {
+            body.extend_from_slice(format!("content-type: {ct}\r\n").as_bytes());
+        }
+        body.extend_from_slice(b"\r\n");
+        body.extend_from_slice(&data);
+        body.extend_from_slice(b"\r\n");
+    }
+    body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+    Ok((body, boundary))
+}
+
 // ── Handlers ─────────────────────────────────────────────────────────────────
 async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "ok": true, "service": "knockport-relay" }))
@@ -238,12 +336,23 @@ async fn proxy(
         .await
         .map_err(|reason| err(StatusCode::FORBIDDEN, reason))?;
 
-    let body_bytes = match &payload.body {
-        Some(b) if b.len() > MAX_REQUEST_BODY => {
-            return Err(err(StatusCode::PAYLOAD_TOO_LARGE, "request body too large"))
-        }
-        Some(b) => b.as_bytes().to_vec(),
-        None => Vec::new(),
+    let (body_bytes, multipart_ct): (Vec<u8>, Option<String>) = if payload.multipart.is_empty() {
+        (
+            match &payload.body {
+                Some(b) if b.len() > MAX_REQUEST_BODY => {
+                    return Err(err(StatusCode::PAYLOAD_TOO_LARGE, "request body too large"))
+                }
+                Some(b) => b.as_bytes().to_vec(),
+                None => Vec::new(),
+            },
+            None,
+        )
+    } else {
+        let (bytes, boundary) = build_multipart(&payload.multipart)?;
+        (
+            bytes,
+            Some(format!("multipart/form-data; boundary={boundary}")),
+        )
     };
 
     let method: Method = payload
@@ -273,12 +382,18 @@ async fn proxy(
             if name == "host" || name == "content-length" || HOP_HEADERS.contains(&name.as_str()) {
                 continue;
             }
+            if multipart_ct.is_some() && name == "content-type" {
+                continue;
+            }
             if let (Ok(name), Ok(value)) = (
                 HeaderName::from_bytes(pair.key.as_bytes()),
                 HeaderValue::from_str(&pair.value),
             ) {
                 builder = builder.header(name, value);
             }
+        }
+        if let Some(ct) = &multipart_ct {
+            builder = builder.header(header::CONTENT_TYPE, ct.clone());
         }
         if !current_body.is_empty() && current_method != Method::GET && current_method != Method::HEAD {
             builder = builder.body(current_body.clone());

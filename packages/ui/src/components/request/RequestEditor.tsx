@@ -1,14 +1,15 @@
 import {
   type Assertion,
   type BodyContent,
+  type FormDataEntry,
   HTTP_METHODS,
   type HttpMethod,
   type KeyValuePair,
 } from "@knockport/core";
 import type { TestRunSummary } from "@knockport/engine";
 import { clsx } from "clsx";
-import { ChevronDown, Code2, Loader2, MoreHorizontal, Send } from "lucide-react";
-import { useState } from "react";
+import { ChevronDown, Code2, Loader2, MoreHorizontal, Paperclip, Send, X } from "lucide-react";
+import { useId, useState } from "react";
 import { type ActivePanel, useAppStore } from "../../store/app-store";
 import {
   buildVariableMap,
@@ -285,16 +286,153 @@ function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyC
           </button>
         ))}
       </div>
-      {body.type !== "none" && (
-        <CodeEditor
-          value={body.content ?? ""}
-          onChange={(content) => onChange({ ...body, content })}
-          language={body.type === "json" ? "json" : "text"}
-          height="200px"
+      {body.type === "form-urlencoded" || body.type === "multipart-form" ? (
+        <FormDataTable
+          entries={body.formData ?? []}
+          onChange={(formData) => onChange({ ...body, formData })}
+          allowFiles={body.type === "multipart-form"}
         />
+      ) : (
+        body.type !== "none" && (
+          <CodeEditor
+            value={body.content ?? ""}
+            onChange={(content) => onChange({ ...body, content })}
+            language={body.type === "json" ? "json" : "text"}
+            height="200px"
+          />
+        )
       )}
     </div>
   );
+}
+
+// ── Form Data Table (Form / Multipart bodies) ────────────────────────────────
+// Value cell doubles as text input or file chip (Bruno-style): picking a file
+// via the attach button turns the row into a file part.
+function FormDataTable({
+  entries,
+  onChange,
+  allowFiles,
+}: {
+  entries: FormDataEntry[];
+  onChange: (entries: FormDataEntry[]) => void;
+  allowFiles: boolean;
+}) {
+  const uid = useId();
+  const [newKey, setNewKey] = useState("");
+  const commitNew = () => {
+    if (newKey.trim()) {
+      onChange([...entries, { key: newKey.trim(), value: "", type: "text", enabled: true }]);
+      setNewKey("");
+    }
+  };
+  const update = (i: number, changes: Partial<FormDataEntry>) =>
+    onChange(entries.map((e, idx) => (idx === i ? { ...e, ...changes } : e)));
+
+  return (
+    <div className="kp-kv">
+      <div className="kp-kv-title">Form Fields</div>
+      <div className="kp-kv-table kp-form-table">
+        <div className="kp-kv-row kp-kv-head">
+          <span />
+          <span>Key</span>
+          <span>Value</span>
+          {allowFiles ? <span>File</span> : <span />}
+          <span className="kp-kv-menu">
+            <MoreHorizontal size={13} />
+          </span>
+        </div>
+
+        {entries.map((entry, i) => {
+          const file = entry.value instanceof File ? entry.value : null;
+          return (
+            <div className="kp-kv-row" key={i}>
+              <input
+                type="checkbox"
+                className="kp-checkbox"
+                checked={entry.enabled}
+                onChange={(e) => update(i, { enabled: e.target.checked })}
+              />
+              <input
+                type="text"
+                placeholder="Key"
+                value={entry.key}
+                onChange={(e) => update(i, { key: e.target.value })}
+              />
+              {file ? (
+                <span className="kp-file-chip" title={`${file.name} (${file.type || "unknown"})`}>
+                  <Paperclip size={11} />
+                  <span className="kp-truncate">
+                    {file.name} ({formatBytes(file.size)})
+                  </span>
+                  <button
+                    type="button"
+                    className="kp-file-clear"
+                    title="Remove file"
+                    onClick={() => update(i, { value: "", type: "text" })}
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              ) : (
+                <input
+                  type="text"
+                  placeholder="Value"
+                  value={typeof entry.value === "string" ? entry.value : ""}
+                  onChange={(e) => update(i, { value: e.target.value, type: "text" })}
+                />
+              )}
+              {allowFiles && (
+                <>
+                  <input
+                    type="file"
+                    id={`${uid}-${i}`}
+                    hidden
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) update(i, { value: f, type: "file" });
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="kp-file-btn"
+                    title="Select file"
+                    onClick={() => document.getElementById(`${uid}-${i}`)?.click()}
+                  >
+                    <Paperclip size={13} />
+                  </button>
+                </>
+              )}
+              <span />
+            </div>
+          );
+        })}
+
+        {/* Empty add row */}
+        <div className="kp-kv-row kp-kv-empty">
+          <span />
+          <input
+            type="text"
+            placeholder="Key"
+            value={newKey}
+            onChange={(e) => setNewKey(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && commitNew()}
+            onBlur={commitNew}
+          />
+          <input type="text" placeholder="Value" readOnly />
+          <span />
+          <span />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 // ── Auth Editor ──────────────────────────────────────────────────────────────

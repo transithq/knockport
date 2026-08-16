@@ -1083,6 +1083,54 @@ body.kp-resizing-y .kp-resize-handle {
 .kp-kv-row input::placeholder {
   color: var(--kp-text-muted);
 }
+.kp-form-table .kp-kv-row {
+  grid-template-columns: 28px 1fr 2fr 64px 24px;
+}
+.kp-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--kp-border-secondary);
+  border-radius: var(--kp-radius-sm);
+  background: var(--kp-bg-tertiary);
+  color: var(--kp-text-secondary);
+  font-size: 12px;
+}
+.kp-file-chip .kp-truncate {
+  flex: 1;
+  min-width: 0;
+}
+.kp-file-clear {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  color: var(--kp-text-muted);
+  cursor: pointer;
+  border-radius: var(--kp-radius-sm);
+}
+.kp-file-clear:hover {
+  color: var(--kp-error);
+}
+.kp-file-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  background: transparent;
+  border: 1px solid var(--kp-border-secondary);
+  border-radius: var(--kp-radius-sm);
+  color: var(--kp-text-muted);
+  cursor: pointer;
+}
+.kp-file-btn:hover {
+  color: var(--kp-accent);
+  border-color: var(--kp-border-focus);
+}
 .kp-checkbox {
   width: 15px;
   height: 15px;

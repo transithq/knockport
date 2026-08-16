@@ -229,14 +229,17 @@ export class RelayTransport implements Transport {
       : controller.signal;
 
     const url = buildUrl(request);
-    const headers = buildHeaderList(request);
-    const bodyInit = buildBody(request);
-    if (bodyInit instanceof FormData) {
-      this.activeRequests.delete(request.id);
-      throw new Error("Multipart bodies are not yet supported via the relay — use Direct transport.");
+    let headers = buildHeaderList(request);
+    const isMultipart = request.body?.type === "multipart-form";
+    // Multipart goes as structured parts (files base64); the relay owns the
+    // boundary + content-type, so drop any user content-type for these.
+    if (isMultipart) {
+      headers = headers.filter((h) => h.key.toLowerCase() !== "content-type");
     }
+    const bodyInit = isMultipart ? undefined : buildBody(request);
     const body =
       typeof bodyInit === "string" ? bodyInit : bodyInit != null ? String(bodyInit) : undefined;
+    const multipart = isMultipart ? await buildMultipartParts(request) : undefined;
 
     const startTime = performance.now();
     try {
@@ -246,7 +249,7 @@ export class RelayTransport implements Transport {
           "content-type": "application/json",
           ...(this.token ? { authorization: `Bearer ${this.token}` } : {}),
         },
-        body: JSON.stringify({ method: request.method, url, headers, body }),
+        body: JSON.stringify({ method: request.method, url, headers, body, multipart }),
         signal,
       });
 
@@ -317,6 +320,46 @@ interface RelayProxyResponse {
   body: string;
   encoding: "utf8" | "base64";
   timings?: { total: number; ttfb: number };
+}
+
+// ── Multipart wire format ────────────────────────────────────────────────────
+/** One multipart part for the relay wire format: text values inline, file
+ * contents base64-encoded (FormData can't be JSON-serialized). */
+export interface RelayMultipartPart {
+  name: string;
+  value?: string;
+  filename?: string;
+  content_type?: string;
+  data_base64?: string;
+}
+
+async function buildMultipartParts(request: Request): Promise<RelayMultipartPart[]> {
+  const parts: RelayMultipartPart[] = [];
+  for (const entry of request.body?.formData ?? []) {
+    if (!entry.enabled || !entry.key) continue;
+    if (entry.type === "file" && entry.value instanceof File) {
+      const bytes = new Uint8Array(await entry.value.arrayBuffer());
+      parts.push({
+        name: entry.key,
+        filename: entry.value.name,
+        content_type: entry.value.type || undefined,
+        data_base64: bytesToBase64(bytes),
+      });
+    } else {
+      parts.push({ name: entry.key, value: String(entry.value ?? "") });
+    }
+  }
+  return parts;
+}
+
+/** Chunked base64 so large files don't blow the Function.apply arg limit. */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
 }
 
 /** Decode base64 to a latin-1 string so binary payloads survive the text pipeline. */
