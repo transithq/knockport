@@ -3,12 +3,13 @@ import { clsx } from "clsx";
 import { Boxes, Play, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useAppStore } from "../../store/app-store";
-import { AssertionsEditor } from "../common/AssertionsEditor";
 import { AuthEditor } from "../common/AuthEditor";
 import { CodeEditor } from "../common/CodeEditor";
 
-type SubTab = "overview" | "auth" | "scripts" | "tests" | "variables" | "runs";
-type CollectionScriptPhase = "pre" | "postResponse" | "test";
+type SubTab = "overview" | "auth" | "scripts" | "variables" | "runs";
+// Tests are written in the Post-response script (kp.test / pm.test) — the
+// former Tests column is deprecated, like Hoppscotch's script-only tests.
+type CollectionScriptPhase = "pre" | "postResponse";
 
 function countRequests(collection: Collection): number {
   const countFolder = (f: Folder): number =>
@@ -26,7 +27,7 @@ function countFolders(collection: Collection): number {
 
 /**
  * Full-area collection editor tab (Postman/Bruno style): Overview,
- * Authorization, Scripts, Tests, Variables and Runs subtabs. Edits apply
+ * Authorization, Scripts, Variables and Runs subtabs. Edits apply
  * immediately and persist to IndexedDB via updateCollection.
  */
 export function CollectionEditor({ collectionId }: { collectionId: string }) {
@@ -57,18 +58,12 @@ export function CollectionEditor({ collectionId }: { collectionId: string }) {
     { id: "overview", label: "Overview" },
     { id: "auth", label: "Authorization" },
     { id: "scripts", label: "Scripts" },
-    { id: "tests", label: "Tests" },
     { id: "variables", label: "Variables" },
     { id: "runs", label: "Runs" },
   ];
   const colRuns = runs.filter((r) => r.collectionId === collectionId);
   const scripts = collection.scripts ?? {};
-  const scriptValue =
-    which === "pre"
-      ? (scripts.pre ?? "")
-      : which === "test"
-        ? (scripts.test ?? "")
-        : (scripts.postResponse ?? "");
+  const scriptValue = which === "pre" ? (scripts.pre ?? "") : (scripts.postResponse ?? "");
 
   return (
     <div className="kp-collection-editor kp-scroll">
@@ -159,40 +154,17 @@ export function CollectionEditor({ collectionId }: { collectionId: string }) {
               >
                 Post-response
               </button>
-              <button
-                type="button"
-                className={clsx("kp-seg", which === "test" && "active")}
-                onClick={() => setWhich("test")}
-              >
-                Tests
-              </button>
             </div>
             <p className="kp-hint">
               {which === "pre"
                 ? "Runs before every request in this collection, ahead of the request's own pre-request script."
-                : which === "postResponse"
-                  ? "Runs after every request in this collection, ahead of the request's own post-response script."
-                  : "Runs after every request in this collection, together with the request's own test script."}
+                : "Runs after every request in this collection, ahead of the request's own post-response script. Write tests here with kp.test / pm.test."}
             </p>
             <CodeEditor
               value={scriptValue}
               onChange={(v) => set({ scripts: { ...scripts, [which]: v } })}
               language="javascript"
               height="220px"
-            />
-          </div>
-        )}
-
-        {sub === "tests" && (
-          <div className="kp-collection-section">
-            <p className="kp-hint">
-              Quick assertions evaluated against{" "}
-              <code className="kp-mono kp-accent-text">response</code> for every request in this
-              collection — must return <code className="kp-mono kp-accent-text">true</code> to pass.
-            </p>
-            <AssertionsEditor
-              assertions={collection.assertions ?? []}
-              onChange={(a) => set({ assertions: a })}
             />
           </div>
         )}

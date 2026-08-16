@@ -529,7 +529,26 @@ export const useAppStore = create<AppStore>((set, get) => ({
   loadCollections: async () => {
     try {
       const records = await dbCollections.getAll();
-      set({ collections: records as unknown as Collection[] });
+      // Deprecated: collection-level `scripts.test` (the former Tests column)
+      // is folded into `scripts.postResponse` so existing test scripts keep
+      // running under the script-only model.
+      const collections = (records as unknown as Collection[]).map((c) => {
+        const t = c.scripts?.test;
+        if (!t?.trim()) return c;
+        const migrated: Collection = {
+          ...c,
+          scripts: {
+            ...c.scripts,
+            test: undefined,
+            postResponse: c.scripts?.postResponse?.trim()
+              ? `${c.scripts.postResponse}\n\n${t}`
+              : t,
+          },
+        };
+        persistCollection(migrated);
+        return migrated;
+      });
+      set({ collections });
     } catch {
       // storage unavailable
     }
