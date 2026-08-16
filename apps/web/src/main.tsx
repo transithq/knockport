@@ -1,3 +1,6 @@
+// Node-global polyfills (process/Buffer/global) — must run before any module
+// that evaluates against them (mqtt.js in the MQTT workspace).
+import "@knockport/ui/polyfills";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import {

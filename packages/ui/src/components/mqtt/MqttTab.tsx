@@ -1,4 +1,4 @@
-import mqtt, { type MqttClient } from "mqtt";
+import type { MqttClient } from "mqtt";
 import { Cloud, Eraser, Plus, Send, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../../store/app-store";
@@ -46,7 +46,7 @@ export function MqttTab() {
 
   const connected = status === "connected";
 
-  const connect = () => {
+  const connect = async () => {
     if (!/^wss?:\/\//i.test(url)) {
       pushSys("Broker URL must start with ws:// or wss:// (MQTT over WebSocket)");
       return;
@@ -55,6 +55,9 @@ export function MqttTab() {
     setMqttStatus("connecting");
     pushSys(`Connecting to ${url}…`);
     try {
+      // Lazy-load mqtt.js so its (polyfilled) Node globals never run during
+      // app boot and a packaging failure can only affect this tab.
+      const { default: mqtt } = await import("mqtt");
       const client = mqtt.connect(url, {
         clientId: `knockport_${Math.random().toString(16).slice(2, 10)}`,
         reconnectPeriod: 0, // manual reconnect — avoid surprise traffic
@@ -145,7 +148,7 @@ export function MqttTab() {
           type="text"
           value={url}
           onChange={(e) => setMqttUrl(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !connected && connect()}
+          onKeyDown={(e) => e.key === "Enter" && !connected && void connect()}
           placeholder="wss://test.mosquitto.org:8081/mqtt"
           className="kp-url-input kp-mono"
           spellCheck={false}
@@ -156,7 +159,7 @@ export function MqttTab() {
               <Cloud size={13} /> Disconnect
             </button>
           ) : (
-            <button type="button" className="kp-send-btn" onClick={connect}>
+            <button type="button" className="kp-send-btn" onClick={() => void connect()}>
               <Cloud size={13} /> Connect
             </button>
           )}

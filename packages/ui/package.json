@@ -34,9 +34,11 @@
     "@knockport/storage": "workspace:*",
     "@knockport/transport": "workspace:*",
     "@tanstack/react-virtual": "^3.14.9",
+    "buffer": "^6.0.3",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
     "codemirror": "^6.0.1",
+    "events": "^3.3.0",
     "lucide-react": "^0.468.0",
     "mqtt": "^4.3.8",
     "react": "^19.0.0",
@@ -47,6 +49,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@types/events": "^3.0.3",
     "@types/react": "^19.0.4",
     "@types/react-dom": "^19.0.2",
     "typescript": "^5.7.3",
