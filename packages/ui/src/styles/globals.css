@@ -189,7 +189,8 @@ body {
 
 /* ── Sidebar ─────────────────────────────────────────────────────────────── */
 .kp-sidebar {
-  width: 250px;
+  position: relative;
+  min-width: 200px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -766,19 +767,119 @@ body {
 .kp-workspace-grid {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-columns: minmax(0, 1fr) 8px minmax(300px, 400px);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
 }
 .kp-col-left {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: minmax(0, auto) 8px minmax(0, 1fr);
   min-height: 0;
-  border-right: 1px solid var(--kp-border-primary);
+  min-width: 0;
 }
 .kp-col-right {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
+}
+.kp-pane-scroll {
+  overflow: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.kp-pane-scroll-flex {
+  flex: 1;
+}
+
+/* ── Resize handles (Bruno-style: thin, hairline that highlights) ───────── */
+.kp-resize-handle {
+  position: relative;
+  flex-shrink: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.kp-resize-handle::after {
+  content: "";
+  position: absolute;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+.kp-resize-handle::before {
+  content: "";
+  position: absolute;
+  background: var(--kp-border-primary);
+}
+.kp-resize-handle:hover::after,
+body.kp-resizing-x .kp-resize-handle.vertical::after,
+body.kp-resizing-y .kp-resize-handle.horizontal::after {
+  background: var(--kp-accent);
+}
+.kp-resize-handle.vertical {
+  cursor: col-resize;
+}
+.kp-resize-handle.vertical::before {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+}
+.kp-resize-handle.vertical::after {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+}
+.kp-resize-handle.horizontal {
+  cursor: row-resize;
+}
+.kp-resize-handle.horizontal::before {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  transform: translateY(-50%);
+}
+.kp-resize-handle.horizontal::after {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+}
+/* Sidebar handle straddles the panel's right edge (Bruno style) */
+.kp-sidebar > .kp-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+}
+/* Prevent text selection while resizing */
+body.kp-resizing-x,
+body.kp-resizing-y {
+  user-select: none;
+  cursor: inherit;
+}
+body.kp-resizing-x {
+  cursor: col-resize;
+}
+body.kp-resizing-y {
+  cursor: row-resize;
+}
+body.kp-resizing-x *,
+body.kp-resizing-y * {
+  pointer-events: none;
+}
+body.kp-resizing-x .kp-resize-handle,
+body.kp-resizing-y .kp-resize-handle {
+  pointer-events: auto;
 }
 
 /* ── Request editor ─────────────────────────────────────────────────────── */
@@ -786,7 +887,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-bottom: 1px solid var(--kp-border-primary);
+  flex-shrink: 0;
 }
 .kp-urlbar {
   display: flex;

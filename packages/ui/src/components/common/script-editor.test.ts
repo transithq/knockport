@@ -38,7 +38,7 @@ describe("standard JS completions", () => {
   });
 
   it("offers globals on explicit chain completion", () => {
-    const result = jsCompletions(ctx("foo.J"), 5, true);
+    const result = jsCompletions(ctx("foo.J", 5, true));
     expect(result).not.toBeNull();
     expect(result!.options.map((o) => o.label)).toContain("JSON");
   });

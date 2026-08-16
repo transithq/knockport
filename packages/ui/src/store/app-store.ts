@@ -153,6 +153,12 @@ export interface AppStore {
   sidebarWidth: number;
   sidebarCollapsed: boolean;
 
+  // Workspace layout (resizable panes, persisted)
+  /** Right analytics column width in px. */
+  rightPaneWidth: number;
+  /** Request pane height in px (response fills the rest). */
+  requestPaneHeight: number;
+
   // Collections
   collections: Collection[];
   activeCollectionId: string | null;
@@ -204,6 +210,10 @@ export interface AppStore {
   setSidebarTab: (tab: SidebarTab) => void;
   setSidebarWidth: (width: number) => void;
   toggleSidebar: () => void;
+
+  // Actions — Layout panes
+  setRightPaneWidth: (width: number) => void;
+  setRequestPaneHeight: (height: number) => void;
 
   // Actions — Collections
   addCollection: (collection: Collection) => void;
@@ -275,8 +285,20 @@ export interface AppStore {
 export const useAppStore = create<AppStore>((set, get) => ({
   // ── Initial State ────────────────────────────────────────────────────────
   sidebarTab: "collections",
-  sidebarWidth: 280,
+  sidebarWidth:
+    (typeof localStorage !== "undefined" &&
+      Number.parseInt(localStorage.getItem("kp-sidebar-width") ?? "", 10)) ||
+    280,
   sidebarCollapsed: false,
+
+  rightPaneWidth:
+    (typeof localStorage !== "undefined" &&
+      Number.parseInt(localStorage.getItem("kp-right-pane-width") ?? "", 10)) ||
+    400,
+  requestPaneHeight:
+    (typeof localStorage !== "undefined" &&
+      Number.parseInt(localStorage.getItem("kp-request-pane-height") ?? "", 10)) ||
+    320,
 
   collections: [],
   activeCollectionId: null,
@@ -322,8 +344,32 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // ── Sidebar Actions ──────────────────────────────────────────────────────
   setSidebarTab: (tab) => set({ sidebarTab: tab }),
-  setSidebarWidth: (width) => set({ sidebarWidth: width }),
+  setSidebarWidth: (width) => {
+    set({ sidebarWidth: width });
+    try {
+      localStorage.setItem("kp-sidebar-width", String(width));
+    } catch {
+      /* storage unavailable */
+    }
+  },
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+
+  setRightPaneWidth: (width) => {
+    set({ rightPaneWidth: width });
+    try {
+      localStorage.setItem("kp-right-pane-width", String(width));
+    } catch {
+      /* storage unavailable */
+    }
+  },
+  setRequestPaneHeight: (height) => {
+    set({ requestPaneHeight: height });
+    try {
+      localStorage.setItem("kp-request-pane-height", String(height));
+    } catch {
+      /* storage unavailable */
+    }
+  },
 
   // ── Collection Actions ───────────────────────────────────────────────────
   addCollection: (collection) => {

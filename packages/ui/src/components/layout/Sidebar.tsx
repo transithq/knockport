@@ -17,7 +17,13 @@ import {
   Trash2,
 } from "lucide-react";
 import { type SidebarTab, useAppStore } from "../../store/app-store";
+import { useResizer } from "../common/useResizer";
 import { CollectionTree } from "./CollectionTree";
+
+// ── Sidebar size constraints (Bruno: 220–600px) ─────────────────────────────
+const SIDEBAR_MIN = 200;
+const SIDEBAR_MAX = 560;
+const SIDEBAR_DEFAULT = 280;
 
 // ── Method color helper ──────────────────────────────────────────────────────
 const methodColor: Record<string, string> = {
@@ -63,9 +69,11 @@ const NAV_ITEMS: NavItem[] = [
 export function Sidebar() {
   const sidebarTab = useAppStore((s) => s.sidebarTab);
   const setSidebarTab = useAppStore((s) => s.setSidebarTab);
+  const sidebarWidth = useAppStore((s) => s.sidebarWidth);
   const collections = useAppStore((s) => s.collections);
   const environments = useAppStore((s) => s.environments);
   const activeEnvironmentId = useAppStore((s) => s.activeEnvironmentId);
+  const resizer = useResizer("x");
   const setActiveEnvironment = useAppStore((s) => s.setActiveEnvironment);
   const history = useAppStore((s) => s.history);
   const openCommandPalette = useAppStore((s) => s.setCommandPaletteOpen);
@@ -97,7 +105,7 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="kp-sidebar">
+    <aside className="kp-sidebar" style={{ width: `${sidebarWidth}px` }}>
       {/* Logo */}
       <div className="kp-sidebar-logo">
         <span className="kp-logo-mark">
@@ -259,6 +267,23 @@ export function Sidebar() {
           Feedback
         </button>
       </div>
+
+      {/* Resize handle (drag to resize, double-click to reset) */}
+      <div
+        className="kp-resize-handle vertical"
+        role="separator"
+        aria-orientation="vertical"
+        onMouseDown={(e) =>
+          resizer.start(e, {
+            getValue: () => useAppStore.getState().sidebarWidth,
+            setValue: (w) => useAppStore.getState().setSidebarWidth(w),
+            min: SIDEBAR_MIN,
+            getMax: () => Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, window.innerWidth - 720)),
+            defaultSize: SIDEBAR_DEFAULT,
+          })
+        }
+        onDoubleClick={() => useAppStore.getState().setSidebarWidth(SIDEBAR_DEFAULT)}
+      />
     </aside>
   );
 }

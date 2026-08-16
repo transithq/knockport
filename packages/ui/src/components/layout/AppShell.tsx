@@ -1,10 +1,11 @@
 import { createId } from "@knockport/core";
 import type { Request } from "@knockport/core";
 import { Boxes, Braces, ChevronDown, MoreHorizontal, Play, Plus, Settings, X } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useAppStore } from "../../store/app-store";
 import { CollectionEditor } from "../collections/CollectionEditor";
 import { CommandPalette } from "../command/CommandPalette";
+import { useResizer } from "../common/useResizer";
 import { EnvironmentEditor } from "../environments/EnvironmentEditor";
 import { CodegenModal, ImportModal } from "../modals/Modals";
 import { RequestEditor, handleSend } from "../request/RequestEditor";
@@ -14,6 +15,92 @@ import { RunnerTab } from "../runner/RunnerTab";
 import { SettingsPage } from "../settings/SettingsPage";
 import { WebSocketModal } from "../websocket/WebSocketModal";
 import { Sidebar } from "./Sidebar";
+
+// ── Resizable workspace (request | response, with analytics rail) ────────────
+// Pane constraints, Bruno-style pixel clamping.
+const RIGHT_PANE_MIN = 300;
+const RIGHT_PANE_MAX = 720;
+const RIGHT_PANE_DEFAULT = 400;
+const REQUEST_PANE_MIN = 180;
+const RESPONSE_PANE_MIN = 200;
+const REQUEST_PANE_DEFAULT = 320;
+
+function WorkspaceGrid({ tabId }: { tabId: string }) {
+  const rightPaneWidth = useAppStore((s) => s.rightPaneWidth);
+  const requestPaneHeight = useAppStore((s) => s.requestPaneHeight);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const colResizer = useResizer("x");
+  const rowResizer = useResizer("y");
+
+  // Re-clamp persisted pane sizes when the window shrinks (Bruno's
+  // ResizeObserver guard) — keeps panels from overflowing their container.
+  useEffect(() => {
+    const clamp = () => {
+      const s = useAppStore.getState();
+      const w = gridRef.current?.clientWidth ?? Number.POSITIVE_INFINITY;
+      const h = gridRef.current?.clientHeight ?? Number.POSITIVE_INFINITY;
+      const rightMax = Math.min(RIGHT_PANE_MAX, Math.max(RIGHT_PANE_MIN, w - 420));
+      if (s.rightPaneWidth > rightMax) s.setRightPaneWidth(rightMax);
+      const reqMax = Math.max(REQUEST_PANE_MIN, h - RESPONSE_PANE_MIN - 16);
+      if (s.requestPaneHeight > reqMax) s.setRequestPaneHeight(reqMax);
+    };
+    clamp();
+    window.addEventListener("resize", clamp);
+    return () => window.removeEventListener("resize", clamp);
+  }, []);
+
+  return (
+    <div className="kp-workspace-grid" ref={gridRef} style={{ gridTemplateColumns: `minmax(0, 1fr) 8px ${rightPaneWidth}px` }}>
+      <div
+        className="kp-col-left"
+        style={{ gridTemplateRows: `minmax(0, ${requestPaneHeight}px) 8px minmax(0, 1fr)` }}
+      >
+        <div className="kp-pane-scroll">
+          <RequestEditor tabId={tabId} />
+        </div>
+        <div
+          className="kp-resize-handle horizontal"
+          role="separator"
+          aria-orientation="horizontal"
+          onMouseDown={(e) =>
+            rowResizer.start(e, {
+              getValue: () => useAppStore.getState().requestPaneHeight,
+              setValue: (h) => useAppStore.getState().setRequestPaneHeight(h),
+              min: REQUEST_PANE_MIN,
+              getMax: () =>
+                Math.max(REQUEST_PANE_MIN, (gridRef.current?.clientHeight ?? 600) - RESPONSE_PANE_MIN),
+              defaultSize: REQUEST_PANE_DEFAULT,
+            })
+          }
+          onDoubleClick={() => useAppStore.getState().setRequestPaneHeight(REQUEST_PANE_DEFAULT)}
+        />
+        <div className="kp-pane-scroll kp-pane-scroll-flex">
+          <ResponseBody tabId={tabId} />
+        </div>
+      </div>
+      <div
+        className="kp-resize-handle vertical"
+        role="separator"
+        aria-orientation="vertical"
+        onMouseDown={(e) =>
+          colResizer.start(e, {
+            getValue: () => useAppStore.getState().rightPaneWidth,
+            setValue: (w) => useAppStore.getState().setRightPaneWidth(w),
+            min: RIGHT_PANE_MIN,
+            getMax: () =>
+              Math.min(RIGHT_PANE_MAX, Math.max(RIGHT_PANE_MIN, (gridRef.current?.clientWidth ?? 800) - 420)),
+            invert: true,
+            defaultSize: RIGHT_PANE_DEFAULT,
+          })
+        }
+        onDoubleClick={() => useAppStore.getState().setRightPaneWidth(RIGHT_PANE_DEFAULT)}
+      />
+      <div className="kp-col-right">
+        <ResponseSummary tabId={tabId} />
+      </div>
+    </div>
+  );
+}
 
 const methodColor: Record<string, string> = {
   GET: "var(--kp-method-get)",
@@ -247,15 +334,7 @@ export function AppShell() {
           ) : activeTab.kind === "settings" ? (
             <SettingsPage />
           ) : (
-            <div className="kp-workspace-grid">
-              <div className="kp-col-left">
-                <RequestEditor tabId={activeTab.id} />
-                <ResponseBody tabId={activeTab.id} />
-              </div>
-              <div className="kp-col-right">
-                <ResponseSummary tabId={activeTab.id} />
-              </div>
-            </div>
+            <WorkspaceGrid tabId={activeTab.id} />
           )
         ) : (
           <WelcomeScreen />
