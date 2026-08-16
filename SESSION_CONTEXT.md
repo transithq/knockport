@@ -182,3 +182,59 @@ no onClick, no content-type detection, dead Copy button. Rework (commit ce58051)
   old tokenizer/table CSS (.kp-json-viewer, .kp-ln, .kp-code, .kp-raw-view); tok-* classes kept
   (codegen modal still uses them).
 - 28 ui tests + build green. Not wired: ResponseSummary's Save/Download button (separate follow-up).
+
+
+---
+
+## Session 2026-08-16 (afternoon) — relay hardening, protocol workspaces, UX fixes
+
+### Process changes (IMPORTANT for next agent)
+- DO NOT use the browser-use tool for verification anymore (token budget). Instead:
+  append items to MANUAL_TEST_CHECKLIST.md (repo root, UNTRACKED — never commit it)
+  and let the user test manually. `vite build` + package vitest suites remain the
+  automated gates before every commit.
+- MANUAL_TEST_CHECKLIST.md holds the full QA list for everything below.
+
+### Committed this session (knockport repo)
+- Relay: health indicator in sidebar status bar; KP_RELAY_TOKEN bearer auth on
+  /proxy + /metrics (constant-time compare, /health public); multipart via
+  structured base64 parts (relay builds boundary + owns content-type); mock
+  servers — POST /mock/register, DELETE /mock/{id}, catch-all /mock/{id}/*path
+  with :param/* patterns, per-route status/body/content-type/delay, in-memory.
+- UI: merged Form body section (urlencoded default, file attach silently
+  upgrades to multipart, Urlencoded/Multipart toggle in section header);
+  WebSocket full-area tab (store-persisted log, recent chips); APIs tab
+  (OpenAPI spec import + endpoint browser + request/collection generation);
+  Mock Servers tab (route editor, start/stop, copy URL, auto re-arm on mount);
+  sidebar nav highlights follow the ACTIVE TAB kind; URL bar <-> params
+  two-way sync (Postman-style, draft-on-focus commit-on-blur); Tab-completion
+  (SuggestInput) in URL bar (http(s)://, .com/.dev/.io, {{vars}}) and
+  assertion snippets; dead CTAs fixed (View all headers -> headers panel,
+  response/Send/tabbar dropdown menus via common/DropdownMenu, Feedback
+  button removed); response tabs moved into the store (activeResponsePanel).
+- Tropel (D:/tropel repo, separate commits): tropel-input-http (.http files),
+  tropel-input-curl (command lines), tropel-input-bru (.bru v2; post-response
+  script + tests share the post-response `test` phase, post-response first),
+  tropel-input-insomnia (v4 export, parentId tree, env merge, {{_.v}}->{{v}}).
+  @tropel/shims 0.1.1 PREPARED (dist rebuilt, smoke green, dry-run clean) but
+  NOT PUBLISHED — npm login was 401. After the user logs in: `npm publish` in
+  D:/tropel/packages/shims, bump @tropel/shims dep in packages/engine, restore
+  richer chai assertions (above/below/oneOf) in tests + TestsPanel hint.
+
+### Protocol support added (committed, see MANUAL_TEST_CHECKLIST.md for QA)
+- GraphQL: first-class body segment (Query + Variables panes); transports send
+  the {query, variables} JSON envelope and inject Content-Type application/json
+  when unset; codegen already matched; 4 transport tests.
+- SOAP: "Insert SOAP envelope" helper on Xml bodies (wraps payload / skeleton).
+- SSE: full-area workspace tab (fetch + ReadableStream, manual frame parsing —
+  fetch not EventSource so auth headers + Last-Event-ID work). Direct only.
+  Pure parser sse-parse.ts + 7 tests.
+- MQTT: full-area workspace tab over mqtt.js v4 (WebSocket brokers only,
+  e.g. wss://test.mosquitto.org:8081/mqtt). State in store; URLs persisted.
+- gRPC DEFERRED (next big item): plan = relay-side endpoint using protox to
+  compile .proto at runtime (no protoc), prost-reflect for dynamic messages,
+  and tonic or raw h2 for the HTTP/2 gRPC framing. Do NOT ship a UI-only stub.
+
+### History question (user asked, recommendation given)
+- Recommended a full-area History tab (virtualized table, search, open/delete)
+  with the sidebar keeping a compact recent list. NOT yet implemented.
