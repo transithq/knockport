@@ -931,6 +931,11 @@ body.kp-resizing-y .kp-resize-handle {
 .kp-url-input:focus {
   border-color: var(--kp-border-focus);
 }
+.kp-send-group {
+  display: inline-flex;
+  align-items: stretch;
+  flex-shrink: 0;
+}
 .kp-send-btn {
   display: inline-flex;
   align-items: center;
@@ -943,6 +948,7 @@ body.kp-resizing-y .kp-resize-handle {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
 }
 .kp-send-btn:hover:not(:disabled) {
   background: var(--kp-accent-hover);
@@ -955,13 +961,21 @@ body.kp-resizing-y .kp-resize-handle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 8px;
-  background: var(--kp-accent-hover);
+  padding: 8px;
+  background: var(--kp-accent);
   border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 0 var(--kp-radius-md) var(--kp-radius-md) 0;
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
   color: #fff;
   cursor: pointer;
+  transition: background 0.15s;
+}
+.kp-send-caret:hover:not(:disabled) {
+  background: var(--kp-accent-hover);
+}
+.kp-send-caret:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .kp-req-tabs {

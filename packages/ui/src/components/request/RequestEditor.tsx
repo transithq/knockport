@@ -85,19 +85,26 @@ export function RequestEditor({ tabId }: { tabId: string }) {
           className="kp-url-input kp-mono"
         />
 
-        <button
-          type="button"
-          className="kp-send-btn"
-          title="Send (Ctrl+Enter)"
-          disabled={loading || !request.url}
-          onClick={() => handleSend(tabId)}
-        >
-          {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-          Send
-        </button>
-        <button type="button" className="kp-send-caret" title="Send options">
-          <ChevronDown size={14} />
-        </button>
+        <div className="kp-send-group">
+          <button
+            type="button"
+            className="kp-send-btn"
+            title="Send (Ctrl+Enter)"
+            disabled={loading || !request.url}
+            onClick={() => handleSend(tabId)}
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            Send
+          </button>
+          <button
+            type="button"
+            className="kp-send-caret"
+            title="Send options"
+            disabled={loading || !request.url}
+          >
+            <ChevronDown size={14} />
+          </button>
+        </div>
         <button
           type="button"
           className="kp-icon-btn"
