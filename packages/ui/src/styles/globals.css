@@ -303,8 +303,6 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-top: 1px solid var(--kp-border-primary);
-  margin-top: 4px;
 }
 .kp-sidebar-section-header {
   display: flex;
