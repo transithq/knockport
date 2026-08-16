@@ -254,6 +254,10 @@ function KeyValueTable({
 }
 
 // ── Body Editor ──────────────────────────────────────────────────────────────
+// One "Form" section covers both encodings: urlencoded by default, silently
+// upgraded to multipart the moment a file is attached (Paw-style). The encoding
+// toggle stays visible so text-only multipart remains reachable and imported
+// multipart bodies round-trip without losing their type.
 function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyContent) => void }) {
   const types: BodyContent["type"][] = [
     "none",
@@ -262,15 +266,23 @@ function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyC
     "xml",
     "html",
     "form-urlencoded",
-    "multipart-form",
     "graphql",
   ];
   const label = (t: string) =>
-    t === "form-urlencoded"
-      ? "Form"
-      : t === "multipart-form"
-        ? "Multipart"
-        : t.charAt(0).toUpperCase() + t.slice(1);
+    t === "form-urlencoded" ? "Form" : t.charAt(0).toUpperCase() + t.slice(1);
+  const isForm = body.type === "form-urlencoded" || body.type === "multipart-form";
+
+  const setEncoding = (t: "form-urlencoded" | "multipart-form") => {
+    if (t === "form-urlencoded") {
+      // Files can't survive urlencoded — file rows fall back to empty text.
+      const cleaned = (body.formData ?? []).map((e) =>
+        e.value instanceof File ? { ...e, value: "", type: "text" as const } : e,
+      );
+      onChange({ ...body, type: t, formData: cleaned });
+    } else {
+      onChange({ ...body, type: t });
+    }
+  };
 
   return (
     <div className="kp-body-editor">
@@ -279,18 +291,19 @@ function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyC
           <button
             key={t}
             type="button"
-            className={clsx("kp-seg", body.type === t && "active")}
-            onClick={() => onChange({ ...body, type: t })}
+            className={clsx("kp-seg", (body.type === t || (t === "form-urlencoded" && isForm)) && "active")}
+            onClick={() => !isForm && onChange({ ...body, type: t })}
           >
             {label(t)}
           </button>
         ))}
       </div>
-      {body.type === "form-urlencoded" || body.type === "multipart-form" ? (
+      {isForm ? (
         <FormDataTable
           entries={body.formData ?? []}
           onChange={(formData) => onChange({ ...body, formData })}
-          allowFiles={body.type === "multipart-form"}
+          encoding={body.type}
+          onEncodingChange={setEncoding}
         />
       ) : (
         body.type !== "none" && (
@@ -308,15 +321,18 @@ function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyC
 
 // ── Form Data Table (Form / Multipart bodies) ────────────────────────────────
 // Value cell doubles as text input or file chip (Bruno-style): picking a file
-// via the attach button turns the row into a file part.
+// via the attach button turns the row into a file part AND silently upgrades
+// the body encoding to multipart (files can't travel urlencoded).
 function FormDataTable({
   entries,
   onChange,
-  allowFiles,
+  encoding,
+  onEncodingChange,
 }: {
   entries: FormDataEntry[];
   onChange: (entries: FormDataEntry[]) => void;
-  allowFiles: boolean;
+  encoding: "form-urlencoded" | "multipart-form";
+  onEncodingChange: (t: "form-urlencoded" | "multipart-form") => void;
 }) {
   const uid = useId();
   const [newKey, setNewKey] = useState("");
@@ -331,13 +347,31 @@ function FormDataTable({
 
   return (
     <div className="kp-kv">
-      <div className="kp-kv-title">Form Fields</div>
+      <div className="kp-form-head">
+        <div className="kp-kv-title">Form Fields</div>
+        <div className="kp-seg-row kp-encoding-seg" title="Body encoding for these fields">
+          <button
+            type="button"
+            className={clsx("kp-seg", encoding === "form-urlencoded" && "active")}
+            onClick={() => onEncodingChange("form-urlencoded")}
+          >
+            Urlencoded
+          </button>
+          <button
+            type="button"
+            className={clsx("kp-seg", encoding === "multipart-form" && "active")}
+            onClick={() => onEncodingChange("multipart-form")}
+          >
+            Multipart
+          </button>
+        </div>
+      </div>
       <div className="kp-kv-table kp-form-table">
         <div className="kp-kv-row kp-kv-head">
           <span />
           <span>Key</span>
           <span>Value</span>
-          {allowFiles ? <span>File</span> : <span />}
+          <span>File</span>
           <span className="kp-kv-menu">
             <MoreHorizontal size={13} />
           </span>
@@ -382,28 +416,27 @@ function FormDataTable({
                   onChange={(e) => update(i, { value: e.target.value, type: "text" })}
                 />
               )}
-              {allowFiles && (
-                <>
-                  <input
-                    type="file"
-                    id={`${uid}-${i}`}
-                    hidden
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) update(i, { value: f, type: "file" });
-                      e.target.value = "";
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="kp-file-btn"
-                    title="Select file"
-                    onClick={() => document.getElementById(`${uid}-${i}`)?.click()}
-                  >
-                    <Paperclip size={13} />
-                  </button>
-                </>
-              )}
+              <input
+                type="file"
+                id={`${uid}-${i}`}
+                hidden
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    if (encoding !== "multipart-form") onEncodingChange("multipart-form");
+                    update(i, { value: f, type: "file" });
+                  }
+                  e.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                className="kp-file-btn"
+                title="Select file"
+                onClick={() => document.getElementById(`${uid}-${i}`)?.click()}
+              >
+                <Paperclip size={13} />
+              </button>
               <span />
             </div>
           );

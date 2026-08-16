@@ -1086,6 +1086,23 @@ body.kp-resizing-y .kp-resize-handle {
 .kp-form-table .kp-kv-row {
   grid-template-columns: 28px 1fr 2fr 64px 24px;
 }
+.kp-form-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.kp-form-head .kp-kv-title {
+  margin-bottom: 0;
+}
+.kp-encoding-seg {
+  padding: 2px;
+  margin-bottom: 10px;
+}
+.kp-encoding-seg .kp-seg {
+  padding: 3px 10px;
+  font-size: 11px;
+}
 .kp-file-chip {
   display: inline-flex;
   align-items: center;
