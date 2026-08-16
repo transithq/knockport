@@ -7,7 +7,6 @@ import { CodeViewer, type ViewerLanguage } from "../common/CodeViewer";
 import { downloadResponseText, filenameForResponse } from "./response-export";
 import { type ResponseFormat, detectResponseFormat, formatLabel } from "./response-format";
 
-type BodyTab = "body" | "cookies" | "headers" | "tests";
 type ViewTab = "pretty" | "raw" | "preview";
 
 /** Viewer language for each format (XML/HTML fall back to text highlighting). */
@@ -303,7 +302,11 @@ export function ResponseBody({ tabId }: { tabId: string }) {
   const responses = useAppStore((s) => s.responses);
   const testResults = useAppStore((s) => s.testResults[tabId]);
   const response = responses[tabId];
-  const [bodyTab, setBodyTab] = useState<BodyTab>("body");
+  // Response tab lives in the store so cross-component CTAs (e.g. "View all
+  // headers" in the analytics column) can drive it, and it sticks across
+  // request tab switches like the request panel does.
+  const bodyTab = useAppStore((s) => s.activeResponsePanel);
+  const setBodyTab = useAppStore((s) => s.setActiveResponsePanel);
 
   if (!response) {
     return (

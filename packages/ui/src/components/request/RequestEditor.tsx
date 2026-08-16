@@ -8,7 +8,7 @@ import {
 } from "@knockport/core";
 import type { TestRunSummary } from "@knockport/engine";
 import { clsx } from "clsx";
-import { ChevronDown, Code2, Loader2, MoreHorizontal, Paperclip, Send, X } from "lucide-react";
+import { ChevronDown, Code2, Loader2, MoreHorizontal, Paperclip, Save, Send, X } from "lucide-react";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { type ActivePanel, useAppStore } from "../../store/app-store";
 import {
@@ -22,6 +22,7 @@ import { AssertionsEditor } from "../common/AssertionsEditor";
 import { AuthEditor } from "../common/AuthEditor";
 import { CodeEditor } from "../common/CodeEditor";
 import { type Suggestion, SuggestInput } from "../common/SuggestInput";
+import { DropdownMenu } from "../common/DropdownMenu";
 import { displayUrl, parseQuery, splitQuery } from "./url-params";
 
 const methodColor: Record<string, string> = {
@@ -183,14 +184,27 @@ export function RequestEditor({ tabId }: { tabId: string }) {
             {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
             Send
           </button>
-          <button
-            type="button"
-            className="kp-send-caret"
-            title="Send options"
+          <DropdownMenu
+            buttonClassName="kp-send-caret"
+            buttonTitle="Send options"
+            buttonLabel={<ChevronDown size={14} />}
             disabled={loading || !request.url}
-          >
-            <ChevronDown size={14} />
-          </button>
+            items={[
+              {
+                label: "Send (Ctrl+Enter)",
+                icon: <Send size={12} />,
+                onClick: () => handleSend(tabId),
+              },
+              {
+                label: "Save & send (Ctrl+S)",
+                icon: <Save size={12} />,
+                onClick: () => {
+                  useAppStore.getState().saveRequestTab(tabId);
+                  handleSend(tabId);
+                },
+              },
+            ]}
+          />
         </div>
         <button
           type="button"

@@ -6,6 +6,7 @@ import { useAppStore } from "../../store/app-store";
 import { CollectionEditor } from "../collections/CollectionEditor";
 import { CommandPalette } from "../command/CommandPalette";
 import { useResizer } from "../common/useResizer";
+import { DropdownMenu } from "../common/DropdownMenu";
 import { EnvironmentEditor } from "../environments/EnvironmentEditor";
 import { CodegenModal, ImportModal } from "../modals/Modals";
 import { RequestEditor, handleSend } from "../request/RequestEditor";
@@ -192,9 +193,25 @@ function TabBar() {
         <button type="button" className="kp-tabbar-btn" onClick={newRequest} title="New request">
           <Plus size={15} />
         </button>
-        <button type="button" className="kp-tabbar-btn" title="More">
-          <MoreHorizontal size={15} />
-        </button>
+        <DropdownMenu
+          buttonClassName="kp-tabbar-btn"
+          buttonTitle="More tab actions"
+          buttonLabel={<MoreHorizontal size={15} />}
+          items={[
+            {
+              label: "Close other tabs",
+              onClick: () => {
+                for (const t of tabs.filter((t) => t.id !== activeTabId)) closeTab(t.id);
+              },
+            },
+            {
+              label: "Close all tabs",
+              onClick: () => {
+                for (const t of [...tabs]) closeTab(t.id);
+              },
+            },
+          ]}
+        />
       </div>
     </div>
   );

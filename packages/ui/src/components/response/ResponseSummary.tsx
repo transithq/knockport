@@ -1,7 +1,8 @@
 import { useMemo } from "react";
-import { Check, MoreHorizontal, Download } from "lucide-react";
+import { Check, Copy, Download, Link2, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import { useAppStore } from "../../store/app-store";
+import { DropdownMenu } from "../common/DropdownMenu";
 import { downloadResponseText, filenameForResponse } from "./response-export";
 
 function statusColor(status: number): string {
@@ -81,8 +82,10 @@ function Sparkline({ value }: { value: string }) {
 export function ResponseSummary({ tabId }: { tabId: string }) {
   const responses = useAppStore((s) => s.responses);
   const requestUrl = useAppStore((s) => s.requests[tabId]?.url ?? "");
+  const setActiveResponsePanel = useAppStore((s) => s.setActiveResponsePanel);
   const response = responses[tabId];
   const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState<"url" | "body" | null>(null);
 
   const saveBody = () => {
     if (!response) return;
@@ -90,6 +93,18 @@ export function ResponseSummary({ tabId }: { tabId: string }) {
     downloadResponseText(response.body, name, response.contentType);
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
+  };
+
+  const copyText = async (what: "url" | "body") => {
+    if (!response) return;
+    const text = what === "url" ? response.url : response.body;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(what);
+      setTimeout(() => setCopied(null), 1500);
+    } catch {
+      // clipboard unavailable
+    }
   };
 
   if (!response) {
@@ -120,7 +135,28 @@ export function ResponseSummary({ tabId }: { tabId: string }) {
           <button type="button" className="kp-save-btn" title="Download the response body" onClick={saveBody}>
             {saved ? <Check size={13} /> : <Download size={13} />} Save
           </button>
-          <button type="button" className="kp-icon-btn" title="More"><MoreHorizontal size={13} /></button>
+          <DropdownMenu
+            buttonClassName="kp-icon-btn"
+            buttonTitle="More actions"
+            buttonLabel={<MoreHorizontal size={13} />}
+            items={[
+              {
+                label: copied === "url" ? "URL copied!" : "Copy response URL",
+                icon: <Link2 size={12} />,
+                onClick: () => void copyText("url"),
+              },
+              {
+                label: copied === "body" ? "Body copied!" : "Copy response body",
+                icon: <Copy size={12} />,
+                onClick: () => void copyText("body"),
+              },
+              {
+                label: "Download body",
+                icon: <Download size={12} />,
+                onClick: saveBody,
+              },
+            ]}
+          />
         </span>
       </div>
 
@@ -140,7 +176,15 @@ export function ResponseSummary({ tabId }: { tabId: string }) {
               <span className="kp-kv-val kp-mono">{v}</span>
             </div>
           ))}
-          {headers.length > 8 && <button type="button" className="kp-link-btn">View all headers</button>}
+          {headers.length > 8 && (
+            <button
+              type="button"
+              className="kp-link-btn"
+              onClick={() => setActiveResponsePanel("headers")}
+            >
+              View all headers
+            </button>
+          )}
         </div>
       </div>
 

@@ -311,9 +311,6 @@ export function Sidebar() {
           </span>
         )}
         <span>v0.1.0</span>
-        <button type="button" className="kp-link-btn">
-          Feedback
-        </button>
       </div>
 
       {/* Resize handle (drag to resize, double-click to reset) */}

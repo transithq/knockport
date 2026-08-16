@@ -39,7 +39,7 @@ export interface RequestTab {
 }
 
 export type ActivePanel = "params" | "headers" | "auth" | "body" | "scripts" | "tests" | "settings";
-export type ResponsePanel = "pretty" | "raw" | "preview" | "headers" | "timings" | "cookies";
+export type ResponsePanel = "body" | "cookies" | "headers" | "tests";
 export type SidebarTab = "collections" | "environments" | "history";
 
 export type WsTabStatus = "idle" | "connecting" | "open" | "closed" | "error";
