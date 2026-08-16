@@ -154,3 +154,31 @@ like other pages." Converted:
   multi-line, producing a large cosmetic diff in `globals.css`. Limit `--fix` to files with
   real changes; accept the whole-file churn when it lands.
 - 19 ui tests + `pnpm --filter web build` green.
+
+## 12 · Session 2026-08-16 (cont. #4): Response body viewer rework — committed
+
+User: "response is not json parsed… also the json dropdown is not working properly. check bruno
+and hoppscotch response view and implement likewise." Research summary (both clones in .staging/):
+
+- **Bruno**: normalizes content-type ? default format table; pretty view = READ-ONLY CodeMirror
+  with matching language mode + fold gutter; format dropdown drives both the formatter AND the
+  CodeMirror mode; copy button copies the formatted text; HTML preview in a webview with <base>.
+- **Hoppscotch**: lens registry keyed off content-type regexes + JSON sniffing (JSON.parse probe);
+  all text bodies = read-only CodeMirror 6; JSON pretty via lossless-json; copy composable with
+  icon auto-reset + toast.
+
+KnockPort's prior state: custom regex tokenizer (fragile), two dead "JSON" dropdown buttons with
+no onClick, no content-type detection, dead Copy button. Rework (commit ce58051):
+
+- `common/CodeViewer.tsx` — read-only CodeMirror 6 viewer (readOnly + editable(false)),
+  language from format (json/javascript/text), optional line-wrap, basicSetup fold gutter.
+- `response/response-format.ts` — `detectResponseFormat`: header wins (json + vendor +json,
+  xml, html, javascript), sniffs JSON via JSON.parse probe for text/* or missing content-type,
+  falls back to text. 9 vitest cases.
+- `ResponseBody.tsx` rewritten: Pretty/Raw/Preview segments + WORKING FormatSelector dropdown
+  (JSON/XML/HTML/JS/Text, check-mark on current); JSON pretty synchronous, XML/HTML via lazy
+  `xml-formatter` (new ui dep) in a useEffect; copy button writes the FORMATTED body and flips
+  to a check icon; status bar shows format + "· auto-detected" when not user-picked. Dropped the
+  old tokenizer/table CSS (.kp-json-viewer, .kp-ln, .kp-code, .kp-raw-view); tok-* classes kept
+  (codegen modal still uses them).
+- 28 ui tests + build green. Not wired: ResponseSummary's Save/Download button (separate follow-up).

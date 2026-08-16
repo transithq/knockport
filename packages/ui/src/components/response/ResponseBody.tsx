@@ -1,81 +1,43 @@
 import type { ResponseCookie } from "@knockport/core";
 import { clsx } from "clsx";
-import { ChevronDown, Copy } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Check, ChevronDown, Copy } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../../store/app-store";
+import { CodeViewer, type ViewerLanguage } from "../common/CodeViewer";
+import { type ResponseFormat, detectResponseFormat, formatLabel } from "./response-format";
 
 type BodyTab = "body" | "cookies" | "headers" | "tests";
-type ViewTab = "pretty" | "raw" | "preview" | "visualize";
+type ViewTab = "pretty" | "raw" | "preview";
 
-// ── JSON syntax highlighting (lightweight tokenizer) ─────────────────────────
-function highlightJson(line: string): React.ReactNode[] {
-  const nodes: React.ReactNode[] = [];
-  const regex =
-    /("(?:[^"\\]|\\.)*")(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  let k = 0;
-  while ((m = regex.exec(line)) !== null) {
-    if (m.index > last) nodes.push(<span key={k++}>{line.slice(last, m.index)}</span>);
-    if (m[1] !== undefined) {
-      if (m[2] !== undefined) {
-        nodes.push(
-          <span key={k++} className="tok-key">
-            {m[1]}
-          </span>,
-        );
-        nodes.push(<span key={k++}>{m[2]}</span>);
-      } else {
-        nodes.push(
-          <span key={k++} className="tok-str">
-            {m[1]}
-          </span>,
-        );
-      }
-    } else if (m[3] !== undefined) {
-      nodes.push(
-        <span key={k++} className="tok-bool">
-          {m[3]}
-        </span>,
-      );
-    } else {
-      nodes.push(
-        <span key={k++} className="tok-num">
-          {m[0]}
-        </span>,
-      );
-    }
-    last = regex.lastIndex;
-  }
-  if (last < line.length) nodes.push(<span key={k++}>{line.slice(last)}</span>);
-  return nodes;
+/** Viewer language for each format (XML/HTML fall back to text highlighting). */
+function viewerLanguageFor(format: ResponseFormat): ViewerLanguage {
+  if (format === "json") return "json";
+  if (format === "javascript") return "javascript";
+  return "text";
 }
 
-function JsonViewer({ text }: { text: string }) {
-  const lines = useMemo(() => {
-    let formatted = text;
-    try {
-      formatted = JSON.stringify(JSON.parse(text), null, 2);
-    } catch {
-      // keep raw
+/** Pretty-print a body for the given format; fall back to raw on error. */
+async function formatBody(body: string, format: ResponseFormat): Promise<string> {
+  switch (format) {
+    case "json": {
+      try {
+        return JSON.stringify(JSON.parse(body), null, 2);
+      } catch {
+        return body;
+      }
     }
-    return formatted.split("\n");
-  }, [text]);
-
-  return (
-    <div className="kp-json-viewer kp-scroll">
-      <table>
-        <tbody>
-          {lines.map((line, i) => (
-            <tr key={i}>
-              <td className="kp-ln">{i + 1}</td>
-              <td className="kp-code">{highlightJson(line)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+    case "xml":
+    case "html": {
+      try {
+        const { default: xmlFormat } = await import("xml-formatter");
+        return xmlFormat(body, { indentation: "  ", collapseContent: true, lineSeparator: "\n" });
+      } catch {
+        return body;
+      }
+    }
+    default:
+      return body;
+  }
 }
 
 function formatSize(bytes: number): string {
@@ -120,6 +82,50 @@ function PreviewFrame({
   return <iframe title="preview" className="kp-preview-frame" srcDoc={doc} sandbox="" />;
 }
 
+// ── Format selector (JSON dropdown) ─────────────────────────────────────────
+const FORMAT_OPTIONS: ResponseFormat[] = ["json", "xml", "html", "javascript", "text"];
+
+function FormatSelector({
+  format,
+  onChange,
+}: { format: ResponseFormat; onChange: (f: ResponseFormat) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  return (
+    <div className="kp-format-selector" ref={ref}>
+      <button
+        type="button"
+        className="kp-lang-btn"
+        onClick={() => setOpen((o) => !o)}
+        onBlur={(e) => {
+          if (!ref.current?.contains(e.relatedTarget)) setOpen(false);
+        }}
+      >
+        {formatLabel(format)} <ChevronDown size={12} />
+      </button>
+      {open && (
+        <div className="kp-format-menu">
+          {FORMAT_OPTIONS.map((f) => (
+            <button
+              key={f}
+              type="button"
+              className={clsx("kp-format-menu-item", f === format && "active")}
+              onClick={() => {
+                onChange(f);
+                setOpen(false);
+              }}
+            >
+              {formatLabel(f)}
+              {f === format && <Check size={12} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Cookies table ────────────────────────────────────────────────────────────
 function CookieCard({ cookie }: { cookie: ResponseCookie }) {
   const attrs: [string, string][] = [];
@@ -150,14 +156,124 @@ function CookieCard({ cookie }: { cookie: ResponseCookie }) {
   );
 }
 
+// ── Body panel ───────────────────────────────────────────────────────────────
+function BodyPanel({
+  tabId,
+  response,
+}: {
+  tabId: string;
+  response: { body: string; contentType?: string; bodySize: number; url?: string };
+}) {
+  const requestUrl = useAppStore((s) => s.requests[tabId]?.url ?? "");
+
+  const detected = useMemo(
+    () => detectResponseFormat(response.contentType, response.body),
+    [response.contentType, response.body],
+  );
+  const [format, setFormat] = useState<ResponseFormat | null>(null);
+  const activeFormat: ResponseFormat = format ?? detected.format;
+  const [viewTab, setViewTab] = useState<ViewTab>("pretty");
+  const [copied, setCopied] = useState(false);
+
+  const prettyText = useMemo(() => {
+    let result = response.body;
+    // Synchronous pretty for JSON (the common case); xml/html run through
+    // the async formatter below.
+    if (activeFormat === "json") {
+      try {
+        result = JSON.stringify(JSON.parse(response.body), null, 2);
+      } catch {
+        result = response.body;
+      }
+    }
+    return result;
+  }, [response.body, activeFormat]);
+
+  // XML / HTML pretty-printing is async (lazy xml-formatter import).
+  const [asyncPretty, setAsyncPretty] = useState<string | null>(null);
+  useEffect(() => {
+    if (activeFormat !== "xml" && activeFormat !== "html") {
+      setAsyncPretty(null);
+      return;
+    }
+    let cancelled = false;
+    setAsyncPretty(null);
+    void formatBody(response.body, activeFormat).then((t) => {
+      if (!cancelled) setAsyncPretty(t);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [response.body, activeFormat]);
+
+  const displayText =
+    activeFormat === "xml" || activeFormat === "html" ? (asyncPretty ?? prettyText) : prettyText;
+
+  const copyBody = async () => {
+    try {
+      const text = await formatBody(response.body, activeFormat);
+      await navigator.clipboard.writeText(text);
+    } catch {
+      await navigator.clipboard.writeText(response.body).catch(() => {});
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const wrap = activeFormat === "text" || viewTab === "raw";
+
+  return (
+    <>
+      <div className="kp-view-row">
+        <div className="kp-seg-row">
+          {(["pretty", "raw", "preview"] as ViewTab[]).map((v) => (
+            <button
+              key={v}
+              type="button"
+              className={clsx("kp-seg", viewTab === v && "active")}
+              onClick={() => setViewTab(v)}
+            >
+              {v.charAt(0).toUpperCase() + v.slice(1)}
+            </button>
+          ))}
+        </div>
+        <FormatSelector format={activeFormat} onChange={(f) => setFormat(f)} />
+      </div>
+
+      {viewTab === "pretty" && (
+        <CodeViewer value={displayText} language={viewerLanguageFor(activeFormat)} wrap={wrap} />
+      )}
+      {viewTab === "raw" && <CodeViewer value={response.body} language="text" wrap />}
+      {viewTab === "preview" && (
+        <PreviewFrame
+          body={response.body}
+          contentType={response.contentType}
+          requestUrl={response.url ?? requestUrl}
+        />
+      )}
+
+      <div className="kp-body-statusbar">
+        <span>
+          {formatLabel(activeFormat)}
+          {format === null && <span className="kp-hint"> · auto-detected</span>}
+        </span>
+        <span className="kp-status-right">
+          <span>Size: {formatSize(response.bodySize)}</span>
+          <button type="button" className="kp-icon-btn" title="Copy body" onClick={copyBody}>
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+          </button>
+        </span>
+      </div>
+    </>
+  );
+}
+
 // ── Response Body (left-bottom panel) ────────────────────────────────────────
 export function ResponseBody({ tabId }: { tabId: string }) {
   const responses = useAppStore((s) => s.responses);
   const testResults = useAppStore((s) => s.testResults[tabId]);
-  const requestUrl = useAppStore((s) => s.requests[tabId]?.url ?? "");
   const response = responses[tabId];
   const [bodyTab, setBodyTab] = useState<BodyTab>("body");
-  const [viewTab, setViewTab] = useState<ViewTab>("pretty");
 
   if (!response) {
     return (
@@ -214,57 +330,7 @@ export function ResponseBody({ tabId }: { tabId: string }) {
         </button>
       </div>
 
-      {bodyTab === "body" && (
-        <>
-          <div className="kp-view-row">
-            <div className="kp-seg-row">
-              {(["pretty", "raw", "preview", "visualize"] as ViewTab[]).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  className={clsx("kp-seg", viewTab === v && "active")}
-                  onClick={() => setViewTab(v)}
-                >
-                  {v.charAt(0).toUpperCase() + v.slice(1)}
-                </button>
-              ))}
-            </div>
-            <button type="button" className="kp-lang-btn">
-              JSON <ChevronDown size={12} />
-            </button>
-          </div>
-
-          {viewTab === "pretty" && <JsonViewer text={response.body} />}
-          {viewTab === "raw" && (
-            <pre className="kp-raw-view kp-scroll kp-mono">{response.body}</pre>
-          )}
-          {viewTab === "preview" && (
-            <PreviewFrame
-              body={response.body}
-              contentType={response.contentType}
-              requestUrl={response.url ?? requestUrl}
-            />
-          )}
-          {viewTab === "visualize" && (
-            <div className="kp-empty-center">
-              <p className="kp-empty-sub">Visualize scripts run here (coming soon)</p>
-            </div>
-          )}
-
-          <div className="kp-body-statusbar">
-            <button type="button" className="kp-lang-btn">
-              JSON <ChevronDown size={12} />
-            </button>
-            <span className="kp-status-right">
-              <span>Ln 1, Col 1</span>
-              <span>Size: {formatSize(response.bodySize)}</span>
-              <button type="button" className="kp-icon-btn" title="Copy">
-                <Copy size={13} />
-              </button>
-            </span>
-          </div>
-        </>
-      )}
+      {bodyTab === "body" && <BodyPanel tabId={tabId} response={response} />}
 
       {bodyTab === "headers" && (
         <div className="kp-kv-list kp-scroll">
