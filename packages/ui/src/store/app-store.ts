@@ -40,7 +40,7 @@ export interface RequestTab {
   collectionId?: string;
 }
 
-export type ActivePanel = "params" | "headers" | "auth" | "body" | "scripts" | "tests" | "settings";
+export type ActivePanel = "params" | "headers" | "auth" | "body" | "scripts" | "tests";
 export type ResponsePanel = "body" | "cookies" | "headers" | "tests";
 export type SidebarTab = "collections" | "environments" | "history";
 

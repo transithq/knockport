@@ -128,7 +128,6 @@ export function RequestEditor({ tabId }: { tabId: string }) {
     { id: "body", label: "Body" },
     { id: "scripts", label: "Scripts" },
     { id: "tests", label: "Tests" },
-    { id: "settings", label: "Settings" },
   ];
 
   return (
@@ -262,7 +261,6 @@ export function RequestEditor({ tabId }: { tabId: string }) {
         )}
         {activeRequestPanel === "scripts" && <ScriptEditor tabId={tabId} />}
         {activeRequestPanel === "tests" && <TestsPanel tabId={tabId} />}
-        {activeRequestPanel === "settings" && <RequestSettings />}
       </div>
     </div>
   );
@@ -730,24 +728,6 @@ kp.test("fast enough", () => {
 
 // ── Request Settings ─────────────────────────────────────────────────────────
 // Transport preferences (relay, timeout) are global — see the Settings page.
-function RequestSettings() {
-  return (
-    <div className="kp-hint-block">
-      <p>
-        Transport settings are global and live in <strong>Settings</strong> — relay toggle, relay
-        URL, theme, and the request timeout applied to every send.
-      </p>
-      <button
-        type="button"
-        className="kp-btn secondary"
-        onClick={() => useAppStore.getState().openSettingsTab()}
-      >
-        Open Settings
-      </button>
-    </div>
-  );
-}
-
 // ── Send ─────────────────────────────────────────────────────────────────────
 export async function handleSend(tabId: string) {
   const store = useAppStore.getState();
