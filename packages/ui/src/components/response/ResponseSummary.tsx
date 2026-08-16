@@ -1,6 +1,8 @@
 import { useMemo } from "react";
-import { ChevronDown, MoreHorizontal, Download } from "lucide-react";
+import { Check, MoreHorizontal, Download } from "lucide-react";
+import { useState } from "react";
 import { useAppStore } from "../../store/app-store";
+import { downloadResponseText, filenameForResponse } from "./response-export";
 
 function statusColor(status: number): string {
   if (status >= 200 && status < 300) return "var(--kp-status-2xx)";
@@ -18,6 +20,17 @@ function formatSize(bytes: number): string {
 function formatMs(ms: number): string {
   if (!Number.isFinite(ms)) return "0";
   return String(Math.round(ms * 1000) / 1000);
+}
+
+/** Relative time label for the response timestamp. */
+function timeAgo(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "Just now";
+  const sec = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (sec < 60) return "Just now";
+  if (sec < 3600) return `${Math.round(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.round(sec / 3600)}h ago`;
+  return new Date(iso).toLocaleDateString();
 }
 
 // ── Sparkline chart (SVG) ────────────────────────────────────────────────────
@@ -67,7 +80,17 @@ function Sparkline({ value }: { value: string }) {
 // ── Response Summary (right column) ──────────────────────────────────────────
 export function ResponseSummary({ tabId }: { tabId: string }) {
   const responses = useAppStore((s) => s.responses);
+  const requestUrl = useAppStore((s) => s.requests[tabId]?.url ?? "");
   const response = responses[tabId];
+  const [saved, setSaved] = useState(false);
+
+  const saveBody = () => {
+    if (!response) return;
+    const name = filenameForResponse(response.url ?? requestUrl, response.contentType, response.body);
+    downloadResponseText(response.body, name, response.contentType);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  };
 
   if (!response) {
     return (
@@ -93,8 +116,10 @@ export function ResponseSummary({ tabId }: { tabId: string }) {
         <span className="kp-summary-dot">•</span>
         <span>{formatSize(response.bodySize)}</span>
         <span className="kp-status-right">
-          <button type="button" className="kp-lang-btn">Just now <ChevronDown size={12} /></button>
-          <button type="button" className="kp-icon-btn" title="Save"><Download size={13} /></button>
+          <span className="kp-summary-time">{timeAgo(response.timestamp)}</span>
+          <button type="button" className="kp-icon-btn" title="Save response body" onClick={saveBody}>
+            {saved ? <Check size={13} /> : <Download size={13} />}
+          </button>
           <button type="button" className="kp-icon-btn" title="More"><MoreHorizontal size={13} /></button>
         </span>
       </div>

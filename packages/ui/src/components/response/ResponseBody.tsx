@@ -1,6 +1,6 @@
 import type { ResponseCookie } from "@knockport/core";
 import { clsx } from "clsx";
-import { Check, ChevronDown, Copy } from "lucide-react";
+import { Check, ChevronDown, Copy, WrapText } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../../store/app-store";
 import { CodeViewer, type ViewerLanguage } from "../common/CodeViewer";
@@ -174,6 +174,17 @@ function BodyPanel({
   const activeFormat: ResponseFormat = format ?? detected.format;
   const [viewTab, setViewTab] = useState<ViewTab>("pretty");
   const [copied, setCopied] = useState(false);
+  const [userWrap, setUserWrap] = useState<boolean>(
+    () => typeof localStorage !== "undefined" && localStorage.getItem("kp-response-wrap") === "1",
+  );
+  const setWrapPref = (on: boolean) => {
+    setUserWrap(on);
+    try {
+      localStorage.setItem("kp-response-wrap", on ? "1" : "0");
+    } catch {
+      /* storage unavailable */
+    }
+  };
 
   const prettyText = useMemo(() => {
     let result = response.body;
@@ -220,7 +231,7 @@ function BodyPanel({
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const wrap = activeFormat === "text" || viewTab === "raw";
+  const wrap = userWrap || viewTab === "raw";
 
   return (
     <>
@@ -258,6 +269,15 @@ function BodyPanel({
           {format === null && <span className="kp-hint"> · auto-detected</span>}
         </span>
         <span className="kp-status-right">
+          <button
+            type="button"
+            className={clsx("kp-icon-btn", userWrap && "active")}
+            title={userWrap ? "Turn off word wrap" : "Turn on word wrap"}
+            aria-pressed={userWrap}
+            onClick={() => setWrapPref(!userWrap)}
+          >
+            <WrapText size={13} />
+          </button>
           <span>Size: {formatSize(response.bodySize)}</span>
           <button type="button" className="kp-icon-btn" title="Copy body" onClick={copyBody}>
             {copied ? <Check size={13} /> : <Copy size={13} />}
