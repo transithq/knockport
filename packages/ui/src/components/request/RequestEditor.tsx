@@ -400,7 +400,7 @@ function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyC
         <FormDataTable
           entries={body.formData ?? []}
           onChange={(formData) => onChange({ ...body, formData })}
-          encoding={body.type}
+          encoding={body.type === "multipart-form" ? "multipart-form" : "form-urlencoded"}
           onEncodingChange={setEncoding}
         />
       ) : body.type === "graphql" ? (
@@ -421,7 +421,10 @@ function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyC
             <CodeEditor
               value={body.graphql?.variables ?? ""}
               onChange={(variables) =>
-                onChange({ ...body, graphql: { ...(body.graphql ?? {}), variables } })
+                onChange({
+                  ...body,
+                  graphql: { query: body.graphql?.query ?? "", variables },
+                })
               }
               language="json"
               height="160px"

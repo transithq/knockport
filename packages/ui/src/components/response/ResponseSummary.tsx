@@ -97,7 +97,7 @@ export function ResponseSummary({ tabId }: { tabId: string }) {
 
   const copyText = async (what: "url" | "body") => {
     if (!response) return;
-    const text = what === "url" ? response.url : response.body;
+    const text = (what === "url" ? response.url : response.body) ?? "";
     try {
       await navigator.clipboard.writeText(text);
       setCopied(what);

@@ -1,4 +1,5 @@
 import { createId } from "@knockport/core";
+import type { HttpMethod, Request } from "@knockport/core";
 import { Braces, FileCode2, Plus, Trash2, Upload } from "lucide-react";
 import { useMemo, useState } from "react";
 import { parse as parseYaml } from "yaml";
@@ -157,17 +158,17 @@ export function ApiTab() {
   const addRequestToCollection = (op: ApiOperation) => {
     if (!selected) return;
     const store = useAppStore.getState();
-    const req = {
+    const req: Request = {
       id: createId("req"),
       name: op.summary || op.operationId || `${op.method} ${op.path}`,
-      method: op.method,
+      method: op.method.toUpperCase() as HttpMethod,
       url: opUrl(selected, op),
       headers: [],
       params: [],
       body: { type: "none" },
       auth: { type: "none" },
       metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-    } as const;
+    };
     // Reuse the first collection; create one when none exists.
     const target = store.collections[0];
     if (!target) {
@@ -190,10 +191,10 @@ export function ApiTab() {
   const importAllToCollection = () => {
     if (!selected) return;
     const store = useAppStore.getState();
-    const requests = selected.operations.map((op) => ({
+    const requests: Request[] = selected.operations.map((op) => ({
       id: createId("req"),
       name: op.summary || op.operationId || `${op.method} ${op.path}`,
-      method: op.method,
+      method: op.method.toUpperCase() as HttpMethod,
       url: opUrl(selected, op),
       headers: [],
       params: [],

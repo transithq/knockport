@@ -404,7 +404,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   runnerStates: {},
 
   activeRequestPanel: "params",
-  activeResponsePanel: "pretty",
+  activeResponsePanel: "body",
   commandPaletteOpen: false,
   codegenOpen: false,
   importOpen: false,
