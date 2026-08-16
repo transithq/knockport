@@ -1,4 +1,5 @@
 import { createId } from "@knockport/core";
+import { useEffect } from "react";
 import {
   Aperture,
   Boxes,
@@ -82,6 +83,18 @@ export function Sidebar() {
   const openSettingsTab = useAppStore((s) => s.openSettingsTab);
   const addCollection = useAppStore((s) => s.addCollection);
   const addEnvironment = useAppStore((s) => s.addEnvironment);
+  const useRelay = useAppStore((s) => s.useRelay);
+  const relayUrl = useAppStore((s) => s.relayUrl);
+  const relayHealth = useAppStore((s) => s.relayHealth);
+  const probeRelay = useAppStore((s) => s.probeRelay);
+
+  // Relay health: probe on mount / config change, then every 30s while relay is on.
+  useEffect(() => {
+    if (!useRelay) return;
+    probeRelay();
+    const t = setInterval(probeRelay, 30_000);
+    return () => clearInterval(t);
+  }, [useRelay, relayUrl, probeRelay]);
 
   const createNew = () => {
     if (sidebarTab === "collections") {
@@ -262,6 +275,16 @@ export function Sidebar() {
         <span className="kp-status-online">
           <span className="kp-online-dot" /> Online
         </span>
+        {useRelay && (
+          <span
+            className={`kp-status-online kp-relay-status kp-relay-${relayHealth}`}
+            title={`${relayUrl} — ${relayHealth}`}
+            onClick={() => probeRelay()}
+          >
+            <span className="kp-online-dot" />
+            Relay {relayHealth === "checking" ? "…" : relayHealth}
+          </span>
+        )}
         <span>v0.1.0</span>
         <button type="button" className="kp-link-btn">
           Feedback

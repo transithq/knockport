@@ -147,6 +147,8 @@ function persistEnvironment(e: Environment) {
 }
 
 // ── App Store ────────────────────────────────────────────────────────────────
+export type RelayHealth = "off" | "checking" | "up" | "down";
+
 export interface AppStore {
   // Sidebar
   sidebarTab: SidebarTab;
@@ -202,6 +204,7 @@ export interface AppStore {
   // Transport settings (relay)
   useRelay: boolean;
   relayUrl: string;
+  relayHealth: "off" | "checking" | "up" | "down";
 
   // Global request timeout (ms) applied to every send
   timeoutMs: number;
@@ -280,6 +283,7 @@ export interface AppStore {
   setUseRelay: (on: boolean) => void;
   setRelayUrl: (url: string) => void;
   setTimeoutMs: (ms: number) => void;
+  probeRelay: () => Promise<void>;
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -336,6 +340,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   relayUrl:
     (typeof localStorage !== "undefined" && localStorage.getItem("kp-relay-url")) ||
     "http://localhost:8787",
+  relayHealth: "off" as RelayHealth,
 
   timeoutMs:
     (typeof localStorage !== "undefined" &&
@@ -967,6 +972,27 @@ export const useAppStore = create<AppStore>((set, get) => ({
       localStorage.setItem("kp-timeout-ms", String(ms));
     } catch {
       // ignore
+    }
+  },
+
+  probeRelay: async () => {
+    const { useRelay, relayUrl } = get();
+    if (!useRelay || !relayUrl) {
+      set({ relayHealth: "off" });
+      return;
+    }
+    set({ relayHealth: "checking" });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    try {
+      const res = await fetch(`${relayUrl.replace(/\/+$/, "")}/health`, {
+        signal: controller.signal,
+      });
+      set({ relayHealth: res.ok ? "up" : "down" });
+    } catch {
+      set({ relayHealth: "down" });
+    } finally {
+      clearTimeout(timer);
     }
   },
 }));

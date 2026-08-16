@@ -620,6 +620,19 @@ body {
   border-radius: 50%;
   background: var(--kp-success);
 }
+.kp-relay-status {
+  cursor: pointer;
+  user-select: none;
+}
+.kp-relay-status .kp-online-dot {
+  background: var(--kp-warning);
+}
+.kp-relay-status.kp-relay-up .kp-online-dot {
+  background: var(--kp-success);
+}
+.kp-relay-status.kp-relay-down .kp-online-dot {
+  background: var(--kp-error);
+}
 .kp-link-btn {
   background: none;
   border: none;
