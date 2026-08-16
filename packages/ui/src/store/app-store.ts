@@ -25,7 +25,15 @@ export interface RequestTab {
   requestId: string;
   name: string;
   isDirty: boolean;
-  kind?: "request" | "environment" | "collection" | "runner" | "settings";
+  kind?:
+    | "request"
+    | "environment"
+    | "collection"
+    | "runner"
+    | "settings"
+    | "websocket"
+    | "api"
+    | "mock";
   envId?: string;
   collectionId?: string;
 }
@@ -33,6 +41,16 @@ export interface RequestTab {
 export type ActivePanel = "params" | "headers" | "auth" | "body" | "scripts" | "tests" | "settings";
 export type ResponsePanel = "pretty" | "raw" | "preview" | "headers" | "timings" | "cookies";
 export type SidebarTab = "collections" | "environments" | "history";
+
+export type WsTabStatus = "idle" | "connecting" | "open" | "closed" | "error";
+
+// ── WebSocket log entry ──────────────────────────────────────────────────────
+export interface WsLogEntry {
+  dir: "in" | "out" | "sys";
+  text: string;
+  time: string;
+  size?: number;
+}
 
 // ── Collection runner history (in-memory) ───────────────────────────────────
 export interface CollectionRunEntry {
@@ -198,7 +216,11 @@ export interface AppStore {
   commandPaletteOpen: boolean;
   codegenOpen: boolean;
   importOpen: boolean;
-  websocketOpen: boolean;
+
+  // ── WebSocket workspace (single tab; state survives tab switches) ──
+  wsUrl: string;
+  wsStatus: "idle" | "connecting" | "open" | "closed" | "error";
+  wsLog: WsLogEntry[];
   theme: "dark" | "light";
 
   // Transport settings (relay)
@@ -230,6 +252,7 @@ export interface AppStore {
   renameFolder: (collectionId: string, folderId: string, name: string) => void;
   deleteFolder: (collectionId: string, folderId: string) => void;
   addRequest: (collectionId: string, folderId: string | null, name?: string) => void;
+  addExistingRequest: (collectionId: string, folderId: string | null, request: Request) => void;
   deleteRequest: (collectionId: string, requestId: string) => void;
   loadCollections: () => Promise<void>;
 
@@ -278,7 +301,13 @@ export interface AppStore {
   setCommandPaletteOpen: (open: boolean) => void;
   setCodegenOpen: (open: boolean) => void;
   setImportOpen: (open: boolean) => void;
-  setWebsocketOpen: (open: boolean) => void;
+  openWebSocketTab: () => void;
+  openApiTab: () => void;
+  openMockTab: () => void;
+  setWsUrl: (url: string) => void;
+  setWsStatus: (status: "idle" | "connecting" | "open" | "closed" | "error") => void;
+  pushWsLog: (entry: WsLogEntry) => void;
+  clearWsLog: () => void;
   toggleTheme: () => void;
   setTheme: (theme: "dark" | "light") => void;
   setUseRelay: (on: boolean) => void;
@@ -332,7 +361,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   commandPaletteOpen: false,
   codegenOpen: false,
   importOpen: false,
-  websocketOpen: false,
+  wsUrl: (typeof localStorage !== "undefined" && localStorage.getItem("kp-ws-url")) || "wss://echo.websocket.org",
+  wsStatus: "idle" as WsTabStatus,
+  wsLog: [],
   theme:
     typeof localStorage !== "undefined" && localStorage.getItem("kp-theme") === "light"
       ? "light"
@@ -499,6 +530,26 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const c = get().collections.find((x) => x.id === collectionId);
     if (c) persistCollection(c);
     get().openTab(request);
+  },
+
+  addExistingRequest: (collectionId, folderId, request) => {
+    set((s) => ({
+      collections: s.collections.map((c) =>
+        c.id === collectionId
+          ? folderId
+            ? {
+                ...c,
+                folders: mapFolderTree(c.folders, folderId, (f) => ({
+                  ...f,
+                  requests: [...f.requests, request],
+                })),
+              }
+            : { ...c, requests: [...c.requests, request] }
+          : c,
+      ),
+    }));
+    const c = get().collections.find((x) => x.id === collectionId);
+    if (c) persistCollection(c);
   },
 
   deleteRequest: (collectionId, requestId) =>
@@ -937,7 +988,65 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   setCodegenOpen: (open) => set({ codegenOpen: open }),
   setImportOpen: (open) => set({ importOpen: open }),
-  setWebsocketOpen: (open) => set({ websocketOpen: open }),
+  openWebSocketTab: () => {
+    const s = get();
+    const existing = s.tabs.find((t) => t.kind === "websocket");
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return;
+    }
+    const tabId = createId("tab");
+    set((st) => ({
+      tabs: [
+        ...st.tabs,
+        { id: tabId, requestId: "websocket", kind: "websocket", name: "WebSocket", isDirty: false },
+      ],
+      activeTabId: tabId,
+    }));
+  },
+
+  openApiTab: () => {
+    const s = get();
+    const existing = s.tabs.find((t) => t.kind === "api");
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return;
+    }
+    const tabId = createId("tab");
+    set((st) => ({
+      tabs: [...st.tabs, { id: tabId, requestId: "api", kind: "api", name: "APIs", isDirty: false }],
+      activeTabId: tabId,
+    }));
+  },
+
+  openMockTab: () => {
+    const s = get();
+    const existing = s.tabs.find((t) => t.kind === "mock");
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return;
+    }
+    const tabId = createId("tab");
+    set((st) => ({
+      tabs: [...st.tabs, { id: tabId, requestId: "mock", kind: "mock", name: "Mock Servers", isDirty: false }],
+      activeTabId: tabId,
+    }));
+  },
+
+  setWsUrl: (url) => {
+    set({ wsUrl: url });
+    try {
+      localStorage.setItem("kp-ws-url", url);
+    } catch {
+      // ignore
+    }
+  },
+
+  setWsStatus: (status) => set({ wsStatus: status }),
+
+  pushWsLog: (entry) => set((s) => ({ wsLog: [...s.wsLog.slice(-499), entry] })),
+
+  clearWsLog: () => set({ wsLog: [] }),
   toggleTheme: () => {
     const next = get().theme === "dark" ? "light" : "dark";
     get().setTheme(next);

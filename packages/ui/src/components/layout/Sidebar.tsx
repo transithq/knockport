@@ -50,7 +50,7 @@ function MethodTag({ method }: { method: string }) {
 
 // ── Nav items ────────────────────────────────────────────────────────────────
 interface NavItem {
-  id: SidebarTab | "placeholder" | "websocket" | "settings";
+  id: SidebarTab | "placeholder" | "websocket" | "api" | "mock" | "settings";
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }
@@ -60,8 +60,8 @@ const NAV_ITEMS: NavItem[] = [
   { id: "collections", label: "Collections", icon: FolderClosed },
   { id: "environments", label: "Environments", icon: Boxes },
   { id: "history", label: "History", icon: HistoryIcon },
-  { id: "placeholder", label: "APIs", icon: Plug },
-  { id: "placeholder", label: "Mock Servers", icon: Server },
+  { id: "api", label: "APIs", icon: Plug },
+  { id: "mock", label: "Mock Servers", icon: Server },
   { id: "websocket", label: "WebSockets", icon: Radio },
   { id: "settings", label: "Settings", icon: Settings },
 ];
@@ -79,7 +79,27 @@ export function Sidebar() {
   const history = useAppStore((s) => s.history);
   const openCommandPalette = useAppStore((s) => s.setCommandPaletteOpen);
   const toggleTheme = useAppStore((s) => s.toggleTheme);
-  const setWebsocketOpen = useAppStore((s) => s.setWebsocketOpen);
+  const openWebSocketTab = useAppStore((s) => s.openWebSocketTab);
+  const openApiTab = useAppStore((s) => s.openApiTab);
+  const openMockTab = useAppStore((s) => s.openMockTab);
+  const activeNav = useAppStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    if (!tab) return s.sidebarTab;
+    switch (tab.kind) {
+      case "environment":
+        return "environments" as const;
+      case "websocket":
+        return "websocket" as const;
+      case "api":
+        return "api" as const;
+      case "mock":
+        return "mock" as const;
+      case "settings":
+        return "settings" as const;
+      default: // request | collection | runner
+        return "collections" as const;
+    }
+  });
   const openSettingsTab = useAppStore((s) => s.openSettingsTab);
   const addCollection = useAppStore((s) => s.addCollection);
   const addEnvironment = useAppStore((s) => s.addEnvironment);
@@ -143,18 +163,23 @@ export function Sidebar() {
         <span className="kp-kbd">⌘K</span>
       </button>
 
-      {/* Nav */}
+      {/* Nav — highlights follow the ACTIVE TAB (what the main area renders):
+          request/collection/runner tabs → Collections, environment tabs →
+          Environments, and the dedicated workspaces highlight their own item.
+          With no tab open, the selected sidebar section wins. */}
       <nav className="kp-nav">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
-          const active = item.id === sidebarTab;
+          const active = item.id === activeNav;
           return (
             <button
               key={item.label}
               type="button"
               className={`kp-nav-item${active ? " active" : ""}`}
               onClick={() => {
-                if (item.id === "websocket") setWebsocketOpen(true);
+                if (item.id === "websocket") openWebSocketTab();
+                else if (item.id === "api") openApiTab();
+                else if (item.id === "mock") openMockTab();
                 else if (item.id === "settings") openSettingsTab();
                 else if (item.id !== "placeholder") setSidebarTab(item.id as SidebarTab);
               }}

@@ -2157,23 +2157,35 @@ body.kp-resizing-y .kp-resize-handle {
   border-color: var(--kp-accent);
 }
 
-/* ── WebSocket ────────────────────────────────────────────────────────────── */
-.kp-ws-controls {
+/* ── WebSocket workspace ──────────────────────────────────────────────────── */
+.kp-ws-workspace {
   display: flex;
-  gap: 8px;
-  padding: 0 14px;
+  flex-direction: column;
+  height: 100%;
+  padding: 10px 14px;
+  gap: 10px;
+}
+.kp-ws-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 .kp-ws-log {
   flex: 1;
-  min-height: 200px;
-  max-height: 320px;
+  min-height: 120px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 10px 14px;
   background: var(--kp-bg-tertiary);
-  margin: 0 14px;
   border-radius: var(--kp-radius-md);
+  position: relative;
+}
+.kp-ws-clear {
+  position: sticky;
+  top: 0;
+  align-self: flex-end;
 }
 .kp-ws-msg {
   display: flex;
@@ -2200,6 +2212,125 @@ body.kp-resizing-y .kp-resize-handle {
 .kp-ws-text {
   color: var(--kp-text-secondary);
   word-break: break-all;
+}
+.kp-ws-size {
+  color: var(--kp-text-muted);
+  font-size: 10px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.kp-ws-composer {
+  display: flex;
+  gap: 8px;
+}
+.kp-ws-recent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ── API specs / Mock servers ─────────────────────────────────────────────── */
+.kp-api-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.kp-api-spec-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--kp-bg-secondary);
+  border: 1px solid var(--kp-border-primary);
+  border-radius: var(--kp-radius-md);
+  color: var(--kp-text-primary);
+  cursor: pointer;
+}
+.kp-api-spec-card.active {
+  border-color: var(--kp-accent);
+}
+.kp-api-spec-card .kp-icon-btn,
+.kp-api-spec-card .kp-btn {
+  flex-shrink: 0;
+}
+.kp-api-spec-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.kp-api-import-row {
+  align-items: flex-start;
+}
+.kp-api-import-row label {
+  padding-top: 7px;
+}
+.kp-api-textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  padding: 8px 10px;
+  font-family: var(--kp-font-mono, monospace);
+  font-size: 12px;
+}
+.kp-api-import-actions {
+  justify-content: flex-end;
+}
+.kp-api-error {
+  color: var(--kp-error);
+  font-size: 12px;
+  margin: 6px 0;
+}
+.kp-api-spec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.kp-api-op-row {
+  grid-template-columns: 64px 1.4fr 1fr auto;
+}
+.kp-api-op-path {
+  color: var(--kp-text-secondary);
+  font-size: 12px;
+}
+.kp-api-op-summary {
+  color: var(--kp-text-muted);
+  font-size: 12px;
+}
+.kp-mock-routes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.kp-mock-route {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kp-mock-route .kp-kv-row {
+  grid-template-columns: 90px 1fr 70px 80px 24px;
+}
+.kp-mock-method {
+  padding: 6px 6px;
+}
+.kp-mock-status,
+.kp-mock-delay {
+  padding: 6px 6px;
+}
+.kp-mock-route-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 8px;
+  border-left: 2px solid var(--kp-border-secondary);
+}
+.kp-mock-ct {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.kp-file-drop-btn {
+  cursor: pointer;
 }
 
 /* ── CodeMirror editor ────────────────────────────────────────────────────── */

@@ -19,7 +19,7 @@ use std::{
 use axum::{
     extract::{ConnectInfo, State},
     http::{header, HeaderName, HeaderValue, Method, StatusCode},
-    routing::{get, post},
+    routing::{any, delete, get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -79,6 +79,32 @@ struct MultipartPart {
     data_base64: Option<String>,
 }
 
+// ── Mock servers ──────────────────────────────────────────────────────────────
+#[derive(Deserialize, Clone)]
+struct MockRoute {
+    method: String,
+    /// Path pattern: literal segments, `:param` (one segment), `*` (rest).
+    path: String,
+    status: u16,
+    #[serde(default)]
+    body: String,
+    #[serde(default)]
+    content_type: String,
+    #[serde(default)]
+    headers: Vec<HeaderPair>,
+    #[serde(default)]
+    delay_ms: u64,
+}
+
+#[derive(Deserialize)]
+struct MockRegister {
+    id: String,
+    #[serde(default)]
+    routes: Vec<MockRoute>,
+}
+
+const MAX_MOCK_ROUTES: usize = 200;
+
 #[derive(Serialize)]
 struct Timings {
     total: f64,
@@ -113,6 +139,9 @@ struct AppState {
     /// Session token (KP_RELAY_TOKEN). When set, /proxy and /metrics require
     /// `Authorization: Bearer <token>`; /health stays public for status checks.
     token: Option<String>,
+    /// Registered mock servers: id -> routes. In-memory only — clients
+    /// re-register on start (definitions live client-side).
+    mocks: Mutex<HashMap<String, Vec<MockRoute>>>,
 }
 
 /// Constant-time-ish comparison so token checks don't leak length/prefix timing.
@@ -522,6 +551,127 @@ fn base64_encode(bytes: &[u8]) -> String {
     out
 }
 
+// ── Mock server handlers ──────────────────────────────────────────────────────
+async fn mock_register(
+    State(state): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
+    Json(payload): Json<MockRegister>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    check_token(&state, &headers)?;
+    let id = payload.id.trim().to_string();
+    if id.is_empty() || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err(err(StatusCode::BAD_REQUEST, "mock id must be alphanumeric/dash/underscore"));
+    }
+    if payload.routes.len() > MAX_MOCK_ROUTES {
+        return Err(err(StatusCode::BAD_REQUEST, "too many mock routes"));
+    }
+    for r in &payload.routes {
+        if r.method.parse::<Method>().is_err() {
+            return Err(err(StatusCode::BAD_REQUEST, &format!("invalid method {:?}", r.method)));
+        }
+        if !r.path.starts_with('/') {
+            return Err(err(StatusCode::BAD_REQUEST, "route path must start with '/'"));
+        }
+        if r.body.len() > MAX_REQUEST_BODY {
+            return Err(err(StatusCode::PAYLOAD_TOO_LARGE, "mock body too large"));
+        }
+    }
+    state
+        .mocks
+        .lock()
+        .unwrap()
+        .insert(id.clone(), payload.routes);
+    Ok(Json(serde_json::json!({ "ok": true, "url": format!("/mock/{id}/") })))
+}
+
+async fn mock_unregister(
+    State(state): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    check_token(&state, &headers)?;
+    state.mocks.lock().unwrap().remove(&id);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn mock_serve(
+    State(state): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
+    axum::extract::Path((id, path)): axum::extract::Path<(String, String)>,
+    req: axum::extract::Request,
+) -> Result<axum::response::Response, (StatusCode, Json<serde_json::Value>)> {
+    check_token(&state, &headers)?;
+    let method = req.method().clone();
+    let routes = state
+        .mocks
+        .lock()
+        .unwrap()
+        .get(&id)
+        .cloned()
+        .unwrap_or_default();
+    if routes.is_empty() {
+        return Err(err(StatusCode::NOT_FOUND, "unknown mock server"));
+    }
+
+    let path = format!("/{}", path.trim_start_matches('/'));
+    let route = routes
+        .iter()
+        .find(|r| r.method.eq_ignore_ascii_case(method.as_str()) && route_matches(&r.path, &path))
+        .ok_or_else(|| {
+            err(
+                StatusCode::NOT_FOUND,
+                &format!("no mock route for {} {}", method, path),
+            )
+        })?;
+
+    if route.delay_ms > 0 {
+        tokio::time::sleep(Duration::from_millis(route.delay_ms.min(10_000))).await;
+    }
+
+    let mut builder = axum::response::Response::builder().status(StatusCode::from_u16(route.status).unwrap_or(StatusCode::OK));
+    if !route.content_type.is_empty() {
+        builder = builder.header(header::CONTENT_TYPE, &route.content_type);
+    } else if !route.body.is_empty() {
+        builder = builder.header(header::CONTENT_TYPE, "application/json");
+    }
+    for h in &route.headers {
+        if let (Ok(name), Ok(value)) = (
+            HeaderName::from_bytes(h.key.as_bytes()),
+            HeaderValue::from_str(&h.value),
+        ) {
+            builder = builder.header(name, value);
+        }
+    }
+    builder
+        .body(axum::body::Body::from(route.body.clone()))
+        .map_err(|_| err(StatusCode::INTERNAL_SERVER_ERROR, "failed to build mock response"))
+}
+
+/// Match a route pattern against a concrete path: literal segments,
+/// `:param` consumes one segment, `*` consumes the rest.
+fn route_matches(pattern: &str, path: &str) -> bool {
+    let pat: Vec<&str> = pattern.split('/').filter(|s| !s.is_empty()).collect();
+    let seg: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    let mut pi = 0;
+    let mut si = 0;
+    while pi < pat.len() {
+        match pat[pi] {
+            "*" => return true,
+            p => {
+                if si >= seg.len() {
+                    return false;
+                }
+                if !p.starts_with(':') && p != seg[si] {
+                    return false;
+                }
+                pi += 1;
+                si += 1;
+            }
+        }
+    }
+    si == seg.len()
+}
+
 // ── Server ───────────────────────────────────────────────────────────────────
 #[tokio::main]
 async fn main() {
@@ -583,12 +733,16 @@ async fn main() {
         metrics: Metrics::default(),
         rate: Mutex::new(HashMap::new()),
         token,
+        mocks: Mutex::new(HashMap::new()),
     });
 
     let app = Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics))
         .route("/proxy", post(proxy))
+        .route("/mock/register", post(mock_register))
+        .route("/mock/{id}", delete(mock_unregister))
+        .route("/mock/{id}/{*path}", any(mock_serve))
         .layer(cors)
         .with_state(state);
 

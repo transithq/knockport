@@ -1,6 +1,6 @@
 import { createId } from "@knockport/core";
 import type { Request } from "@knockport/core";
-import { Boxes, Braces, ChevronDown, MoreHorizontal, Play, Plus, Settings, X } from "lucide-react";
+import { Boxes, Braces, ChevronDown, MoreHorizontal, Play, Plus, Radio, Server, Settings, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useAppStore } from "../../store/app-store";
 import { CollectionEditor } from "../collections/CollectionEditor";
@@ -13,7 +13,9 @@ import { ResponseBody } from "../response/ResponseBody";
 import { ResponseSummary } from "../response/ResponseSummary";
 import { RunnerTab } from "../runner/RunnerTab";
 import { SettingsPage } from "../settings/SettingsPage";
-import { WebSocketModal } from "../websocket/WebSocketModal";
+import { WebSocketTab } from "../websocket/WebSocketTab";
+import { ApiTab } from "../api/ApiTab";
+import { MockTab } from "../mock/MockTab";
 import { Sidebar } from "./Sidebar";
 
 // ── Resizable workspace (request | response, with analytics rail) ────────────
@@ -157,6 +159,12 @@ function TabBar() {
                 <Play size={12} className="kp-env-tab-icon" />
               ) : tab.kind === "settings" ? (
                 <Settings size={12} className="kp-env-tab-icon" />
+              ) : tab.kind === "websocket" ? (
+                <Radio size={12} className="kp-env-tab-icon" />
+              ) : tab.kind === "api" ? (
+                <Braces size={12} className="kp-env-tab-icon" />
+              ) : tab.kind === "mock" ? (
+                <Server size={12} className="kp-env-tab-icon" />
               ) : (
                 <span
                   className="kp-method-tag"
@@ -287,7 +295,7 @@ export function AppShell() {
       // suppressed while any modal or the command palette is open)
       if ((e.ctrlKey || e.metaKey) && (e.key === "Enter" || e.key.toLowerCase() === "s")) {
         const s = useAppStore.getState();
-        if (s.commandPaletteOpen || s.codegenOpen || s.importOpen || s.websocketOpen) return;
+        if (s.commandPaletteOpen || s.codegenOpen || s.importOpen) return;
         const tab = s.tabs.find((t) => t.id === s.activeTabId);
         if (!tab || (tab.kind && tab.kind !== "request")) return;
         e.preventDefault();
@@ -298,7 +306,6 @@ export function AppShell() {
         const s = useAppStore.getState();
         if (s.codegenOpen) s.setCodegenOpen(false);
         else if (s.importOpen) s.setImportOpen(false);
-        else if (s.websocketOpen) s.setWebsocketOpen(false);
       }
     };
     window.addEventListener("keydown", handler);
@@ -333,6 +340,12 @@ export function AppShell() {
             <RunnerTab collectionId={activeTab.collectionId ?? ""} />
           ) : activeTab.kind === "settings" ? (
             <SettingsPage />
+          ) : activeTab.kind === "websocket" ? (
+            <WebSocketTab />
+          ) : activeTab.kind === "api" ? (
+            <ApiTab />
+          ) : activeTab.kind === "mock" ? (
+            <MockTab />
           ) : (
             <WorkspaceGrid tabId={activeTab.id} />
           )
@@ -343,7 +356,6 @@ export function AppShell() {
       <CommandPalette />
       <CodegenModal />
       <ImportModal />
-      <WebSocketModal />
     </div>
   );
 }

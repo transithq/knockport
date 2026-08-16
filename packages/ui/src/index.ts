@@ -8,7 +8,6 @@ export { CommandPalette } from "./components/command/CommandPalette";
 export { CodegenModal, ImportModal } from "./components/modals/Modals";
 export { EnvironmentEditor } from "./components/environments/EnvironmentEditor";
 export { RunnerTab } from "./components/runner/RunnerTab";
-export { WebSocketModal } from "./components/websocket/WebSocketModal";
 
 // ── Primitives ───────────────────────────────────────────────────────────────
 export { Button, Input, Badge, Tabs, IconButton, EmptyState } from "./components/common/primitives";
