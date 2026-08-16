@@ -21,6 +21,9 @@ draggable since `8169c43`).
   `asideRef`/`navPaneRef`; `useResizer("y")`; min 96px, max = sidebar height ? 240 reserved.
   CSS: `.kp-sidebar > .kp-resize-handle.horizontal` overrides the absolute-position rule
   meant for the vertical (width) handle.
+- Commit `781ceb5` — fix(ui): `.kp-sidebar-section` border-top + margin-top removed — the
+  contents box's own border was stacking under the handle hairline; the handle is now the
+  single divider. (User flagged "divider and border seen two separately, looks awful".)
 
 ## Recent history (compressed — details in git log)
 
