@@ -50,3 +50,6 @@ headers.png
 
 # toolchain installers
 vs_buildtools.exe
+
+# local manual QA checklist — never commit
+MANUAL_TEST_CHECKLIST.md
