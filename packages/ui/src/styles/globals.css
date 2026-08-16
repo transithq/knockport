@@ -1406,6 +1406,46 @@ body.kp-resizing-y .kp-resize-handle {
   gap: 6px;
   padding: 10px 12px;
 }
+
+/* ── Response headers list ─────────────────────────────────────────────── */
+/* flex:1 + min-height:0 are required: without them the list takes its
+   intrinsic height inside the flex-column parent, which collapses the tab
+   row above it. */
+.kp-headers-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 0;
+}
+.kp-headers-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+  gap: 14px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--kp-border-primary);
+  transition: background 0.12s;
+}
+.kp-headers-row:last-child {
+  border-bottom: none;
+}
+.kp-headers-row:hover {
+  background: var(--kp-bg-hover);
+}
+.kp-headers-key {
+  font-size: 12px;
+  color: var(--kp-text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kp-headers-val {
+  font-size: 12px;
+  color: var(--kp-text-primary);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .kp-cookie-card {
   border: 1px solid var(--kp-border-primary);
   border-radius: var(--kp-radius-sm);

@@ -363,11 +363,11 @@ export function ResponseBody({ tabId }: { tabId: string }) {
       {bodyTab === "body" && <BodyPanel tabId={tabId} response={response} />}
 
       {bodyTab === "headers" && (
-        <div className="kp-kv-list kp-scroll">
+        <div className="kp-headers-list">
           {Object.entries(response.headers).map(([k, v]) => (
-            <div className="kp-kv-list-row" key={k}>
-              <span className="kp-kv-key">{k}</span>
-              <span className="kp-kv-val kp-mono">{v}</span>
+            <div className="kp-headers-row" key={k}>
+              <span className="kp-headers-key">{k}</span>
+              <span className="kp-headers-val kp-mono">{v}</span>
             </div>
           ))}
         </div>
