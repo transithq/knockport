@@ -405,14 +405,51 @@ function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyC
           encoding={body.type}
           onEncodingChange={setEncoding}
         />
+      ) : body.type === "graphql" ? (
+        <div className="kp-graphql-editor">
+          <div className="kp-graphql-pane">
+            <div className="kp-kv-title">Query</div>
+            <CodeEditor
+              value={body.graphql?.query ?? ""}
+              onChange={(query) =>
+                onChange({ ...body, graphql: { ...(body.graphql ?? {}), query } })
+              }
+              language="text"
+              height="160px"
+            />
+          </div>
+          <div className="kp-graphql-pane">
+            <div className="kp-kv-title">Variables (JSON)</div>
+            <CodeEditor
+              value={body.graphql?.variables ?? ""}
+              onChange={(variables) =>
+                onChange({ ...body, graphql: { ...(body.graphql ?? {}), variables } })
+              }
+              language="json"
+              height="160px"
+            />
+          </div>
+        </div>
       ) : (
         body.type !== "none" && (
-          <CodeEditor
-            value={body.content ?? ""}
-            onChange={(content) => onChange({ ...body, content })}
-            language={body.type === "json" ? "json" : "text"}
-            height="200px"
-          />
+          <>
+            {body.type === "xml" && (
+              <button
+                type="button"
+                className="kp-lang-btn"
+                title="Wrap the content in a SOAP 1.1 envelope (or insert a skeleton)"
+                onClick={() => onChange({ ...body, content: soapEnvelope(body.content ?? "") })}
+              >
+                Insert SOAP envelope
+              </button>
+            )}
+            <CodeEditor
+              value={body.content ?? ""}
+              onChange={(content) => onChange({ ...body, content })}
+              language={body.type === "json" ? "json" : "text"}
+              height="200px"
+            />
+          </>
         )
       )}
     </div>
@@ -560,6 +597,28 @@ function FormDataTable({
       </div>
     </div>
   );
+}
+
+/** SOAP 1.1 envelope: wraps existing content as the Body payload, or
+ * produces a skeleton when the editor is empty. Pair with a text/xml
+ * Content-Type header (user-set — SOAPAction too for SOAP 1.1). */
+function soapEnvelope(content: string): string {
+  const inner = content.trim();
+  const body = inner
+    ? `    <!-- wrapped payload -->
+    ${inner}`
+    : `    <!-- your payload here -->`;
+  return [
+    '<?xml version="1.0" encoding="utf-8"?>',
+    '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"',
+    '               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"',
+    '               xmlns:xsd="http://www.w3.org/2001/XMLSchema">',
+    '  <soap:Header />',
+    '  <soap:Body>',
+    body,
+    '  </soap:Body>',
+    '</soap:Envelope>',
+  ].join("\n");
 }
 
 function formatBytes(bytes: number): string {

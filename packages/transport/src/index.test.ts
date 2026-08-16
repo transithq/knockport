@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSetCookie, parseSetCookies } from "./index";
+import { buildBody, buildHeaderList, parseSetCookie, parseSetCookies } from "./index";
 
 describe("parseSetCookie", () => {
   it("parses a minimal cookie", () => {
@@ -56,5 +56,53 @@ describe("parseSetCookies", () => {
     expect(cookies[0].name).toBe("a");
     expect(cookies[1].name).toBe("b");
     expect(cookies[1].expires).toBe("Wed, 21 Oct 2026 07:28:00 GMT");
+  });
+});
+
+
+// ── GraphQL wire envelope ────────────────────────────────────────────────────
+describe("graphql body serialization", () => {
+  const gqlRequest = {
+    id: "r1",
+    name: "q",
+    method: "POST",
+    url: "https://api.example.com/graphql",
+    headers: [],
+    params: [],
+    body: {
+      type: "graphql" as const,
+      graphql: { query: "query { user { name } }", variables: "{\"id\": 1}" },
+    },
+    auth: { type: "none" as const },
+  };
+
+  it("serializes query + parsed variables into the JSON envelope", () => {
+    const body = buildBody(gqlRequest);
+    expect(typeof body).toBe("string");
+    expect(JSON.parse(body as string)).toEqual({
+      query: "query { user { name } }",
+      variables: { id: 1 },
+    });
+  });
+
+  it("omits variables when empty or invalid", () => {
+    const empty = buildBody({ ...gqlRequest, body: { type: "graphql", graphql: { query: "q", variables: "" } } });
+    expect(JSON.parse(empty as string)).toEqual({ query: "q" });
+    const invalid = buildBody({ ...gqlRequest, body: { type: "graphql", graphql: { query: "q", variables: "not json" } } });
+    expect(JSON.parse(invalid as string)).toEqual({ query: "q" });
+  });
+
+  it("injects content-type application/json when unset", () => {
+    const headers = buildHeaderList(gqlRequest);
+    expect(headers).toContainEqual({ key: "Content-Type", value: "application/json" });
+  });
+
+  it("never overrides a user-set content-type", () => {
+    const headers = buildHeaderList({
+      ...gqlRequest,
+      headers: [{ key: "content-type", value: "application/graphql", enabled: true }],
+    });
+    expect(headers).toContainEqual({ key: "content-type", value: "application/graphql" });
+    expect(headers.filter((h) => h.key.toLowerCase() === "content-type")).toHaveLength(1);
   });
 });

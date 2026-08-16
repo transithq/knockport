@@ -2229,6 +2229,19 @@ body.kp-resizing-y .kp-resize-handle {
   gap: 6px;
 }
 
+/* ── GraphQL body editor ───────────────────────────────────────────────────── */
+.kp-graphql-editor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.kp-graphql-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
 /* ── Dropdown menus ────────────────────────────────────────────────────────── */
 .kp-menu-wrap {
   position: relative;

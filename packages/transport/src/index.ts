@@ -77,17 +77,21 @@ function buildUrl(request: Request): string {
   return url.toString();
 }
 
-function buildHeaderList(request: Request): { key: string; value: string }[] {
+export function buildHeaderList(request: Request): { key: string; value: string }[] {
   const headers: { key: string; value: string }[] = [];
   for (const header of request.headers) {
     if (header.enabled && header.key) {
       headers.push({ key: header.key, value: header.value });
     }
   }
+  // GraphQL bodies travel as a JSON envelope unless the user set a type.
+  if (request.body?.type === "graphql" && !headers.some((h) => h.key.toLowerCase() === "content-type")) {
+    headers.push({ key: "Content-Type", value: "application/json" });
+  }
   return headers;
 }
 
-function buildBody(request: Request): BodyInit | undefined {
+export function buildBody(request: Request): BodyInit | undefined {
   if (!request.body || request.body.type === "none") return undefined;
   if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return undefined;
 
@@ -96,8 +100,14 @@ function buildBody(request: Request): BodyInit | undefined {
     case "text":
     case "xml":
     case "html":
-    case "graphql":
-      return request.body.content;
+    case "graphql": {
+      // Standard GraphQL over HTTP envelope: {"query": "...", "variables": {...}}.
+      const variables = safeParseJson(request.body.graphql?.variables);
+      return JSON.stringify({
+        query: request.body.graphql?.query ?? "",
+        ...(variables !== undefined ? { variables } : {}),
+      });
+    }
     case "form-urlencoded": {
       const params = new URLSearchParams();
       for (const entry of request.body.formData ?? []) {
@@ -120,6 +130,16 @@ function buildBody(request: Request): BodyInit | undefined {
       return request.body.content;
     default:
       return undefined;
+  }
+}
+
+/** Parse a JSON string, returning undefined for empty/invalid input. */
+function safeParseJson(s?: string): unknown {
+  if (!s || !s.trim()) return undefined;
+  try {
+    return JSON.parse(s);
+  } catch {
+    return undefined;
   }
 }
 
