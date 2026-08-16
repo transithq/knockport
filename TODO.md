@@ -111,10 +111,21 @@ Implemented & verified:
   persists across reload.
 
 Follow-ups (not blocking):
-- [ ] Multipart bodies via relay (FormData can't be JSON-serialized — needs base64 parts wire format).
+- [x] Multipart bodies via relay — DONE: structured wire format (text parts inline,
+      file parts base64), relay assembles the body with a generated boundary and
+      owns the content-type. UI: ONE merged Form body section (urlencoded by
+      default; attaching a file silently upgrades to multipart — Paw-style — and
+      a Urlencoded/Multipart toggle in the section header keeps text-only
+      multipart reachable). Verified E2E against postman-echo via relay.
+- [x] Session token — DONE: relay takes `KP_RELAY_TOKEN`; when set, /proxy and
+      /metrics require `Authorization: Bearer <token>` (constant-time compare),
+      /health stays public. Settings page has a relay-token field
+      (`kp-relay-token`); RequestEditor + Runner send it. Verified 401/200 E2E.
+- [x] Relay auto-health indicator — DONE: sidebar status bar shows
+      `Relay up|down` (dot color + tooltip) whenever relay transport is on;
+      probes GET /health on config change + every 30s, click re-probes.
+      Store field `relayHealth` + `probeRelay()`.
 - [ ] Swap reqwest for `tropel-http` path-dep from D:/tropel (reuse its SSRF blacklist, cookie jar, subtimings).
-- [ ] Session token before public deployment (architecture doc §5b checklist).
-- [ ] Relay auto-health indicator in the status bar.
 
 ## 5 · After relay — UI completeness (M2 remainder)
 
@@ -171,11 +182,20 @@ One implementation for every surface (web wasm, extension, desktop native, CLI):
   `inventory::submit!` with priority-based auto-detect. Linked through tropel-engine.
 - Existing adapters: openapi (3.x + Swagger 2.0, $ref resolution), har, postman
   (v2.1 via tropel-collection), k6, subprocess.
-- Added by us (committed in Tropel): `tropel-input-bru` (Bruno .bru block grammar,
-  path params → {{vars}}, disabled `~key` dropped, scripts/tests mapped) and
-  `tropel-input-insomnia` (v4 export JSON, parentId tree rebuild, env → variables).
-- Still to add in Tropel, same pattern: `tropel-input-http` (.http files),
-  `tropel-input-curl` (cURL one-liners).
+- Added by us (committed in Tropel): `tropel-input-http` (.http / .rest request
+  files: `###`-separated named requests, bare-URL GET default, query continuation
+  lines, header dup-merging, body variant from Content-Type, `@file` variables,
+  JetBrains response handlers dropped; 23 tests) and `tropel-input-curl`
+  (shell-ish tokenizer with quotes/escapes/`\` continuations/`$` prompt, multiple
+  commands per input, -X -H -d -F -u -A -e -b --data-urlencode --max-time -L -I
+  plus glued and `--flag=value` forms; 24 tests). Both force-linked in
+  tropel-engine `builtins.rs`.
+- STILL MISSING in Tropel (earlier session's `tropel-input-bru` + 
+  `tropel-input-insomnia` were NOT actually committed — .staging copies are empty
+  and D:/tropel never received them): re-add `tropel-input-bru` (Bruno .bru block
+  grammar, path params → {{vars}}, disabled `~key` dropped, scripts/tests mapped)
+  and `tropel-input-insomnia` (v4 export JSON, parentId tree rebuild, env →
+  variables).
 - KnockPort consumption plan:
   1. Add an import entry point to the wasm slice (tropel-web or a slim new crate):
      `import_any(bytes) -> Scenario JSON` iterating registered adapters by priority.
