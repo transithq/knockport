@@ -117,8 +117,8 @@ export function ResponseSummary({ tabId }: { tabId: string }) {
         <span>{formatSize(response.bodySize)}</span>
         <span className="kp-status-right">
           <span className="kp-summary-time">{timeAgo(response.timestamp)}</span>
-          <button type="button" className="kp-icon-btn" title="Save response body" onClick={saveBody}>
-            {saved ? <Check size={13} /> : <Download size={13} />}
+          <button type="button" className="kp-save-btn" title="Download the response body" onClick={saveBody}>
+            {saved ? <Check size={13} /> : <Download size={13} />} Save
           </button>
           <button type="button" className="kp-icon-btn" title="More"><MoreHorizontal size={13} /></button>
         </span>

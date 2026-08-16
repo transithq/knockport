@@ -1,9 +1,10 @@
 import type { ResponseCookie } from "@knockport/core";
 import { clsx } from "clsx";
-import { Check, ChevronDown, Copy, WrapText } from "lucide-react";
+import { Check, ChevronDown, Copy, Download, WrapText } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../../store/app-store";
 import { CodeViewer, type ViewerLanguage } from "../common/CodeViewer";
+import { downloadResponseText, filenameForResponse } from "./response-export";
 import { type ResponseFormat, detectResponseFormat, formatLabel } from "./response-format";
 
 type BodyTab = "body" | "cookies" | "headers" | "tests";
@@ -231,6 +232,12 @@ function BodyPanel({
     setTimeout(() => setCopied(false), 1500);
   };
 
+  const saveBody = async () => {
+    const text = await formatBody(response.body, activeFormat);
+    const name = filenameForResponse(response.url ?? requestUrl, response.contentType, text);
+    downloadResponseText(text, name, response.contentType);
+  };
+
   const wrap = userWrap || viewTab === "raw";
 
   return (
@@ -279,8 +286,11 @@ function BodyPanel({
             <WrapText size={13} />
           </button>
           <span>Size: {formatSize(response.bodySize)}</span>
-          <button type="button" className="kp-icon-btn" title="Copy body" onClick={copyBody}>
-            {copied ? <Check size={13} /> : <Copy size={13} />}
+          <button type="button" className="kp-save-btn" title="Download the formatted response" onClick={saveBody}>
+            <Download size={13} /> Save
+          </button>
+          <button type="button" className="kp-save-btn" title="Copy the formatted response" onClick={copyBody}>
+            {copied ? <Check size={13} /> : <Copy size={13} />} Copy
           </button>
         </span>
       </div>

@@ -1226,6 +1226,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 6px 14px;
   border-top: 1px solid var(--kp-border-primary);
@@ -1238,6 +1239,26 @@ body {
   align-items: center;
   gap: 10px;
   margin-left: auto;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.kp-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: var(--kp-bg-tertiary);
+  border: 1px solid var(--kp-border-primary);
+  border-radius: var(--kp-radius-md);
+  color: var(--kp-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.kp-save-btn:hover {
+  border-color: var(--kp-border-secondary);
+  background: var(--kp-bg-hover);
+  color: var(--kp-text-primary);
 }
 
 .kp-kv-list {
@@ -1331,6 +1352,7 @@ body {
 .kp-summary-statusbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 10px 12px;
   background: var(--kp-bg-secondary);
