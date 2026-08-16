@@ -69,7 +69,7 @@ export function RequestEditor({ tabId }: { tabId: string }) {
             style={{ color: methodColor[request.method] }}
           >
             {HTTP_METHODS.map((m) => (
-              <option key={m} value={m}>
+              <option key={m} value={m} style={{ color: methodColor[m] }}>
                 {m}
               </option>
             ))}
