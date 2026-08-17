@@ -125,7 +125,20 @@ Follow-ups (not blocking):
       `Relay up|down` (dot color + tooltip) whenever relay transport is on;
       probes GET /health on config change + every 30s, click re-probes.
       Store field `relayHealth` + `probeRelay()`.
-- [ ] Swap reqwest for `tropel-http` path-dep from D:/tropel (reuse its SSRF blacklist, cookie jar, subtimings).
+- [x] Swap reqwest for `tropel-http` path-dep from D:/tropel — DONE: commit `add7069`.
+      The relay builds via tropel-http's `HttpClient`: redirects w/ RFC 7231
+      rewrites per hop, `blacklistIPs` SSRF guard on every hop (IP literals
+      pre-connect + DNS resolver; fed the new `SSRF_BLOCKLIST` CIDRs from a
+      tropel-http commit), per-request DNS re-resolve (ttl 0 = old relay
+      behavior), streamed response + redirect-hop body cap (`max_response_bytes`,
+      50 MB), real sub-timings (dns/tcp/tls/download) on the wire, lossless
+      `raw_headers` (multiple Set-Cookie lines survive). Initial-URL pre-check
+      keeps the clean 403 shape. Frontend decodes the extended timings with
+      fallbacks for older relay builds. E2E-verified: GET/POST/multipart/
+      cookies, loopback + private + nip.io + IPv6 + v4-mapped blocks, redirect
+      chains, hop-level SSRF. tropel-side additions live on branch
+      `fix/w2-path-var-length-sort` (D:\tropel — client.rs/sdk/tropel-web
+      diffs there belong to a concurrent W2 session, untouched).
 
 ## 5 · After relay — UI completeness (M2 remainder)
 
