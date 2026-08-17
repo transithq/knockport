@@ -59,3 +59,33 @@ export function getPredefinedVariableNames(): readonly string[] {
  * tropel-variables/src/catalog.rs).
  */
 export const MAX_DYNAMIC_LENGTH = 10_000;
+
+// ── OAuth2 / JWT / WSSE (tropel-auth::oauth behind core-wasm) ───────────────
+// Re-export the auth building blocks so the UI/engine import them from
+// @knockport/core (single import point for the wasm tier). All functions
+// throw until `ensureTropelCore()` resolves, EXCEPT oauth2IsTokenExpired
+// (pure JS host clock).
+export {
+  generatePkcePair,
+  oauth2AttachToken,
+  oauth2BuildAuthorizeUrl,
+  oauth2BuildTokenRequest,
+  oauth2DecodeJwt,
+  oauth2IsTokenExpired,
+  oauth2JwtExpiresAt,
+  oauth2ParseTokenResponse,
+  oauth2SignJwt,
+  oauth2StoreToken,
+  wsseSign,
+} from "@tropel/core-wasm";
+export type {
+  AuthorizeParams,
+  AuthorizeRequest,
+  DecodedJwt,
+  PkcePair,
+  StoredToken,
+  TokenAttachment,
+  TokenRequest,
+  TokenRequestParams,
+  TokenResponse,
+} from "@tropel/core-wasm";

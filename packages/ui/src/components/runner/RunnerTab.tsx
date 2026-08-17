@@ -2,6 +2,7 @@ import type { Collection, Folder, Request } from "@knockport/core";
 import {
   collectPromptVariableNames,
   collectRequestPromptVariables,
+  ensureOAuth2AndAttach,
   withPromptAnswers,
 } from "@knockport/core";
 import { clsx } from "clsx";
@@ -133,6 +134,10 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           vars = runPreScript(req.scripts.pre, vars, opts).variables;
         }
         const resolved = resolveRequest(req, vars, collection);
+        // OAuth2 (B1): attach the stored token; refresh first when expired.
+        if (resolved.auth.type === "oauth2" && resolved.auth.oauth2?.accessToken) {
+          await ensureOAuth2AndAttach(resolved, resolved.auth, transport);
+        }
         const start = performance.now();
         // Enforce the global timeout per request via an abort signal
         const abort = new AbortController();

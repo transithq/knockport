@@ -103,6 +103,48 @@ describe("native YAML round-trip", () => {
     expect(imported.folders[0].requests[0].auth.type).toBe("bearer");
   });
 
+  it("round-trips the full OAuth2 auth block (B1 fields)", () => {
+    const original = makeCollection();
+    original.auth = {
+      type: "oauth2",
+      oauth2: {
+        grantType: "authorization_code",
+        authUrl: "https://auth.example.com/authorize",
+        tokenUrl: "https://auth.example.com/token",
+        clientId: "cid",
+        clientSecret: "csec",
+        redirectUri: "https://cb",
+        scopes: ["read", "write"],
+        pkce: true,
+        sendTokenIn: "query",
+        queryParamName: "tok",
+        authMethod: "post_body",
+        useIdToken: true,
+        accessToken: "acc",
+        refreshToken: "ref",
+        tokenType: "Bearer",
+        idToken: "idt",
+        expiresAt: 2_000_000_000,
+        scope: "read write",
+      },
+    };
+    const imported = importKnockportYaml(serializeCollection(original)) as Collection;
+    const o2 = imported.auth?.oauth2;
+    expect(o2?.grantType).toBe("authorization_code");
+    expect(o2?.authUrl).toBe("https://auth.example.com/authorize");
+    expect(o2?.redirectUri).toBe("https://cb");
+    expect(o2?.scopes).toEqual(["read", "write"]);
+    expect(o2?.pkce).toBe(true);
+    expect(o2?.sendTokenIn).toBe("query");
+    expect(o2?.queryParamName).toBe("tok");
+    expect(o2?.authMethod).toBe("post_body");
+    expect(o2?.useIdToken).toBe(true);
+    expect(o2?.accessToken).toBe("acc");
+    expect(o2?.refreshToken).toBe("ref");
+    expect(o2?.idToken).toBe("idt");
+    expect(o2?.expiresAt).toBe(2_000_000_000);
+  });
+
   it("importAuto detects native collection YAML", () => {
     const original = makeCollection();
     const imported = importAuto(serializeCollection(original)) as Collection;

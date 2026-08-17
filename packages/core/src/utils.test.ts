@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import type { Request } from "./types";
 import {
-  type Request,
   collectPromptVariableNames,
   collectRequestPromptVariables,
   redactVariables,

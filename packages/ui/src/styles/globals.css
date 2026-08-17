@@ -2543,3 +2543,97 @@ body.kp-resizing-y .kp-resize-handle {
 .kp-code-editor .cm-editor {
   outline: none;
 }
+
+/* ── OAuth2 editor (B1) ───────────────────────────────────────────────────── */
+.kp-oauth-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 640px;
+}
+.kp-oauth-editor select {
+  width: 100%;
+  max-width: 280px;
+}
+.kp-inline-label {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 7px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.kp-reveal-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.kp-reveal-row input {
+  flex: 1;
+  min-width: 0;
+}
+.kp-oauth-advanced {
+  border: 1px solid var(--kp-border-primary);
+  border-radius: var(--kp-radius-md);
+  padding: 8px 10px;
+}
+.kp-oauth-advanced summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--kp-text-secondary);
+  outline: none;
+}
+.kp-oauth-advanced[open] summary {
+  margin-bottom: 8px;
+}
+.kp-oauth-advanced .kp-field-grid {
+  margin-top: 4px;
+}
+.kp-oauth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.kp-oauth-code-exchange {
+  border: 1px dashed var(--kp-border-secondary);
+  border-radius: var(--kp-radius-md);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kp-token-view {
+  border: 1px solid var(--kp-border-primary);
+  border-radius: var(--kp-radius-md);
+  padding: 8px 10px;
+  background: var(--kp-bg-secondary);
+}
+.kp-token-view-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.kp-token-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--kp-success-bg);
+  color: var(--kp-success);
+}
+.kp-token-badge.expired {
+  background: var(--kp-error-bg, rgba(239, 68, 68, 0.12));
+  color: var(--kp-error);
+}
+.kp-token-value {
+  font-size: 12px;
+  word-break: break-all;
+  white-space: pre-wrap;
+  max-height: 96px;
+  overflow-y: auto;
+}
+.kp-error-text {
+  color: var(--kp-error);
+}

@@ -14,6 +14,8 @@ export const HTTP_METHODS = [
 export type HttpMethod = (typeof HTTP_METHODS)[number];
 
 // ── Auth Types ───────────────────────────────────────────────────────────────
+export type OAuth2GrantType = "authorization_code" | "client_credentials" | "password" | "implicit";
+
 export type AuthType =
   | "none"
   | "inherit"
@@ -40,14 +42,37 @@ export interface AuthConfig {
     signatureMethod: "HMAC-SHA1" | "HMAC-SHA256" | "RSA-SHA1";
   };
   oauth2?: {
-    grantType: "authorization_code" | "client_credentials" | "password" | "implicit";
+    grantType: OAuth2GrantType;
     accessToken?: string;
     refreshToken?: string;
+    tokenType?: string;
+    /** OIDC: the id_token from the last exchange. */
+    idToken?: string;
+    /** Absolute UNIX seconds; absent = no expiry advertised. */
+    expiresAt?: number;
+    scope?: string;
+    /** In-flight authorization-code exchange state (opaque, verified by provider). */
+    state?: string;
     clientId?: string;
     clientSecret?: string;
     tokenUrl?: string;
     authUrl?: string;
+    redirectUri?: string;
     scopes?: string[];
+    /** password grant */
+    username?: string;
+    password?: string;
+    /** PKCE (authorization_code); verifier generated per exchange. */
+    pkce?: boolean;
+    codeVerifier?: string;
+    /** Where the token is attached on send. */
+    sendTokenIn?: "header" | "query";
+    headerPrefix?: string;
+    queryParamName?: string;
+    /** Client credentials strategy at the token endpoint. */
+    authMethod?: "basic" | "post_body";
+    /** OIDC: send the id_token instead of the access_token. */
+    useIdToken?: boolean;
   };
   hawk?: { id: string; key: string; algorithm: "sha256" | "sha1" };
   awsSigV4?: {

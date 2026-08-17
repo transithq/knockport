@@ -3,6 +3,7 @@ import {
   type BodyContent,
   collectPromptVariableNames,
   collectRequestPromptVariables,
+  ensureOAuth2AndAttach,
   type FormDataEntry,
   getPredefinedVariableNames,
   HTTP_METHODS,
@@ -791,6 +792,14 @@ export async function handleSend(tabId: string) {
       relayUrl: store.relayUrl,
       relayToken: store.relayToken,
     });
+    // OAuth2 (B1): attach the stored token; refresh first when expired. The
+    // refresh write-back lands on the tab copy; it persists on the next save.
+    if (resolved.auth.type === "oauth2" && resolved.auth.oauth2?.accessToken) {
+      const oauth = await ensureOAuth2AndAttach(resolved, resolved.auth, transport, undefined);
+      if (oauth.refreshed && oauth.stored) {
+        useAppStore.getState().updateRequestAuth(tabId, resolved.auth);
+      }
+    }
     // Enforce the global timeout via an abort signal (transports link it to
     // their own AbortController).
     const abort = new AbortController();

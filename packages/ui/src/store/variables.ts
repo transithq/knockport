@@ -112,6 +112,26 @@ function resolveAuth(auth: AuthConfig, vars: Record<string, string>): AuthConfig
           ? { ...auth.apiKey, value: resolveVariables(auth.apiKey.value, vars) }
           : undefined,
       };
+    case "oauth2": {
+      const o2 = auth.oauth2;
+      if (!o2) return auth;
+      const opt = (v?: string) => (v === undefined ? undefined : resolveVariables(v, vars));
+      return {
+        ...auth,
+        oauth2: {
+          ...o2,
+          clientId: opt(o2.clientId),
+          clientSecret: opt(o2.clientSecret),
+          authUrl: opt(o2.authUrl),
+          tokenUrl: opt(o2.tokenUrl),
+          redirectUri: opt(o2.redirectUri),
+          username: opt(o2.username),
+          password: opt(o2.password),
+          headerPrefix: opt(o2.headerPrefix),
+          queryParamName: opt(o2.queryParamName),
+        },
+      };
+    }
     default:
       return auth;
   }
