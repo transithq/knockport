@@ -22,6 +22,7 @@ import {
   globalsVariableMap,
   resolveRequest,
 } from "../../store/variables";
+import { statusGroupColor, statusLabel } from "../response/status";
 
 type Filter = "all" | "passed" | "failed";
 type DetailTab = "response" | "headers" | "tests";
@@ -350,7 +351,10 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
                     {r.name}
                   </span>
                   <span className="kp-runner-meta">
-                    {r.status || "—"} · {r.time} ms
+                    <span style={{ color: statusGroupColor(r.status), fontWeight: 700 }}>
+                      {r.status || "—"}
+                    </span>{" "}
+                    · {r.time} ms
                   </span>
                 </button>
               ))}
@@ -393,8 +397,13 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
               {selected.url && <div className="kp-runner-url">{selected.url}</div>}
               {selected.error && <div className="kp-runner-error">{selected.error}</div>}
               <div className="kp-runner-detail-meta">
-                <span className={selected.status >= 200 && selected.status < 400 ? "ok" : "fail"}>
-                  {selected.status || "failed"}
+                <span
+                  className="kp-runner-detail-status"
+                  style={{ color: statusGroupColor(selected.status) ?? "var(--kp-status-5xx)" }}
+                >
+                  {selected.status
+                    ? statusLabel(selected.status, selected.response?.statusText)
+                    : "failed"}
                 </span>
                 <span>{selected.time} ms</span>
                 {selected.response && <span>{selected.response.bodySize} B</span>}

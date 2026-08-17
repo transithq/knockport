@@ -2124,12 +2124,7 @@ body.kp-resizing-y .kp-resize-handle {
   color: var(--kp-text-tertiary);
   font-family: var(--kp-font-mono);
 }
-.kp-runner-detail-meta .ok {
-  color: var(--kp-success);
-  font-weight: 700;
-}
-.kp-runner-detail-meta .fail {
-  color: var(--kp-error);
+.kp-runner-detail-meta .kp-runner-detail-status {
   font-weight: 700;
 }
 .kp-runner-body {

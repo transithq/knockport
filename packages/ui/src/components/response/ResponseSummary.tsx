@@ -4,13 +4,7 @@ import { useState } from "react";
 import { useAppStore } from "../../store/app-store";
 import { DropdownMenu } from "../common/DropdownMenu";
 import { downloadResponseText, filenameForResponse } from "./response-export";
-
-function statusColor(status: number): string {
-  if (status >= 200 && status < 300) return "var(--kp-status-2xx)";
-  if (status >= 300 && status < 400) return "var(--kp-status-3xx)";
-  if (status >= 400 && status < 500) return "var(--kp-status-4xx)";
-  return "var(--kp-status-5xx)";
-}
+import { statusGroupColor, statusLabel } from "./status";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -123,8 +117,11 @@ export function ResponseSummary({ tabId }: { tabId: string }) {
     <div className="kp-response-summary kp-scroll">
       {/* Status bar */}
       <div className="kp-summary-statusbar">
-        <span className="kp-status-code" style={{ color: statusColor(response.status) }}>
-          {response.status} {response.statusText}
+        <span
+          className="kp-status-code"
+          style={{ color: statusGroupColor(response.status) ?? "var(--kp-status-5xx)" }}
+        >
+          {statusLabel(response.status, response.statusText)}
         </span>
         <span className="kp-summary-dot">•</span>
         <span>{formatMs(response.timings.total)} ms</span>
