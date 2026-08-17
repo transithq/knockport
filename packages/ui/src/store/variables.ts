@@ -1,4 +1,4 @@
-import type { Request, KeyValuePair, AuthConfig, BodyContent, Collection, Folder } from "@knockport/core";
+import type { Request, KeyValuePair, AuthConfig, BodyContent, Collection, Folder, Environment } from "@knockport/core";
 import { resolveVariables } from "@knockport/core";
 import type { AppStore } from "./app-store";
 
@@ -14,16 +14,34 @@ export function getGlobalsEnvironment(
   return state.environments.find((e) => e.isDefault);
 }
 
-export function buildVariableMap(state: Pick<AppStore, "collections" | "environments" | "activeEnvironmentId">): Record<string, string> {
+/**
+ * Runner environment override (D3): a collection run can execute against a
+ * picked environment instead of the workspace's active one. When
+ * `includeActiveEnv` is set, the active environment's variables are merged in
+ * below the picked one (active env values win nothing — runner env overrides).
+ */
+export interface RunnerEnvOverride {
+  /** Environment picked in the runner (undefined = use the active env as usual). */
+  runnerEnv?: Environment;
+  /** When a runner env is picked, also merge the active env underneath it. */
+  includeActiveEnv?: boolean;
+}
+
+function applyEnvLayer(map: Record<string, string>, env: Environment | undefined): void {
+  if (!env) return;
+  for (const v of env.variables ?? []) {
+    if (v.enabled) map[v.key] = v.value;
+  }
+}
+
+export function buildVariableMap(
+  state: Pick<AppStore, "collections" | "environments" | "activeEnvironmentId">,
+  runnerOverride?: RunnerEnvOverride,
+): Record<string, string> {
   const map: Record<string, string> = {};
 
   // Global environment variables (lowest precedence)
-  const globals = getGlobalsEnvironment(state);
-  if (globals) {
-    for (const v of globals.variables ?? []) {
-      if (v.enabled) map[v.key] = v.value;
-    }
-  }
+  applyEnvLayer(map, getGlobalsEnvironment(state));
 
   // Collection variables (override globals)
   for (const collection of state.collections) {
@@ -32,25 +50,31 @@ export function buildVariableMap(state: Pick<AppStore, "collections" | "environm
     }
   }
 
-  // Environment variables (override collection)
-  const env = state.environments.find((e) => e.id === state.activeEnvironmentId);
-  if (env) {
-    for (const v of env.variables ?? []) {
-      if (v.enabled) map[v.key] = v.value;
-    }
+  // Environment layer(s): runner-picked env overrides the active one (or
+  // merges over it when includeActiveEnv is set).
+  const active = state.environments.find((e) => e.id === state.activeEnvironmentId);
+  if (runnerOverride?.runnerEnv) {
+    if (runnerOverride.includeActiveEnv) applyEnvLayer(map, active);
+    applyEnvLayer(map, runnerOverride.runnerEnv);
+  } else {
+    applyEnvLayer(map, active);
   }
 
   return map;
 }
 
-/** Variables of the active environment only (pm.environment.* scope). */
-export function environmentVariableMap(state: Pick<AppStore, "environments" | "activeEnvironmentId">): Record<string, string> {
+/** Variables of the active (or runner-picked) environment only (pm.environment.* scope). */
+export function environmentVariableMap(
+  state: Pick<AppStore, "environments" | "activeEnvironmentId">,
+  runnerOverride?: RunnerEnvOverride,
+): Record<string, string> {
   const map: Record<string, string> = {};
-  const env = state.environments.find((e) => e.id === state.activeEnvironmentId);
-  if (env) {
-    for (const v of env.variables ?? []) {
-      if (v.enabled) map[v.key] = v.value;
-    }
+  const active = state.environments.find((e) => e.id === state.activeEnvironmentId);
+  if (runnerOverride?.runnerEnv) {
+    if (runnerOverride.includeActiveEnv) applyEnvLayer(map, active);
+    applyEnvLayer(map, runnerOverride.runnerEnv);
+  } else {
+    applyEnvLayer(map, active);
   }
   return map;
 }

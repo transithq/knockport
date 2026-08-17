@@ -117,6 +117,18 @@ export interface RunnerTabState {
   results: CollectionRunEntry[];
   selectedIdx: number | null;
   filter: "all" | "passed" | "failed";
+  /** D3: stop the run after the first failed/errored request (bail). */
+  stopOnError: boolean;
+  /** D3: carry script-set variable values into subsequent requests. */
+  keepVariableValues: boolean;
+  /** D3: retain full response bodies in the results for inspection. */
+  persistResponses: boolean;
+  /** D3: run against a specific environment instead of the active one. */
+  runnerEnvironmentId: string | null;
+  /** D3: merge the active environment's variables under the runner env. */
+  includeActiveEnv: boolean;
+  /** Set when a run was stopped early by stop-on-error. */
+  stoppedReason?: string;
 }
 
 export const DEFAULT_RUNNER_STATE: RunnerTabState = {
@@ -127,6 +139,11 @@ export const DEFAULT_RUNNER_STATE: RunnerTabState = {
   results: [],
   selectedIdx: null,
   filter: "all",
+  stopOnError: false,
+  keepVariableValues: true,
+  persistResponses: true,
+  runnerEnvironmentId: null,
+  includeActiveEnv: true,
 };
 
 // ── Folder tree helpers ─────────────────────────────────────────────────────

@@ -57,6 +57,8 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
   const collection = collections.find((c) => c.id === collectionId);
   const rs = useAppStore((s) => s.runnerStates[collectionId] ?? DEFAULT_RUNNER_STATE);
   const setRunnerState = useAppStore((s) => s.setRunnerState);
+  const environments = useAppStore((s) => s.environments);
+  const activeEnvironmentId = useAppStore((s) => s.activeEnvironmentId);
 
   const [detailTab, setDetailTab] = useState<DetailTab>("response");
 
@@ -69,6 +71,9 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
   const requests = flattenRequests(collection);
   const included = requests.filter((r) => !excluded.has(r.id));
 
+  const runnerEnv = environments.find((e) => e.id === rs.runnerEnvironmentId);
+  const activeEnv = environments.find((e) => e.id === activeEnvironmentId);
+
   const toggle = (id: string) => {
     const next = new Set(excluded);
     if (next.has(id)) next.delete(id);
@@ -78,7 +83,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
 
   const run = async () => {
     if (included.length === 0) return;
-    patch({ phase: "running", results: [], selectedIdx: null });
+    patch({ phase: "running", results: [], selectedIdx: null, stoppedReason: undefined });
     const { getTransport } = await import("@knockport/transport");
     const { runTests, runPreScript, runPostResponseScript, mergeTestSummaries } = await import(
       "@knockport/engine"
@@ -91,8 +96,18 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
     const all: CollectionRunEntry[] = [];
     const startedAt = new Date().toISOString();
     // Post-response variable mutations carry into the next request's runtime
-    // scope (Bruno-style). Reset per outer run.
+    // scope (Bruno-style). Reset per outer run. The "keep variable values"
+    // toggle (D3) disables the carry, giving each request a fresh scope.
     let carryVars: Record<string, string> = {};
+    // D3 runner environment: executes against the picked env instead of the
+    // active one; optionally merges the active env's variables underneath.
+    const envOverride = () => {
+      const picker = useAppStore.getState().runnerStates[collectionId] ?? DEFAULT_RUNNER_STATE;
+      const picked = useAppStore
+        .getState()
+        .environments.find((e) => e.id === picker.runnerEnvironmentId);
+      return picked ? { runnerEnv: picked, includeActiveEnv: picker.includeActiveEnv } : undefined;
+    };
 
     // Prompt variables (A5): asked once at run start (Bruno semantics — one
     // dialog per run), carried into every request/iteration. Cancel aborts.
@@ -113,17 +128,23 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
     }
     const promptVars = withPromptAnswers({}, promptAnswers);
 
-    for (let it = 0; it < iterations; it++) {
+    let stoppedReason: string | undefined;
+    outer: for (let it = 0; it < iterations; it++) {
       for (const collectionCopy of included) {
         const state = useAppStore.getState();
+        const override = envOverride();
         // Prefer the live copy from an open request tab so unsaved edits are executed
         const liveTab = state.tabs.find(
           (t) => (!t.kind || t.kind === "request") && t.requestId === collectionCopy.id,
         );
         const req = (liveTab && state.requests[liveTab.id]) || collectionCopy;
-        let vars = { ...buildVariableMap(state), ...carryVars, ...promptVars };
+        let vars = {
+          ...buildVariableMap(state, override),
+          ...carryVars,
+          ...promptVars,
+        };
         const opts = {
-          environment: environmentVariableMap(state),
+          environment: environmentVariableMap(state, override),
           collectionVariables: collectionVariablesMap(state),
           globals: globalsVariableMap(state),
           request: req,
@@ -143,6 +164,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
         // Enforce the global timeout per request via an abort signal
         const abort = new AbortController();
         const timer = setTimeout(() => abort.abort(), state.timeoutMs);
+        let failed = false;
         try {
           const res = await transport.execute(resolved, { signal: abort.signal });
           clearTimeout(timer);
@@ -155,7 +177,9 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           let postSummary = null;
           if (postScript.trim()) {
             const post = await runPostResponseScript(res, postScript, vars, opts);
-            carryVars = post.variables;
+            // D3 keep-variable-values: when off, every request starts with a
+            // fresh runtime scope — mutations do not carry forward.
+            carryVars = rs.keepVariableValues ? post.variables : {};
             postSummary = post.summary;
           }
 
@@ -171,7 +195,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
             const summary = await runTests(res, {
               script: testScript || undefined,
               assertions,
-              environment: environmentVariableMap(state),
+              environment: environmentVariableMap(state, override),
               collectionVariables: collectionVariablesMap(state),
               globals: globalsVariableMap(state),
               request: resolved,
@@ -187,20 +211,25 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
             testsTotal = testSummary.tests.length;
             testsOk = testsOk && postSummary.failed === 0 && !postSummary.scriptError;
           }
+          failed = !(res.status >= 200 && res.status < 400 && testsOk);
           all.push({
             name: req.name,
             method: req.method,
             status: res.status,
             time: Math.round(performance.now() - start),
-            ok: res.status >= 200 && res.status < 400 && testsOk,
+            ok: !failed,
             testsPassed,
             testsTotal,
             url: resolved.url,
-            response: res,
+            // D3 persist-responses: drop the body when off (headers survive).
+            response: rs.persistResponses
+              ? res
+              : { ...res, body: "", bodySize: 0 },
             testSummary,
           });
         } catch (err) {
           clearTimeout(timer);
+          failed = true;
           all.push({
             name: req.name,
             method: req.method,
@@ -214,6 +243,12 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           });
         }
         patch({ results: [...all] });
+        // D3 stop-on-error / bail: abort the rest of the run after the first
+        // failed or errored request.
+        if (rs.stopOnError && failed) {
+          stoppedReason = `Stopped on error: ${req.name} (iteration ${it + 1}) failed`;
+          break outer;
+        }
         if (delay > 0) await new Promise((r) => setTimeout(r, delay));
       }
     }
@@ -224,7 +259,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
       iterations,
       results: all,
     });
-    patch({ phase: "done" });
+    patch({ phase: "done", stoppedReason });
   };
 
   const reset = () => {
@@ -298,6 +333,72 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           </span>
         )}
       </div>
+
+      {phase === "config" && (
+        <div className="kp-runner-options">
+          <label className="kp-runner-field">
+            Environment
+            <select
+              className="kp-runner-env-select"
+              value={rs.runnerEnvironmentId ?? ""}
+              onChange={(e) => patch({ runnerEnvironmentId: e.target.value || null })}
+            >
+              <option value="">
+                Active environment{activeEnv ? ` (${activeEnv.name})` : ""}
+              </option>
+              {environments
+                .filter((e) => e.id !== activeEnvironmentId)
+                .map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          {runnerEnv && (
+            <label className="kp-runner-check" title="Also merge the active environment's variables underneath the picked one">
+              <input
+                type="checkbox"
+                className="kp-checkbox"
+                checked={rs.includeActiveEnv}
+                onChange={(e) => patch({ includeActiveEnv: e.target.checked })}
+              />
+              Include active env
+            </label>
+          )}
+          <label className="kp-runner-check" title="Stop the run after the first failed or errored request">
+            <input
+              type="checkbox"
+              className="kp-checkbox"
+              checked={rs.stopOnError}
+              onChange={(e) => patch({ stopOnError: e.target.checked })}
+            />
+            Stop on error
+          </label>
+          <label className="kp-runner-check" title="Carry script-set variables into subsequent requests of the run">
+            <input
+              type="checkbox"
+              className="kp-checkbox"
+              checked={rs.keepVariableValues}
+              onChange={(e) => patch({ keepVariableValues: e.target.checked })}
+            />
+            Keep variable values
+          </label>
+          <label className="kp-runner-check" title="Retain response bodies in the results for inspection">
+            <input
+              type="checkbox"
+              className="kp-checkbox"
+              checked={rs.persistResponses}
+              onChange={(e) => patch({ persistResponses: e.target.checked })}
+            />
+            Persist responses
+          </label>
+        </div>
+      )}
+
+      {phase === "done" && rs.stoppedReason && (
+        <div className="kp-runner-error">{rs.stoppedReason}</div>
+      )}
 
       {phase !== "config" && (
         <div className="kp-seg-row">
@@ -429,7 +530,11 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
 
               {detailTab === "response" && (
                 <pre className="kp-code-block kp-runner-body">
-                  {selected.response ? formatBody(selected.response.body) : "No response received."}
+                  {!selected.response
+                    ? "No response received."
+                    : !rs.persistResponses && selected.response.body === ""
+                      ? "Response body not persisted — enable Persist responses to inspect bodies."
+                      : formatBody(selected.response.body)}
                 </pre>
               )}
 
