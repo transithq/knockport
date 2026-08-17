@@ -21,6 +21,7 @@ export {
 export {
   importCurl,
   importPostman,
+  importPostmanEnvironment,
   importHar,
   importKnockportJson,
   importKnockportYaml,

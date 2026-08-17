@@ -232,7 +232,8 @@ export function ImportModal() {
           <button type="button" className="kp-icon-btn" onClick={() => setOpen(false)}><X size={14} /></button>
         </div>
         <p className="kp-hint" style={{ padding: "0 14px" }}>
-          Paste a cURL command, Postman v2.1 JSON, or HAR file content.
+          Paste a cURL command, Postman collection/environment JSON, Postman environment
+          JSON, or HAR file content.
         </p>
         <textarea
           className="kp-code-input kp-mono"

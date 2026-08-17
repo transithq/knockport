@@ -130,9 +130,7 @@ interface PostmanItem {
   name?: string;
   request?: any;
   item?: PostmanItem[];
-}
-
-export function importPostman(json: string): Collection {
+}export function importPostman(json: string): Collection {
   const doc = JSON.parse(json);
   const name = doc.info?.name ?? "Imported Collection";
 
@@ -242,6 +240,42 @@ function findAuthValue(arr: any, key: string): string {
   return entry?.value ?? "";
 }
 
+// ── Postman environment importer ─────────────────────────────────────────────
+// Postman exports environments as flat JSON:
+//   { id, name, values: [{ key, value, enabled, type: "default"|"secret" }],
+//     _postman_variable_scope: "environment", _postman_exported_at/using }
+
+/** True when a parsed document looks like a Postman environment export. */
+function looksLikePostmanEnvironment(doc: any): boolean {
+  if (!doc || typeof doc !== "object" || Array.isArray(doc)) return false;
+  if (doc._postman_variable_scope === "environment") return true;
+  // Older/CLI exports may lack the scope marker — treat a named `values`
+  // array as an environment when it cannot be a collection or globals file.
+  return (
+    Array.isArray(doc.values) &&
+    typeof doc.name === "string" &&
+    !Array.isArray(doc.item) &&
+    doc._postman_variable_scope !== "globals"
+  );
+}
+
+export function importPostmanEnvironment(json: string): Environment {
+  const doc = JSON.parse(json);
+  if (!looksLikePostmanEnvironment(doc)) {
+    throw new Error("Not a Postman environment export");
+  }
+  return {
+    id: createId("env"),
+    name: doc.name ?? "Imported Environment",
+    variables: (doc.values ?? []).map((v: any) => ({
+      key: String(v.key ?? ""),
+      value: String(v.value ?? ""),
+      enabled: v.enabled !== false,
+      ...(v.type === "secret" ? { type: "secret" as const } : {}),
+    })),
+  };
+}
+
 // ── HAR importer ─────────────────────────────────────────────────────────────
 export function importHar(json: string): Collection {
   const doc = JSON.parse(json);
@@ -285,6 +319,7 @@ export function importAuto(input: string): Collection | Request | Environment {
     const doc = JSON.parse(trimmed);
     if (doc?.log?.entries) return importHar(trimmed);
     if (doc?.info?.schema?.includes("postman") || Array.isArray(doc?.item)) return importPostman(trimmed);
+    if (looksLikePostmanEnvironment(doc)) return importPostmanEnvironment(trimmed);
     if (doc && typeof doc === "object") return importNativeObject(doc);
   } catch {
     // not JSON — try native YAML below
