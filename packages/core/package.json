@@ -18,6 +18,9 @@
     "test:watch": "vitest",
     "clean": "rm -rf dist"
   },
+  "dependencies": {
+    "@tropel/core-wasm": "file:../../../tropel/packages/core-wasm"
+  },
   "devDependencies": {
     "typescript": "^5.7.3",
     "vitest": "^3.0.4"

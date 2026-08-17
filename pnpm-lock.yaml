@@ -41,6 +41,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.0.0
         version: 4.3.3(vite@6.4.3(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
+      '@tropel/core-wasm':
+        specifier: file:../../../tropel/packages/core-wasm
+        version: file:../tropel/packages/core-wasm
       react:
         specifier: ^19.0.0
         version: 19.2.8
@@ -74,6 +77,10 @@ importers:
         version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
 
   packages/core:
+    dependencies:
+      '@tropel/core-wasm':
+        specifier: file:../../../tropel/packages/core-wasm
+        version: file:../tropel/packages/core-wasm
     devDependencies:
       typescript:
         specifier: ^5.7.3
@@ -1015,6 +1022,10 @@ packages:
 
   '@tanstack/virtual-core@3.17.7':
     resolution: {integrity: sha512-bp+v10y65sp2H7WpWfIMyxTNfl8ZVfxFTLRjPIFRryi6FV/J33z4IS53WO4pTk36KlvJ4iLiQz+oaydDC1xbcA==}
+
+  '@tropel/core-wasm@file:../tropel/packages/core-wasm':
+    resolution: {directory: ../tropel/packages/core-wasm, type: directory}
+    engines: {node: '>=20'}
 
   '@tropel/shims@0.1.0':
     resolution: {integrity: sha512-3z5hqtdLdEPaRAsp+s15P9pFQVpfuTbDtbYp+u/rUkHTSgoYuit5vVSidwwnVuzqtaT28U+7/tJP7HvuY/JM2w==}
@@ -2430,6 +2441,8 @@ snapshots:
       react-dom: 19.2.8(react@19.2.8)
 
   '@tanstack/virtual-core@3.17.7': {}
+
+  '@tropel/core-wasm@file:../tropel/packages/core-wasm': {}
 
   '@tropel/shims@0.1.0': {}
 

@@ -19,6 +19,7 @@
     "@knockport/storage": "workspace:*",
     "@knockport/engine": "workspace:*",
     "@knockport/ui": "workspace:*",
+    "@tropel/core-wasm": "file:../../../tropel/packages/core-wasm",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwindcss": "^4.0.0",

@@ -1,3 +1,5 @@
+import { resolvePredefinedVariables } from "./tropel.js";
+
 /**
  * Generate a short, collision-resistant ID.
  * Uses crypto.randomUUID when available, falls back to a timestamp-based scheme.
@@ -32,12 +34,15 @@ export function stableSortPairs<T extends { key: string; enabled: boolean }>(pai
 
 /**
  * Resolve `{{variable}}` references in a string against a variable map.
+ * Predefined dynamic `$variables` ({{$guid}}, {{$timestamp}}, …) are resolved
+ * first, each occurrence generating a fresh value.
  */
 export function resolveVariables(
   template: string,
   variables: Record<string, string>,
 ): string {
-  return template.replace(/\{\{(\s*[\w.]+\s*)\}\}/g, (_, key: string) => {
+  const dynamic = resolvePredefinedVariables(template);
+  return dynamic.replace(/\{\{(\s*[\w.]+\s*)\}\}/g, (_, key: string) => {
     const trimmed = key.trim();
     return variables[trimmed] ?? `{{${trimmed}}}`;
   });

@@ -2,6 +2,7 @@ import {
   type Assertion,
   type BodyContent,
   type FormDataEntry,
+  getPredefinedVariableNames,
   HTTP_METHODS,
   type HttpMethod,
   type KeyValuePair,
@@ -64,6 +65,7 @@ export function RequestEditor({ tabId }: { tabId: string }) {
     return new Set<string>([
       ...(env?.variables ?? []).map((v) => v.key),
       ...(collection?.variables ?? []).map((v) => v.key),
+      ...getPredefinedVariableNames(),
     ]);
   }, [environments, activeEnvironmentId, collections, request?.id]);
 
