@@ -44,6 +44,15 @@ export type ActivePanel = "params" | "headers" | "auth" | "body" | "scripts" | "
 export type ResponsePanel = "body" | "cookies" | "headers" | "tests";
 export type SidebarTab = "collections" | "environments" | "history";
 
+/** Response pane placement (F6, Bruno parity). */
+export type ResponseLayout = "below" | "beside";
+
+/**
+ * Bodies above this size are held behind a "show anyway" guard (F6):
+ * rendering several MB of text through CodeMirror freezes the UI thread.
+ */
+export const LARGE_RESPONSE_BYTES = 1_000_000;
+
 export type WsTabStatus = "idle" | "connecting" | "open" | "closed" | "error";
 
 // ── WebSocket log entry ──────────────────────────────────────────────────────
@@ -202,6 +211,12 @@ export interface AppStore {
   rightPaneWidth: number;
   /** Request pane height in px (response fills the rest). */
   requestPaneHeight: number;
+  /** Response pane placement: stacked under the request or beside it. */
+  responseLayout: ResponseLayout;
+  /** Response pane width in px (beside layout only). */
+  responsePaneWidth: number;
+  /** Tab IDs whose large-response guard was dismissed ("show anyway"). */
+  largeBodyDismissed: Record<string, true>;
 
   // Collections
   collections: Collection[];
@@ -279,6 +294,9 @@ export interface AppStore {
   // Actions — Layout panes
   setRightPaneWidth: (width: number) => void;
   setRequestPaneHeight: (height: number) => void;
+  setResponseLayout: (layout: ResponseLayout) => void;
+  setResponsePaneWidth: (width: number) => void;
+  dismissLargeBody: (tabId: string) => void;
 
   // Actions — Collections
   addCollection: (collection: Collection) => void;
@@ -395,6 +413,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
     (typeof localStorage !== "undefined" &&
       Number.parseInt(localStorage.getItem("kp-request-pane-height") ?? "", 10)) ||
     320,
+  responseLayout:
+    (typeof localStorage !== "undefined" &&
+      localStorage.getItem("kp-response-layout") === "beside")
+      ? "beside"
+      : "below",
+  responsePaneWidth:
+    (typeof localStorage !== "undefined" &&
+      Number.parseInt(localStorage.getItem("kp-response-pane-width") ?? "", 10)) ||
+    480,
+  largeBodyDismissed: {},
 
   collections: [],
   activeCollectionId: null,
@@ -493,6 +521,24 @@ export const useAppStore = create<AppStore>((set, get) => ({
       /* storage unavailable */
     }
   },
+  setResponseLayout: (layout) => {
+    set({ responseLayout: layout });
+    try {
+      localStorage.setItem("kp-response-layout", layout);
+    } catch {
+      /* storage unavailable */
+    }
+  },
+  setResponsePaneWidth: (width) => {
+    set({ responsePaneWidth: width });
+    try {
+      localStorage.setItem("kp-response-pane-width", String(width));
+    } catch {
+      /* storage unavailable */
+    }
+  },
+  dismissLargeBody: (tabId) =>
+    set((s) => ({ largeBodyDismissed: { ...s.largeBodyDismissed, [tabId]: true } })),
 
   // ── Collection Actions ───────────────────────────────────────────────────
   addCollection: (collection) => {
@@ -1020,9 +1066,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // ── Response Actions ─────────────────────────────────────────────────────
   setResponse: (tabId, response) =>
-    set((s) => ({
-      responses: { ...s.responses, [tabId]: response },
-    })),
+    set((s) => {
+      // A fresh response resets the large-body guard dismissal for this tab
+      // so every new response is re-evaluated against the size threshold.
+      const largeBodyDismissed = { ...s.largeBodyDismissed };
+      delete largeBodyDismissed[tabId];
+      return {
+        responses: { ...s.responses, [tabId]: response },
+        largeBodyDismissed,
+      };
+    }),
 
   setTestResults: (tabId, results) =>
     set((s) => ({

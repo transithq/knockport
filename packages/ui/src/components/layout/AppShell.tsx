@@ -29,13 +29,22 @@ const RIGHT_PANE_DEFAULT = 400;
 const REQUEST_PANE_MIN = 180;
 const RESPONSE_PANE_MIN = 200;
 const REQUEST_PANE_DEFAULT = 320;
+const RESPONSE_PANE_DEFAULT = 480;
 
+/**
+ * Workspace grid (F6): two persisted layouts —
+ * - "below": request stacked above the response (row resize), analytics rail right
+ * - "beside": request | response | analytics rail (column resizes only)
+ */
 function WorkspaceGrid({ tabId }: { tabId: string }) {
   const rightPaneWidth = useAppStore((s) => s.rightPaneWidth);
   const requestPaneHeight = useAppStore((s) => s.requestPaneHeight);
+  const responseLayout = useAppStore((s) => s.responseLayout);
+  const responsePaneWidth = useAppStore((s) => s.responsePaneWidth);
   const gridRef = useRef<HTMLDivElement>(null);
   const colResizer = useResizer("x");
   const rowResizer = useResizer("y");
+  const bodyResizer = useResizer("x");
 
   // Re-clamp persisted pane sizes when the window shrinks (Bruno's
   // ResizeObserver guard) — keeps panels from overflowing their container.
@@ -46,13 +55,82 @@ function WorkspaceGrid({ tabId }: { tabId: string }) {
       const h = gridRef.current?.clientHeight ?? Number.POSITIVE_INFINITY;
       const rightMax = Math.min(RIGHT_PANE_MAX, Math.max(RIGHT_PANE_MIN, w - 420));
       if (s.rightPaneWidth > rightMax) s.setRightPaneWidth(rightMax);
-      const reqMax = Math.max(REQUEST_PANE_MIN, h - RESPONSE_PANE_MIN - 16);
-      if (s.requestPaneHeight > reqMax) s.setRequestPaneHeight(reqMax);
+      if (s.responseLayout === "below") {
+        const reqMax = Math.max(REQUEST_PANE_MIN, h - RESPONSE_PANE_MIN - 16);
+        if (s.requestPaneHeight > reqMax) s.setRequestPaneHeight(reqMax);
+      } else {
+        const resMax = Math.max(RESPONSE_PANE_MIN, w - s.rightPaneWidth - REQUEST_PANE_MIN - 32);
+        if (s.responsePaneWidth > resMax) s.setResponsePaneWidth(resMax);
+      }
     };
     clamp();
     window.addEventListener("resize", clamp);
     return () => window.removeEventListener("resize", clamp);
   }, []);
+
+  if (responseLayout === "beside") {
+    return (
+      <div
+        className="kp-workspace-grid kp-workspace-beside"
+        ref={gridRef}
+        style={{
+          gridTemplateColumns: `minmax(0, 1fr) 8px minmax(0, ${responsePaneWidth}px) 8px ${rightPaneWidth}px`,
+        }}
+      >
+        <div className="kp-pane-scroll">
+          <RequestEditor tabId={tabId} />
+        </div>
+        <div
+          className="kp-resize-handle vertical"
+          role="separator"
+          aria-orientation="vertical"
+          onMouseDown={(e) =>
+            bodyResizer.start(e, {
+              getValue: () => useAppStore.getState().responsePaneWidth,
+              setValue: (w) => useAppStore.getState().setResponsePaneWidth(w),
+              min: RESPONSE_PANE_MIN,
+              getMax: () => {
+                const s = useAppStore.getState();
+                return Math.max(
+                  RESPONSE_PANE_MIN,
+                  (gridRef.current?.clientWidth ?? 800) -
+                    s.rightPaneWidth -
+                    REQUEST_PANE_MIN -
+                    16,
+                );
+              },
+              invert: true,
+              defaultSize: RESPONSE_PANE_DEFAULT,
+            })
+          }
+          onDoubleClick={() => useAppStore.getState().setResponsePaneWidth(RESPONSE_PANE_DEFAULT)}
+        />
+        <div className="kp-pane-scroll kp-pane-scroll-flex">
+          <ResponseBody tabId={tabId} />
+        </div>
+        <div
+          className="kp-resize-handle vertical"
+          role="separator"
+          aria-orientation="vertical"
+          onMouseDown={(e) =>
+            colResizer.start(e, {
+              getValue: () => useAppStore.getState().rightPaneWidth,
+              setValue: (w) => useAppStore.getState().setRightPaneWidth(w),
+              min: RIGHT_PANE_MIN,
+              getMax: () =>
+                Math.min(RIGHT_PANE_MAX, Math.max(RIGHT_PANE_MIN, (gridRef.current?.clientWidth ?? 800) - 420)),
+              invert: true,
+              defaultSize: RIGHT_PANE_DEFAULT,
+            })
+          }
+          onDoubleClick={() => useAppStore.getState().setRightPaneWidth(RIGHT_PANE_DEFAULT)}
+        />
+        <div className="kp-col-right">
+          <ResponseSummary tabId={tabId} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="kp-workspace-grid" ref={gridRef} style={{ gridTemplateColumns: `minmax(0, 1fr) 8px ${rightPaneWidth}px` }}>

@@ -1,8 +1,8 @@
 import type { ResponseCookie } from "@knockport/core";
 import { clsx } from "clsx";
-import { Check, ChevronDown, Copy, Download, WrapText } from "lucide-react";
+import { Check, ChevronDown, Copy, Download, PanelBottom, PanelRight, WrapText } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useAppStore } from "../../store/app-store";
+import { LARGE_RESPONSE_BYTES, useAppStore } from "../../store/app-store";
 import { CodeViewer, type ViewerLanguage } from "../common/CodeViewer";
 import { downloadResponseText, filenameForResponse } from "./response-export";
 import { type ResponseFormat, detectResponseFormat, formatLabel } from "./response-format";
@@ -165,6 +165,8 @@ function BodyPanel({
   response: { body: string; contentType?: string; bodySize: number; url?: string };
 }) {
   const requestUrl = useAppStore((s) => s.requests[tabId]?.url ?? "");
+  const largeDismissed = useAppStore((s) => s.largeBodyDismissed[tabId] === true);
+  const dismissLargeBody = useAppStore((s) => s.dismissLargeBody);
 
   const detected = useMemo(
     () => detectResponseFormat(response.contentType, response.body),
@@ -238,6 +240,11 @@ function BodyPanel({
   };
 
   const wrap = userWrap || viewTab === "raw";
+  // F6 large-response guard: rendering multi-MB bodies through CodeMirror
+  // freezes the UI thread, so hold them behind an explicit "show anyway".
+  // The dismissal is per tab and resets when a new response lands (the send
+  // path clears it before storing the response).
+  const guarded = response.bodySize > LARGE_RESPONSE_BYTES && !largeDismissed;
 
   return (
     <>
@@ -257,11 +264,33 @@ function BodyPanel({
         <FormatSelector format={activeFormat} onChange={(f) => setFormat(f)} />
       </div>
 
-      {viewTab === "pretty" && (
+      {guarded && (
+        <div className="kp-large-body-guard">
+          <p className="kp-large-body-title">Large response body</p>
+          <p className="kp-large-body-sub">
+            {formatSize(response.bodySize)} of {formatLabel(activeFormat)} — rendering it may make
+            the app unresponsive. You can still download it below.
+          </p>
+          <div className="kp-large-body-actions">
+            <button
+              type="button"
+              className="kp-btn primary"
+              onClick={() => dismissLargeBody(tabId)}
+            >
+              Show anyway
+            </button>
+            <button type="button" className="kp-btn" onClick={saveBody}>
+              <Download size={13} /> Download
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!guarded && viewTab === "pretty" && (
         <CodeViewer value={displayText} language={viewerLanguageFor(activeFormat)} wrap={wrap} />
       )}
-      {viewTab === "raw" && <CodeViewer value={response.body} language="text" wrap />}
-      {viewTab === "preview" && (
+      {!guarded && viewTab === "raw" && <CodeViewer value={response.body} language="text" wrap />}
+      {!guarded && viewTab === "preview" && (
         <PreviewFrame
           body={response.body}
           contentType={response.contentType}
@@ -301,6 +330,8 @@ function BodyPanel({
 export function ResponseBody({ tabId }: { tabId: string }) {
   const responses = useAppStore((s) => s.responses);
   const testResults = useAppStore((s) => s.testResults[tabId]);
+  const responseLayout = useAppStore((s) => s.responseLayout);
+  const setResponseLayout = useAppStore((s) => s.setResponseLayout);
   const response = responses[tabId];
   // Response tab lives in the store so cross-component CTAs (e.g. "View all
   // headers" in the analytics column) can drive it, and it sticks across
@@ -360,6 +391,16 @@ export function ResponseBody({ tabId }: { tabId: string }) {
               {testResults.passed}/{testResults.tests.length}
             </span>
           )}
+        </button>
+        <span className="kp-req-tabs-spacer" />
+        <button
+          type="button"
+          className="kp-icon-btn kp-layout-toggle"
+          title={responseLayout === "below" ? "Show response beside the request" : "Show response below the request"}
+          aria-pressed={responseLayout === "beside"}
+          onClick={() => setResponseLayout(responseLayout === "below" ? "beside" : "below")}
+        >
+          {responseLayout === "below" ? <PanelRight size={14} /> : <PanelBottom size={14} />}
         </button>
       </div>
 

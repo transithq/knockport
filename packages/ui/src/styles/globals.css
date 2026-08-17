@@ -841,6 +841,11 @@ body {
   min-height: 0;
   min-width: 0;
 }
+/* F6: beside layout — request | response | analytics (3 panes, no inner row resize) */
+.kp-workspace-beside {
+  grid-template-columns: minmax(0, 1fr) 8px minmax(200px, 480px) 8px minmax(300px, 400px);
+  grid-template-rows: minmax(0, 1fr);
+}
 .kp-pane-scroll {
   overflow: auto;
   min-height: 0;
@@ -1076,6 +1081,13 @@ body.kp-resizing-y .kp-resize-handle {
   border-radius: 8px;
   background: var(--kp-bg-elevated);
   color: var(--kp-text-tertiary);
+}
+/* F6: layout toggle pinned to the right edge of the response tab strip */
+.kp-req-tabs-spacer {
+  flex: 1;
+}
+.kp-layout-toggle {
+  align-self: center;
 }
 
 .kp-req-panel {
@@ -1359,6 +1371,34 @@ body.kp-resizing-y .kp-resize-handle {
   gap: 10px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--kp-border-primary);
+}
+/* F6: large-response guard — sits where the viewer would render */
+.kp-large-body-guard {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+}
+.kp-large-body-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--kp-text-primary);
+}
+.kp-large-body-sub {
+  max-width: 440px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--kp-text-secondary);
+}
+.kp-large-body-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
 }
 .kp-lang-btn {
   display: inline-flex;
