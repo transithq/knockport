@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../../store/app-store";
 import { openCollectionFolder, isDiskCollection, writeCollectionToDisk } from "../../store/disk";
 import { createId } from "@knockport/core";
-import { exportPostman, exportJson, serializeCollection, serializeEnvironment } from "@knockport/format";
+import { exportPostman, exportJson, serializeCollection, serializeEnvironment, serializeEnvironments } from "@knockport/format";
 import {
   Search,
   FilePlus,
@@ -132,6 +132,13 @@ export function CommandPalette() {
       const s = useAppStore.getState();
       const env = s.environments.find((e) => e.id === s.activeEnvironmentId) ?? s.environments[0];
       if (env) downloadFile(`${env.name.replace(/\s+/g, "_")}.yaml`, serializeEnvironment(env), "text/yaml");
+      setCommandPaletteOpen(false);
+    } },
+    { id: "export-environments-bulk", label: "Export All Environments (one YAML)", icon: <Upload size={14} />, group: "Actions", action: () => {
+      const s = useAppStore.getState();
+      if (s.environments.length > 0) {
+        downloadFile("knockport_environments.yaml", serializeEnvironments(s.environments), "text/yaml");
+      }
       setCommandPaletteOpen(false);
     } },
   ];

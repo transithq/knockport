@@ -74,6 +74,34 @@ export function deserializeEnvironment(yaml: string): Environment {
 }
 
 /**
+ * Serialize every environment into a single bulk YAML document (H9,
+ * download/export artifact — secret variable values are masked, matching
+ * `serializeEnvironment`). Round-trips through `deserializeEnvironments`.
+ */
+export function serializeEnvironments(envs: Environment[]): string {
+  const doc = {
+    environments: envs.map((env) => ({
+      name: env.name,
+      variables: redactVariables(env.variables ?? []).map(serializeVariable),
+    })),
+  };
+  const raw = stringify(doc, STR_OPTS);
+  return normalizeOutput(raw);
+}
+
+/**
+ * Deserialize the bulk environment document produced by
+ * `serializeEnvironments`.
+ */
+export function deserializeEnvironments(yaml: string): Environment[] {
+  const doc = parse(yaml, DOC_OPTS) as any;
+  if (!doc || typeof doc !== "object" || !Array.isArray(doc.environments)) {
+    throw new Error("Invalid bulk environment document — expected an environments: list");
+  }
+  return doc.environments.map((e: any) => environmentFromRaw(e ?? {}));
+}
+
+/**
  * Serialize a single request to byte-stable YAML.
  */
 export function serializeRequest(request: Request): string {

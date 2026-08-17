@@ -3,6 +3,8 @@ export {
   deserializeCollection,
   serializeEnvironment,
   deserializeEnvironment,
+  serializeEnvironments,
+  deserializeEnvironments,
   serializeRequest,
   deserializeRequest,
   collectionFromRaw,
