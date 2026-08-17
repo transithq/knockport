@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Request } from "@knockport/core";
 import { buildBody, buildHeaderList, parseSetCookie, parseSetCookies } from "./index";
 
 describe("parseSetCookie", () => {
@@ -62,7 +63,7 @@ describe("parseSetCookies", () => {
 
 // ── GraphQL wire envelope ────────────────────────────────────────────────────
 describe("graphql body serialization", () => {
-  const gqlRequest = {
+  const gqlRequest: Request = {
     id: "r1",
     name: "q",
     method: "POST",
@@ -70,10 +71,10 @@ describe("graphql body serialization", () => {
     headers: [],
     params: [],
     body: {
-      type: "graphql" as const,
+      type: "graphql",
       graphql: { query: "query { user { name } }", variables: "{\"id\": 1}" },
     },
-    auth: { type: "none" as const },
+    auth: { type: "none" },
   };
 
   it("serializes query + parsed variables into the JSON envelope", () => {
