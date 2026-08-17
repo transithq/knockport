@@ -6,6 +6,8 @@ import {
   HTTP_METHODS,
   type HttpMethod,
   type KeyValuePair,
+  scrubRequestSecrets,
+  secretVariableValues,
 } from "@knockport/core";
 import type { TestRunSummary } from "@knockport/engine";
 import { clsx } from "clsx";
@@ -820,9 +822,16 @@ export async function handleSend(tabId: string) {
       store.setTestResults(tabId, null);
     }
 
+    // Scrub secret-typed variable values out of the resolved request before
+    // it reaches history (the auth headers/params may carry live credentials).
+    const activeEnv = store.environments.find((e) => e.id === store.activeEnvironmentId);
+    const secretValues = secretVariableValues(
+      activeEnv?.variables ?? [],
+      ...store.collections.map((c) => c.variables ?? []),
+    );
     store.addHistoryEntry({
       id: crypto.randomUUID(),
-      request: resolved,
+      request: scrubRequestSecrets(resolved, secretValues),
       response,
       timestamp: new Date().toISOString(),
     });

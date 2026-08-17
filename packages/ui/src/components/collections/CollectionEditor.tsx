@@ -1,10 +1,11 @@
 import type { Collection, Folder, Variable } from "@knockport/core";
 import { clsx } from "clsx";
-import { Boxes, Play, Trash2 } from "lucide-react";
+import { Boxes, Play } from "lucide-react";
 import { useState } from "react";
 import { useAppStore } from "../../store/app-store";
 import { AuthEditor } from "../common/AuthEditor";
 import { CodeEditor } from "../common/CodeEditor";
+import { VariablesTable } from "../common/VariablesTable";
 
 type SubTab = "overview" | "auth" | "scripts" | "variables" | "runs";
 // Tests are written in the Post-response script (kp.test / pm.test) — the
@@ -37,7 +38,6 @@ export function CollectionEditor({ collectionId }: { collectionId: string }) {
   const runs = useAppStore((s) => s.collectionRuns);
   const [sub, setSub] = useState<SubTab>("overview");
   const [which, setWhich] = useState<CollectionScriptPhase>("pre");
-  const [newKey, setNewKey] = useState("");
   const collection = collections.find((c) => c.id === collectionId);
 
   if (!collection) return null;
@@ -45,14 +45,6 @@ export function CollectionEditor({ collectionId }: { collectionId: string }) {
   const set = (changes: Partial<Collection>) => updateCollection(collection.id, changes);
   const variables = collection.variables ?? [];
   const setVars = (vars: Variable[]) => set({ variables: vars });
-  const update = (i: number, field: keyof Variable, value: string | boolean) =>
-    setVars(variables.map((v, idx) => (idx === i ? { ...v, [field]: value } : v)));
-  const commitNew = () => {
-    if (newKey.trim()) {
-      setVars([...variables, { key: newKey.trim(), value: "", enabled: true }]);
-      setNewKey("");
-    }
-  };
 
   const subTabs: { id: SubTab; label: string }[] = [
     { id: "overview", label: "Overview" },
@@ -174,62 +166,11 @@ export function CollectionEditor({ collectionId }: { collectionId: string }) {
             <p className="kp-hint">
               Available in every request of this collection as <code>{"{{variable_name}}"}</code>{" "}
               and as <code>pm.collectionVariables.*</code> in scripts. Environment variables
-              override collection variables with the same key.
+              override collection variables with the same key. Mark credentials as{" "}
+              <code>secret</code> — their values are masked here and redacted from exports
+              and history.
             </p>
-            <div className="kp-kv-table">
-              <div className="kp-kv-row kp-kv-head">
-                <span />
-                <span>Variable</span>
-                <span>Value</span>
-                <span />
-              </div>
-
-              {variables.map((v, i) => (
-                <div className="kp-kv-row" key={i}>
-                  <input
-                    type="checkbox"
-                    className="kp-checkbox"
-                    checked={v.enabled !== false}
-                    onChange={(e) => update(i, "enabled", e.target.checked)}
-                  />
-                  <input
-                    type="text"
-                    value={v.key}
-                    placeholder="variable_name"
-                    onChange={(e) => update(i, "key", e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    value={v.value}
-                    placeholder="value"
-                    onChange={(e) => update(i, "value", e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="kp-icon-btn kp-danger"
-                    title="Remove variable"
-                    onClick={() => setVars(variables.filter((_, idx) => idx !== i))}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
-
-              {/* Empty add row — typing a key creates a new variable */}
-              <div className="kp-kv-row">
-                <span />
-                <input
-                  type="text"
-                  value={newKey}
-                  placeholder="Add variable…"
-                  onChange={(e) => setNewKey(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && commitNew()}
-                  onBlur={commitNew}
-                />
-                <span />
-                <span />
-              </div>
-            </div>
+            <VariablesTable variables={variables} onChange={setVars} />
           </div>
         )}
 

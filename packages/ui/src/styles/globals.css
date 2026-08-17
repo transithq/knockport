@@ -447,7 +447,7 @@ body {
   color: var(--kp-accent);
 }
 .kp-env-editor .kp-kv-row {
-  grid-template-columns: 28px 1fr 1fr 32px;
+  grid-template-columns: 28px 1fr 88px 1fr 26px 26px;
 }
 .kp-env-tab-icon {
   color: var(--kp-accent);
@@ -552,6 +552,32 @@ body {
 }
 .kp-collection-section .kp-kv-row {
   grid-template-columns: 28px 1fr 1fr 32px;
+}
+.kp-collection-section .kp-vars-table .kp-kv-row {
+  grid-template-columns: 28px 1fr 88px 1fr 26px 26px;
+}
+.kp-vars-type {
+  padding: 5px 6px;
+  background: var(--kp-bg-tertiary);
+  border: 1px solid var(--kp-border-primary);
+  border-radius: var(--kp-radius-sm);
+  color: var(--kp-text-secondary);
+  font-size: 11.5px;
+  cursor: pointer;
+  outline: none;
+}
+.kp-secret-toggle {
+  color: var(--kp-text-muted);
+}
+.kp-secret-toggle:hover {
+  color: var(--kp-accent);
+  background: var(--kp-bg-elevated);
+}
+.kp-secret-toggle-hidden {
+  visibility: hidden;
+}
+.kp-vars-secret {
+  font-family: var(--kp-font-mono);
 }
 .kp-collection-runs {
   gap: 10px;

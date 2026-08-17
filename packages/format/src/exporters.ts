@@ -1,13 +1,24 @@
 import type { Collection, Folder, Request } from "@knockport/core";
+import { redactVariables } from "@knockport/core";
+
+// ── Export redaction ─────────────────────────────────────────────────────────
+// Secret-typed variables are masked in every download/export artifact (JSON,
+// Postman, YAML). On-disk YAML folders and IndexedDB keep live values — they
+// are the user's own storage (see format/files.ts, redaction-free by design).
+
+export function redactCollectionForExport(collection: Collection): Collection {
+  return { ...collection, variables: redactVariables(collection.variables ?? []) };
+}
 
 // ── Exporters ────────────────────────────────────────────────────────────────
 
 /**
  * Export a collection as native KnockPort JSON (round-trips through
- * deserializeCollection after IDs are regenerated on import).
+ * deserializeCollection after IDs are regenerated on import). Secret
+ * variable values are masked.
  */
 export function exportJson(collection: Collection): string {
-  return JSON.stringify(collection, null, 2);
+  return JSON.stringify(redactCollectionForExport(collection), null, 2);
 }
 
 /**
@@ -15,7 +26,7 @@ export function exportJson(collection: Collection): string {
  * Postman/Insomnia/Bruno and re-imported by our own Postman importer.
  */
 export function exportPostman(collection: Collection): string {
-  return JSON.stringify(collectionToPostman(collection), null, 2);
+  return JSON.stringify(collectionToPostman(redactCollectionForExport(collection)), null, 2);
 }
 
 function collectionToPostman(c: Collection): Record<string, unknown> {

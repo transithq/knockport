@@ -9,7 +9,7 @@ import type {
   Request,
   Variable,
 } from "@knockport/core";
-import { createId } from "@knockport/core";
+import { createId, redactVariables } from "@knockport/core";
 import { type DocumentOptions, type ToStringOptions, parse, stringify } from "yaml";
 
 // ── Byte-stable YAML serialization ───────────────────────────────────────────
@@ -26,14 +26,19 @@ const STR_OPTS: ToStringOptions = {
 };
 
 /**
- * Serialize a collection to byte-stable YAML.
+ * Serialize a collection to byte-stable YAML (download/export artifact —
+ * secret variable values are masked; on-disk collections go through
+ * files.ts, which keeps live values in the user's own working files).
  * - Stable key order via sorted serialization
  * - LF line endings
  * - No trailing whitespace
  * - No regenerated IDs
  */
 export function serializeCollection(collection: Collection): string {
-  const doc = collectionToYamlDoc(collection);
+  const doc = collectionToYamlDoc({
+    ...collection,
+    variables: redactVariables(collection.variables ?? []),
+  });
   const raw = stringify(doc, STR_OPTS);
   return normalizeOutput(raw);
 }
@@ -47,12 +52,14 @@ export function deserializeCollection(yaml: string): Collection {
 }
 
 /**
- * Serialize an environment to byte-stable YAML.
+ * Serialize an environment to byte-stable YAML (download/export artifact —
+ * secret variable values are masked; live values persist via Dexie and the
+ * environments/ disk layout in files.ts).
  */
 export function serializeEnvironment(env: Environment): string {
   const doc = {
     name: env.name,
-    variables: env.variables.map(serializeVariable),
+    variables: redactVariables(env.variables ?? []).map(serializeVariable),
   };
   const raw = stringify(doc, STR_OPTS);
   return normalizeOutput(raw);
