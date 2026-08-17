@@ -35,18 +35,78 @@ export function stableSortPairs<T extends { key: string; enabled: boolean }>(pai
 
 /**
  * Resolve `{{variable}}` references in a string against a variable map.
- * Predefined dynamic `$variables` ({{$guid}}, {{$timestamp}}, …) are resolved
- * first, each occurrence generating a fresh value.
+ * Pass order: predefined dynamic `$variables` ({{$guid}}, …, fresh per
+ * occurrence) → prompt variables `{{$prompt.name}}` (answered on send) →
+ * plain `{{name}}` lookups.
  */
 export function resolveVariables(
   template: string,
   variables: Record<string, string>,
 ): string {
-  const dynamic = resolvePredefinedVariables(template);
-  return dynamic.replace(/\{\{(\s*[\w.]+\s*)\}\}/g, (_, key: string) => {
+  let out = resolvePredefinedVariables(template);
+  out = out.replace(PROMPT_VAR_RE, (_, name: string) => {
+    return variables[`prompt.${name}`] ?? `{{$prompt.${name}}}`;
+  });
+  return out.replace(/\{\{(\s*[\w.]+\s*)\}\}/g, (_, key: string) => {
     const trimmed = key.trim();
     return variables[trimmed] ?? `{{${trimmed}}}`;
   });
+}
+
+// ── Prompt variables ─────────────────────────────────────────────────────────
+// `{{$prompt.name}}` placeholders ask for a value in a pre-send dialog
+// (Bruno's PromptVariablesModal). The map key is `prompt.name`; values are
+// merged into the variable map before pre-request scripts run.
+
+const PROMPT_VAR_RE = /\{\{\s*\$prompt\.([A-Za-z0-9_]+)\s*\}\}/g;
+
+/**
+ * Distinct prompt-variable names referenced across the given texts (URL,
+ * params, headers, body, scripts), in first-occurrence order.
+ */
+export function collectPromptVariableNames(...texts: string[]): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const text of texts) {
+    if (!text) continue;
+    for (const m of text.matchAll(PROMPT_VAR_RE)) {
+      if (!seen.has(m[1])) {
+        seen.add(m[1]);
+        names.push(m[1]);
+      }
+    }
+  }
+  return names;
+}
+
+/** Prompt-variable names referenced anywhere in a raw (unresolved) request. */
+export function collectRequestPromptVariables(request: Request): string[] {
+  const texts: string[] = [request.url];
+  for (const p of request.params ?? []) texts.push(p.key, p.value);
+  for (const h of request.headers ?? []) texts.push(h.key, h.value);
+  const body = request.body;
+  if (body?.content) texts.push(body.content);
+  if (body?.graphql) texts.push(body.graphql.query, body.graphql.variables ?? "");
+  for (const f of body?.formData ?? []) {
+    if (typeof f.value === "string") texts.push(f.key, f.value);
+  }
+  if (request.scripts) {
+    texts.push(request.scripts.pre ?? "", request.scripts.test ?? "", request.scripts.postResponse ?? "");
+  }
+  return collectPromptVariableNames(...texts);
+}
+
+/**
+ * Merge prompt answers into a variable map under `prompt.*` keys so
+ * `{{$prompt.name}}` placeholders resolve through the standard path.
+ */
+export function withPromptAnswers(
+  vars: Record<string, string>,
+  answers: Record<string, string>,
+): Record<string, string> {
+  const out = { ...vars };
+  for (const [name, value] of Object.entries(answers)) out[`prompt.${name}`] = value;
+  return out;
 }
 
 // ── Secret variables ─────────────────────────────────────────────────────────

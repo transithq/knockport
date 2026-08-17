@@ -1904,6 +1904,34 @@ body.kp-resizing-y .kp-resize-handle {
   font-size: 12px;
   color: var(--kp-error);
 }
+.kp-prompt-vars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 14px 14px;
+}
+.kp-prompt-var {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kp-prompt-var span {
+  font-size: 11.5px;
+  font-family: var(--kp-font-mono);
+  color: var(--kp-text-secondary);
+}
+.kp-prompt-var input {
+  padding: 7px 9px;
+  background: var(--kp-bg-tertiary);
+  border: 1px solid var(--kp-border-primary);
+  border-radius: var(--kp-radius-sm);
+  color: var(--kp-text-primary);
+  font-size: 12.5px;
+  outline: none;
+}
+.kp-prompt-var input:focus {
+  border-color: var(--kp-border-focus);
+}
 
 /* ── Runner ───────────────────────────────────────────────────────────────── */
 .kp-runner-row {

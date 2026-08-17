@@ -1,6 +1,8 @@
 import {
   type Assertion,
   type BodyContent,
+  collectPromptVariableNames,
+  collectRequestPromptVariables,
   type FormDataEntry,
   getPredefinedVariableNames,
   HTTP_METHODS,
@@ -8,12 +10,14 @@ import {
   type KeyValuePair,
   scrubRequestSecrets,
   secretVariableValues,
+  withPromptAnswers,
 } from "@knockport/core";
 import type { TestRunSummary } from "@knockport/engine";
 import { clsx } from "clsx";
 import { ChevronDown, Code2, Loader2, MoreHorizontal, Paperclip, Save, Send, X } from "lucide-react";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { type ActivePanel, useAppStore } from "../../store/app-store";
+import { promptForVariables } from "../../store/prompts";
 import {
   buildVariableMap,
   collectionVariablesMap,
@@ -741,11 +745,28 @@ export async function handleSend(tabId: string) {
   const request = store.requests[tabId];
   if (!request) return;
 
-  store.setLoading(tabId, true);
+    store.setLoading(tabId, true);
   try {
     const { getTransport } = await import("@knockport/transport");
     const collection = findCollectionOfRequest(store.collections, request.id);
-    let vars = buildVariableMap(store);
+    // Prompt variables (A5): `{{$prompt.name}}` placeholders (request +
+    // collection scripts) pause the send for an answer each, merged into
+    // the map before pre-request scripts. Cancelling aborts the send.
+    const answers = await promptForVariables([
+      ...new Set([
+        ...collectRequestPromptVariables(request),
+        ...collectPromptVariableNames(
+          collection?.scripts?.pre ?? "",
+          collection?.scripts?.test ?? "",
+          collection?.scripts?.postResponse ?? "",
+        ),
+      ]),
+    ]);
+    if (answers === null) {
+      store.setLoading(tabId, false);
+      return;
+    }
+    let vars = withPromptAnswers(buildVariableMap(store), answers);
     if (collection?.scripts?.pre?.trim() || request.scripts?.pre?.trim()) {
       const { runPreScript } = await import("@knockport/engine");
       const opts = {

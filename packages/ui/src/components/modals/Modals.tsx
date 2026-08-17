@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { Copy, X, Download } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Copy, X, Download, Send } from "lucide-react";
 import { clsx } from "clsx";
 import { useAppStore } from "../../store/app-store";
 import { buildVariableMap, resolveRequest } from "../../store/variables";
@@ -123,6 +123,69 @@ export function CodegenModal() {
         <div className="kp-modal-footer">
           <button type="button" className="kp-btn primary" onClick={copy}>
             <Copy size={14} /> {copied ? "Copied!" : "Copy"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Prompt Variables Modal (A5) ──────────────────────────────────────────────
+// Sends that reference `{{$prompt.name}}` pause here for one answer per
+// placeholder (Bruno parity). Answers resolve on Send (or in the runner,
+// once per run); cancelling aborts the send.
+export function PromptVariablesModal() {
+  const pending = useAppStore((s) => s.promptVars);
+  const setPromptVars = useAppStore((s) => s.setPromptVars);
+  const [values, setValues] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (pending) setValues(Object.fromEntries(pending.names.map((n) => [n, ""])));
+  }, [pending]);
+
+  if (!pending) return null;
+
+  const answer = (answers: Record<string, string> | null) => {
+    const { resolve } = pending;
+    setPromptVars(null);
+    resolve(answers);
+  };
+
+  return (
+    <div className="kp-cmdk-overlay" onClick={() => answer(null)}>
+      <div className="kp-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="kp-modal-header">
+          <span>Prompt variables</span>
+          <button type="button" className="kp-icon-btn" onClick={() => answer(null)}>
+            <X size={14} />
+          </button>
+        </div>
+        <p className="kp-hint" style={{ padding: "0 14px" }}>
+          This request references prompt variables — enter a value for each before sending.
+        </p>
+        <div className="kp-prompt-vars">
+          {pending.names.map((name) => (
+            <label key={name} className="kp-prompt-var">
+              <span>{"{{$prompt." + name + "}}"}</span>
+              <input
+                type="text"
+                value={values[name] ?? ""}
+                autoFocus={name === pending.names[0]}
+                onChange={(e) => setValues({ ...values, [name]: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") answer(values);
+                }}
+                placeholder={name}
+              />
+            </label>
+          ))}
+        </div>
+        <div className="kp-modal-footer">
+          <button type="button" className="kp-btn" onClick={() => answer(null)}>
+            Cancel
+          </button>
+          <button type="button" className="kp-btn primary" onClick={() => answer(values)}>
+            <Send size={14} /> Send
           </button>
         </div>
       </div>

@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   type Request,
+  collectPromptVariableNames,
+  collectRequestPromptVariables,
   redactVariables,
+  resolveVariables,
   scrubRequestSecrets,
   SECRET_MASK,
   secretVariableValues,
+  withPromptAnswers,
 } from "./utils";
 
 const makeRequest = (): Request => ({
@@ -63,5 +67,45 @@ describe("scrubRequestSecrets", () => {
   it("is a no-op for an empty secret list (same object back)", () => {
     const req = makeRequest();
     expect(scrubRequestSecrets(req, [])).toBe(req);
+  });
+});
+
+describe("prompt variables", () => {
+  it("collects distinct $prompt names in first-occurrence order", () => {
+    const names = collectPromptVariableNames(
+      "https://x/{{$prompt.token}}?a={{$prompt.token}}",
+      "head {{$prompt.user}} and {{$prompt.token}} again",
+      "",
+    );
+    expect(names).toEqual(["token", "user"]);
+  });
+
+  it("scans url, params, headers, body and scripts of a request", () => {
+    const req = makeRequest();
+    req.url = "https://x/{{$prompt.fromUrl}}";
+    req.headers = [
+      { key: "X-T", value: "{{$prompt.fromHeader}}", enabled: true },
+      { key: "Authorization", value: "Bearer sk_live_abc123", enabled: true },
+      { key: "Accept", value: "application/json", enabled: true },
+    ];
+    req.body = { type: "json", content: "{{ $prompt.fromBody }}" };
+    req.scripts = { pre: "const u = '{{$prompt.fromScript}}';" };
+    expect(collectRequestPromptVariables(req)).toEqual([
+      "fromUrl",
+      "fromHeader",
+      "fromBody",
+      "fromScript",
+    ]);
+  });
+
+  it("withPromptAnswers merges under prompt.* and resolveVariables consumes them", () => {
+    const vars = withPromptAnswers({ host: "api.test" }, { token: "abc123" });
+    expect(vars["prompt.token"]).toBe("abc123");
+    const out = resolveVariables("h={{host}} t={{$prompt.token}}", vars);
+    expect(out).toBe("h=api.test t=abc123");
+  });
+
+  it("unanswered $prompt placeholders survive literal", () => {
+    expect(resolveVariables("t={{$prompt.missing}}", {})).toBe("t={{$prompt.missing}}");
   });
 });

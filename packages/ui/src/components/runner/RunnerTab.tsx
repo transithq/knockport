@@ -1,4 +1,9 @@
 import type { Collection, Folder, Request } from "@knockport/core";
+import {
+  collectPromptVariableNames,
+  collectRequestPromptVariables,
+  withPromptAnswers,
+} from "@knockport/core";
 import { clsx } from "clsx";
 import { CheckCircle2, Loader2, Play, RotateCcw, X, XCircle } from "lucide-react";
 import { useState } from "react";
@@ -8,6 +13,7 @@ import {
   type RunnerTabState,
   useAppStore,
 } from "../../store/app-store";
+import { promptForVariables } from "../../store/prompts";
 import {
   buildVariableMap,
   collectionVariablesMap,
@@ -85,6 +91,25 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
     // scope (Bruno-style). Reset per outer run.
     let carryVars: Record<string, string> = {};
 
+    // Prompt variables (A5): asked once at run start (Bruno semantics — one
+    // dialog per run), carried into every request/iteration. Cancel aborts.
+    const promptNames = [
+      ...new Set([
+        ...included.flatMap((r) => collectRequestPromptVariables(r)),
+        ...collectPromptVariableNames(
+          collection.scripts?.pre ?? "",
+          collection.scripts?.test ?? "",
+          collection.scripts?.postResponse ?? "",
+        ),
+      ]),
+    ];
+    const promptAnswers = await promptForVariables(promptNames);
+    if (promptAnswers === null) {
+      patch({ phase: "config" });
+      return;
+    }
+    const promptVars = withPromptAnswers({}, promptAnswers);
+
     for (let it = 0; it < iterations; it++) {
       for (const collectionCopy of included) {
         const state = useAppStore.getState();
@@ -93,7 +118,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           (t) => (!t.kind || t.kind === "request") && t.requestId === collectionCopy.id,
         );
         const req = (liveTab && state.requests[liveTab.id]) || collectionCopy;
-        let vars = { ...buildVariableMap(state), ...carryVars };
+        let vars = { ...buildVariableMap(state), ...carryVars, ...promptVars };
         const opts = {
           environment: environmentVariableMap(state),
           collectionVariables: collectionVariablesMap(state),

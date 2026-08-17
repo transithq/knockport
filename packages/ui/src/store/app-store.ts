@@ -240,6 +240,8 @@ export interface AppStore {
   commandPaletteOpen: boolean;
   codegenOpen: boolean;
   importOpen: boolean;
+  /** Pending prompt-variable dialog (A5): answers resolve on Send. */
+  promptVars: { names: string[]; resolve: (answers: Record<string, string> | null) => void } | null;
 
   // ── WebSocket workspace (single tab; state survives tab switches) ──
   wsUrl: string;
@@ -338,6 +340,9 @@ export interface AppStore {
   setCommandPaletteOpen: (open: boolean) => void;
   setCodegenOpen: (open: boolean) => void;
   setImportOpen: (open: boolean) => void;
+  setPromptVars: (
+    pending: { names: string[]; resolve: (answers: Record<string, string> | null) => void } | null,
+  ) => void;
   openWebSocketTab: () => void;
   openApiTab: () => void;
   openMockTab: () => void;
@@ -415,6 +420,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   commandPaletteOpen: false,
   codegenOpen: false,
   importOpen: false,
+  promptVars: null,
   wsUrl: (typeof localStorage !== "undefined" && localStorage.getItem("kp-ws-url")) || "wss://echo.websocket.org",
   wsStatus: "idle" as WsTabStatus,
   wsLog: [],
@@ -1064,6 +1070,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   setCodegenOpen: (open) => set({ codegenOpen: open }),
   setImportOpen: (open) => set({ importOpen: open }),
+  setPromptVars: (pending) => set({ promptVars: pending }),
   openWebSocketTab: () => {
     const s = get();
     const existing = s.tabs.find((t) => t.kind === "websocket");

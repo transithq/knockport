@@ -8,7 +8,7 @@ import { CommandPalette } from "../command/CommandPalette";
 import { useResizer } from "../common/useResizer";
 import { DropdownMenu } from "../common/DropdownMenu";
 import { EnvironmentEditor } from "../environments/EnvironmentEditor";
-import { CodegenModal, ImportModal } from "../modals/Modals";
+import { CodegenModal, ImportModal, PromptVariablesModal } from "../modals/Modals";
 import { RequestEditor, handleSend } from "../request/RequestEditor";
 import { ResponseBody } from "../response/ResponseBody";
 import { ResponseSummary } from "../response/ResponseSummary";
@@ -383,6 +383,7 @@ export function AppShell() {
       <CommandPalette />
       <CodegenModal />
       <ImportModal />
+      <PromptVariablesModal />
     </div>
   );
 }
