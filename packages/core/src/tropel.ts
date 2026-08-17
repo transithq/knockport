@@ -1,11 +1,11 @@
-// Dynamic $variable resolution — routed through @tropel/core-wasm (the
-// compiled Tropel DynamicCatalog) so the web app, extension and CLI share
-// one catalog implementation. The local TS port (./predefinedVariables)
-// survives only as the fallback for the pre-init race (first send before
-// the ~140 KB wasm finishes loading) and for test/runnable environments
-// without WebAssembly. See WEB_EXTENSION_RUNTIME_SPLIT.md: the web app
-// never loads the QuickJS tier — this core-wasm module is its only Rust
-// payload.
+// Dynamic $variable resolution — the compiled Tropel DynamicCatalog
+// (@tropel/core-wasm, the wasm32 core tier). One catalog implementation for
+// the web app, extension and CLI: there is intentionally no TS port. Before
+// init resolves (the ~457 KB wasm is lazy-loaded at boot from apps/web) the
+// resolver degrades to a passthrough — `{{$…}}` survives literal and the
+// embedder's own {{var}} map still resolves on the very first sends.
+// See WEB_EXTENSION_RUNTIME_SPLIT.md: the web app never loads the QuickJS
+// tier — this core-wasm module is its only Rust payload.
 
 import {
   getPredefinedVariablesMeta as tropelMeta,
@@ -13,10 +13,6 @@ import {
   isCoreWasmReady,
   resolveDynamicVariables as tropelResolve,
 } from "@tropel/core-wasm";
-import {
-  PREDEFINED_VARIABLES as TS_PREDEFINED_VARIABLES,
-  resolvePredefinedVariables as tsResolve,
-} from "./predefinedVariables.js";
 
 let initPromise: Promise<boolean> | null = null;
 
@@ -36,12 +32,11 @@ export function isTropelCoreReady(): boolean {
 }
 
 /**
- * Resolve predefined dynamic variables (`{{$guid}}`, …). Wasm catalog when
- * ready, TS fallback until then — both are 1:1 ports of the same
- * DynamicCatalog, so behaviour never diverges.
+ * Resolve predefined dynamic variables (`{{$guid}}`, …) — fresh value per
+ * occurrence, Tropel semantics. Passthrough (input unchanged) until init.
  */
 export function resolvePredefinedVariables(template: string): string {
-  return isCoreWasmReady() ? tropelResolve(template) : tsResolve(template);
+  return tropelResolve(template);
 }
 
 export interface PredefinedVariableInfo {
@@ -51,13 +46,7 @@ export interface PredefinedVariableInfo {
 
 /** Catalog metadata for editor UIs (synchronous — extracted at package build time). */
 export function getPredefinedVariablesMeta(): readonly PredefinedVariableInfo[] {
-  try {
-    const meta = tropelMeta();
-    if (meta.length > 0) return meta;
-  } catch {
-    // fall through to the TS table
-  }
-  return TS_PREDEFINED_VARIABLES;
+  return tropelMeta();
 }
 
 /** The `$`-prefixed catalog names (autocomplete lists). */
@@ -65,4 +54,8 @@ export function getPredefinedVariableNames(): readonly string[] {
   return getPredefinedVariablesMeta().map((v) => v.name);
 }
 
-export { MAX_DYNAMIC_LENGTH } from "./predefinedVariables.js";
+/**
+ * The catalog's `:length` cap (mirrors Rust `MAX_DYNAMIC_LENGTH` in
+ * tropel-variables/src/catalog.rs).
+ */
+export const MAX_DYNAMIC_LENGTH = 10_000;

@@ -1,14 +1,35 @@
-import { describe, expect, it, vi } from "vitest";
+import { createRequire } from "node:module";
+import { initCoreWasm } from "@tropel/core-wasm";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
+  getPredefinedVariableNames,
   MAX_DYNAMIC_LENGTH,
-  PREDEFINED_VARIABLE_NAMES,
   resolvePredefinedVariables,
-} from "./predefinedVariables";
+} from "./tropel";
 import { resolveVariables } from "./utils";
+
+// Drive the real Tropel catalog: the same wasm bundle apps/web lazy-loads
+// at boot (the `@tropel/core-wasm` file: dependency of packages/core).
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+
+const require = createRequire(import.meta.url);
+const facadePath = require.resolve("@tropel/core-wasm");
+const wasmPath = join(dirname(facadePath), "..", "pkg", "tropel_core_wasm_bg.wasm");
+
+// Read the pkg into memory up front: with the file: dep hardlinked into the
+// pnpm store, the pkg directory can go stale between test runs, while the
+// .wasm bytes themselves are immutable.
+const wasmBytes = readFileSync(wasmPath);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-describe("resolvePredefinedVariables", () => {
+beforeAll(async () => {
+  const ok = await initCoreWasm({ wasmBytes });
+  expect(ok).toBe(true);
+});
+
+describe("resolvePredefinedVariables (wasm catalog)", () => {
   it("returns input without {{$ untouched", () => {
     expect(resolvePredefinedVariables("https://{{baseUrl}}/x")).toBe("https://{{baseUrl}}/x");
   });
@@ -25,7 +46,8 @@ describe("resolvePredefinedVariables", () => {
     const ts = resolvePredefinedVariables("{{$timestamp}}");
     expect(Number(ts)).toBeGreaterThan(1_700_000_000);
     const iso = resolvePredefinedVariables("{{$isoTimestamp}}");
-    expect(new Date(iso).toISOString()).toBe(iso);
+    expect(iso).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/);
+    expect(Number.isNaN(new Date(iso).getTime())).toBe(false);
   });
 
   it("$randomInt resolves to 0–999", () => {
@@ -57,16 +79,8 @@ describe("resolvePredefinedVariables", () => {
     );
   });
 
-  it("unknown $vars stay literal and warn once per name", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    try {
-      expect(resolvePredefinedVariables("u={{$randomUserName}}")).toBe("u={{$randomUserName}}");
-      resolvePredefinedVariables("u={{$randomUserName}}");
-      const hits = warn.mock.calls.filter((c) => String(c[0]).includes("$randomUserName"));
-      expect(hits.length).toBeLessThanOrEqual(1);
-    } finally {
-      warn.mockRestore();
-    }
+  it("unknown $vars stay literal", () => {
+    expect(resolvePredefinedVariables("u={{$randomUserName}}")).toBe("u={{$randomUserName}}");
   });
 
   it("interpolates dynamic vars inside longer strings", () => {
@@ -89,8 +103,9 @@ describe("resolveVariables", () => {
   });
 });
 
-describe("PREDEFINED_VARIABLE_NAMES", () => {
+describe("getPredefinedVariableNames", () => {
   it("covers the documented baseline set and every name starts with $", () => {
+    const names = getPredefinedVariableNames();
     for (const name of [
       "$guid",
       "$timestamp",
@@ -99,14 +114,14 @@ describe("PREDEFINED_VARIABLE_NAMES", () => {
       "$randomInt",
       "$randomColor",
     ]) {
-      expect(PREDEFINED_VARIABLE_NAMES).toContain(name);
+      expect(names).toContain(name);
     }
-    expect(PREDEFINED_VARIABLE_NAMES.every((n) => n.startsWith("$"))).toBe(true);
+    expect(names.every((n) => n.startsWith("$"))).toBe(true);
   });
 
   it("every catalog name resolves", () => {
     for (const name of [
-      ...PREDEFINED_VARIABLE_NAMES,
+      ...getPredefinedVariableNames(),
       "$randomHex:4",
       "$randomPassword:8",
       "$randomString:4",
