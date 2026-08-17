@@ -4,6 +4,11 @@
 //! CORS. Scope is API-client traffic only — never load testing (see
 //! KNOCKPORT_ARCHITECTURE.md §5b).
 //!
+//! Request execution is delegated to `tropel-http` (path dep from D:/tropel):
+//! it owns redirects (RFC 7231 method rewrites), the SSRF `blacklistIPs`
+//! enforcement on every hop (IP literals AND DNS-resolved addresses), the
+//! response-byte cap, and per-hop connection sub-timings.
+//!
 //! Privacy: metrics only. URLs, headers and bodies are never logged.
 
 use std::{
@@ -25,11 +30,13 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 use tracing::info;
+use tropel_http::{parse_blacklist, HttpClient, HttpConfig, IpCidr, SSRF_BLOCKLIST};
+use tropel_sdk::types::{Body as SdkBody, Method as SdkMethod, Request as SdkRequest};
 
 // ── Caps (architecture doc §5b) ──────────────────────────────────────────────
 const MAX_REQUEST_BODY: usize = 10 * 1024 * 1024; // 10 MB
 const MAX_RESPONSE_BODY: usize = 50 * 1024 * 1024; // 50 MB
-const MAX_REDIRECTS: usize = 5;
+const MAX_REDIRECTS: u32 = 5;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const RATE_WINDOW_SECS: u64 = 60;
 const RATE_MAX_PER_WINDOW: u32 = 60;
@@ -109,6 +116,12 @@ const MAX_MOCK_ROUTES: usize = 200;
 struct Timings {
     total: f64,
     ttfb: f64,
+    download: f64,
+    dns: f64,
+    /// TCP connect time (TLS included on https — reqwest folds the handshake
+    /// into the connector call, so `tls` stays 0 when `tcp` is measured).
+    tcp: f64,
+    tls: f64,
 }
 
 #[derive(Serialize)]
@@ -132,7 +145,11 @@ struct Metrics {
 }
 
 struct AppState {
-    client: reqwest::Client,
+    client: HttpClient,
+    /// Parsed `SSRF_BLOCKLIST` CIDRs for the initial-URL pre-check (the
+    /// per-hop enforcement itself lives inside tropel-http's DNS resolver
+    /// and IP-literal guard, fed the same list via `blacklist_ips`).
+    blocklist: Vec<IpCidr>,
     metrics: Metrics,
     /// Fixed-window per-IP rate limiter: ip -> (window_start_unix, count).
     rate: Mutex<HashMap<IpAddr, (u64, u32)>>,
@@ -169,34 +186,14 @@ fn check_token(
     }
 }
 
-// ── SSRF protection ──────────────────────────────────────────────────────────
-fn is_blocked_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => {
-            v4.is_loopback()
-                || v4.is_private()
-                || v4.is_link_local()
-                || v4.is_broadcast()
-                || v4.is_unspecified()
-                // CGNAT 100.64.0.0/10
-                || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xC0) == 64)
-        }
-        IpAddr::V6(v6) => {
-            v6.is_loopback()
-                || v6.is_unspecified()
-                // unique local fc00::/7
-                || (v6.segments()[0] & 0xfe00) == 0xfc00
-                // link local fe80::/10
-                || (v6.segments()[0] & 0xffc0) == 0xfe80
-                // v4-mapped addresses re-checked as v4
-                || v6.to_ipv4_mapped().is_some_and(|v4| is_blocked_ip(IpAddr::V4(v4)))
-        }
-    }
-}
-
-/// Resolve the host and reject if ANY resolved address is blocked
-/// (defeats mixed-answer DNS rebinding attempts).
-async fn ssrf_check(url: &url::Url) -> Result<(), &'static str> {
+/// Fast SSRF pre-check for the INITIAL URL so blocked targets fail with a
+/// clean 403 instead of a generic 502 from the reqwest error chain. This is
+/// error-mapping, not the enforcement layer — `tropel-http` re-checks the
+/// blacklist on EVERY hop (IP literals before connect, DNS answers in its
+/// resolver), covering redirects this single check can't see. Rejects a host
+/// as soon as ANY resolved address falls inside the blocklist (defeats
+/// mixed-answer DNS rebinding, same semantics as the original relay).
+async fn ssrf_precheck(url: &url::Url, blocklist: &[IpCidr]) -> Result<(), &'static str> {
     match url.scheme() {
         "http" | "https" => {}
         _ => return Err("scheme not allowed"),
@@ -204,16 +201,17 @@ async fn ssrf_check(url: &url::Url) -> Result<(), &'static str> {
     let host = url.host_str().ok_or("missing host")?;
     let port = url.port_or_known_default().ok_or("missing port")?;
 
-    // Literal IP hosts are checked directly.
-    if let Ok(ip) = host.parse::<IpAddr>() {
-        return if is_blocked_ip(ip) {
+    // Literal IP hosts are checked directly (strip url-crate v6 brackets).
+    let stripped = host.trim_start_matches('[').trim_end_matches(']');
+    if let Ok(ip) = stripped.parse::<IpAddr>() {
+        return if blocklist.iter().any(|c| c.contains(ip)) {
             Err("target address is blocked")
         } else {
             Ok(())
         };
     }
 
-    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, port))
+    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host.to_string(), port))
         .await
         .map_err(|_| "dns resolution failed")?
         .collect();
@@ -221,7 +219,7 @@ async fn ssrf_check(url: &url::Url) -> Result<(), &'static str> {
         return Err("dns resolution returned no addresses");
     }
     for addr in &addrs {
-        if is_blocked_ip(addr.ip()) {
+        if blocklist.iter().any(|c| c.contains(addr.ip())) {
             return Err("target address is blocked");
         }
     }
@@ -361,7 +359,9 @@ async fn proxy(
     }
 
     let url = url::Url::parse(&payload.url).map_err(|_| err(StatusCode::BAD_REQUEST, "invalid url"))?;
-    ssrf_check(&url)
+    // Fast 403 path for blocked initial targets (clean error shape); hop-by-hop
+    // enforcement stays inside tropel-http (see build-time HttpConfig).
+    ssrf_precheck(&url, &state.blocklist)
         .await
         .map_err(|reason| err(StatusCode::FORBIDDEN, reason))?;
 
@@ -384,145 +384,155 @@ async fn proxy(
         )
     };
 
-    let method: Method = payload
-        .method
-        .parse()
-        .map_err(|_| err(StatusCode::BAD_REQUEST, "invalid method"))?;
+    let method = SdkMethod::parse(&payload.method)
+        .ok_or_else(|| err(StatusCode::BAD_REQUEST, "invalid method"))?;
+
+    // Never forward hop-by-hop, host, or content-length request headers.
+    // Order and duplicate names are preserved end-to-end (e.g. several
+    // Cookie lines) — tropel-sdk's Request.headers is an ordered pair list.
+    let mut headers: Vec<(String, String)> = Vec::new();
+    for pair in &payload.headers {
+        let name = pair.key.to_ascii_lowercase();
+        if name == "host" || name == "content-length" || HOP_HEADERS.contains(&name.as_str()) {
+            continue;
+        }
+        // The relay owns the content-type when it assembles a multipart body.
+        if multipart_ct.is_some() && name == "content-type" {
+            continue;
+        }
+        headers.push((pair.key.clone(), pair.value.clone()));
+    }
+    if let Some(ct) = &multipart_ct {
+        headers.push(("Content-Type".to_string(), ct.clone()));
+    }
 
     let started = Instant::now();
     state.metrics.requests.fetch_add(1, Ordering::Relaxed);
     state.metrics.bytes_in.fetch_add(body_bytes.len() as u64, Ordering::Relaxed);
 
-    // Redirects are followed manually so every hop is SSRF re-checked.
-    let mut current_url = url;
-    let mut current_method = method;
-    let mut current_body = body_bytes;
-    let headers_at_send = payload.headers.clone();
-    let mut ttfb = 0.0;
-    let mut redirect_hops = 0usize;
-
-    let response = loop {
-        let mut builder = state
-            .client
-            .request(current_method.clone(), current_url.as_str());
-
-        for pair in &headers_at_send {
-            let name = pair.key.to_ascii_lowercase();
-            if name == "host" || name == "content-length" || HOP_HEADERS.contains(&name.as_str()) {
-                continue;
-            }
-            if multipart_ct.is_some() && name == "content-type" {
-                continue;
-            }
-            if let (Ok(name), Ok(value)) = (
-                HeaderName::from_bytes(pair.key.as_bytes()),
-                HeaderValue::from_str(&pair.value),
-            ) {
-                builder = builder.header(name, value);
-            }
-        }
-        if let Some(ct) = &multipart_ct {
-            builder = builder.header(header::CONTENT_TYPE, ct.clone());
-        }
-        if !current_body.is_empty() && current_method != Method::GET && current_method != Method::HEAD {
-            builder = builder.body(current_body.clone());
-        }
-
-        let resp = builder
-            .send()
-            .await
-            .map_err(|_| err(StatusCode::BAD_GATEWAY, "upstream request failed"))?;
-
-        if ttfb == 0.0 {
-            ttfb = started.elapsed().as_secs_f64() * 1000.0;
-        }
-
-        let status = resp.status();
-        let is_redirect = matches!(status.as_u16(), 301 | 302 | 303 | 307 | 308)
-            && resp.headers().get(header::LOCATION).is_some();
-        if is_redirect {
-            redirect_hops += 1;
-            if redirect_hops > MAX_REDIRECTS {
-                state.metrics.failures.fetch_add(1, Ordering::Relaxed);
-                return Err(err(StatusCode::BAD_GATEWAY, "too many redirects"));
-            }
-
-            let location = resp
-                .headers()
-                .get(header::LOCATION)
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("")
-                .to_string();
-            drop(resp);
-
-            let next = current_url
-                .join(&location)
-                .map_err(|_| err(StatusCode::BAD_GATEWAY, "invalid redirect location"))?;
-            // Every hop is re-checked against the SSRF blocklist.
-            ssrf_check(&next)
-                .await
-                .map_err(|reason| err(StatusCode::FORBIDDEN, reason))?;
-
-            // 301/302/303 downgrade to GET and drop the body (RFC 7231).
-            if matches!(status.as_u16(), 301 | 302 | 303) {
-                current_method = Method::GET;
-                current_body.clear();
-            }
-            current_url = next;
-            continue;
-        }
-        break resp;
+    // GET/HEAD carry no body (browser fetch semantics — DirectTransport and
+    // the pre-tropel relay both dropped bodies for these methods; the
+    // frontend never sends one either, so this is defense in depth).
+    let body = if body_bytes.is_empty() || matches!(method, SdkMethod::GET | SdkMethod::HEAD) {
+        None
+    } else {
+        Some(SdkBody::Binary(body_bytes))
     };
 
-    let status = response.status();
+    let request = SdkRequest {
+        url: url.to_string(),
+        method,
+        headers,
+        body,
+        timeout: Some(REQUEST_TIMEOUT),
+        ..Default::default()
+    };
+
+    // tropel-http owns the hard parts: redirect following with RFC 7231 method
+    // rewrites, per-hop SSRF `blacklistIPs` enforcement (IP literals and DNS
+    // resolvers alike), the response-byte cap, and connection sub-timings.
+    let response = match state.client.execute(&request, None).await {
+        Ok(resp) => resp,
+        Err(e) => {
+            state.metrics.failures.fetch_add(1, Ordering::Relaxed);
+            let msg = e.to_string();
+            // "blacklist" = hop-level blocklist literal; "blacklisted" = the
+            // DNS resolver's "all resolved addresses ... are blacklisted"
+            // (redirect hops — the initial URL is pre-checked to a 403 above,
+            // so a blocklist hit here is always a blocked redirect target).
+            if msg.contains("blacklist") {
+                return Err(err(StatusCode::FORBIDDEN, "target address is blocked"));
+            }
+            if msg.contains("byte limit") {
+                return Err(err(StatusCode::BAD_GATEWAY, "response body too large"));
+            }
+            return Err(err(StatusCode::BAD_GATEWAY, "upstream request failed"));
+        }
+    };
+
+    // Lossless header list (duplicate names preserved, e.g. multiple
+    // Set-Cookie lines) minus hop-by-hop / content-coding headers.
     let response_headers: Vec<HeaderPair> = response
-        .headers()
+        .raw_headers
         .iter()
         .filter(|(name, _)| {
-            let n = name.as_str();
-            !HOP_HEADERS.contains(&n) && n != "content-encoding" && n != "content-length"
+            let n = name.to_ascii_lowercase();
+            !HOP_HEADERS.contains(&n.as_str()) && n != "content-encoding" && n != "content-length"
         })
         .map(|(name, value)| HeaderPair {
-            key: name.to_string(),
-            value: value.to_str().unwrap_or("").to_string(),
+            key: name.clone(),
+            value: value.clone(),
         })
         .collect();
 
-    // Stream the body with a hard cap.
-    let mut body: Vec<u8> = Vec::new();
-    let mut stream = response;
-    while let Some(chunk) = stream
-        .chunk()
-        .await
-        .map_err(|_| err(StatusCode::BAD_GATEWAY, "upstream stream error"))?
-    {
-        if body.len() + chunk.len() > MAX_RESPONSE_BODY {
-            state.metrics.failures.fetch_add(1, Ordering::Relaxed);
-            return Err(err(StatusCode::BAD_GATEWAY, "response body too large"));
-        }
-        body.extend_from_slice(&chunk);
-    }
-
+    let body = &response.body;
     let total = started.elapsed().as_secs_f64() * 1000.0;
     state.metrics.bytes_out.fetch_add(body.len() as u64, Ordering::Relaxed);
     state.metrics.total_ms.fetch_add(total as u64, Ordering::Relaxed);
 
     let (body_text, encoding) = match String::from_utf8(body.clone()) {
         Ok(text) => (text, "utf8"),
-        Err(_) => (base64_encode(&body), "base64"),
+        Err(_) => (base64_encode(body), "base64"),
     };
 
+    // Match the old wire shape: no reason phrase → empty string (tropel-http
+    // reports "Unknown" where reqwest's canonical_reason() returned None).
+    let status_text = if response.status_text == "Unknown" {
+        String::new()
+    } else {
+        response.status_text.clone()
+    };
+    let timings = wire_timings(&response, total);
+
     Ok(Json(ProxyResponse {
-        status: status.as_u16(),
-        status_text: status
-            .canonical_reason()
-            .unwrap_or("")
-            .to_string(),
+        status: response.status_code,
+        status_text,
         headers: response_headers,
         body: body_text,
         encoding,
-        timings: Timings { total, ttfb },
+        timings,
     }))
+}
+
+/// Map tropel-http's per-hop sub-timings onto the relay wire format.
+///
+/// `total` is the whole wall clock the caller saw (all hops included);
+/// `ttfb` covers the FIRST hop from start until its response head arrived
+/// (blocked + dns + connecting + waiting); `dns` / `tcp` are that hop's
+/// connection phases (reqwest folds the TLS handshake into `connecting`, so
+/// `tls` stays 0 while `tcp` carries it); `download` is the FINAL response's
+/// body-receiving time.
+fn wire_timings(response: &tropel_http::HttpResponse, total_ms: f64) -> Timings {
+    let ms = |d: Duration| d.as_secs_f64() * 1000.0;
+    let fallback = Timings {
+        total: total_ms,
+        ttfb: total_ms,
+        download: 0.0,
+        dns: 0.0,
+        tcp: 0.0,
+        tls: 0.0,
+    };
+    // No redirects → the final response IS the first (only) hop.
+    let first = if response.redirects.is_empty() {
+        response.timings.as_ref()
+    } else {
+        response.redirects.first().and_then(|h| h.timings.as_ref())
+    };
+    let Some(t) = first else {
+        return fallback;
+    };
+    Timings {
+        total: total_ms,
+        ttfb: ms(t.blocked + t.dns + t.connecting + t.waiting),
+        download: response
+            .timings
+            .as_ref()
+            .map(|f| ms(f.receiving))
+            .unwrap_or(0.0),
+        dns: ms(t.dns),
+        tcp: ms(t.connecting),
+        tls: ms(t.tls_handshaking),
+    }
 }
 
 /// Minimal base64 encoder (avoids another dependency for one call site).
@@ -717,11 +727,33 @@ async fn main() {
             .allow_headers(AllowHeaders::any()),
     };
 
-    let client = reqwest::Client::builder()
-        .timeout(REQUEST_TIMEOUT)
-        .redirect(reqwest::redirect::Policy::none()) // redirects handled with SSRF re-checks
-        .build()
-        .expect("failed to build http client");
+    let blocklist: Vec<IpCidr> = parse_blacklist(
+        &SSRF_BLOCKLIST
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>(),
+    );
+    let http_config = HttpConfig {
+        // tropel-http follows redirects MANUALLY so every hop is re-checked
+        // against `blacklist_ips` — the same SSRF model the relay had, reused.
+        max_redirects: MAX_REDIRECTS,
+        request_timeout: Some("30s".to_string()),
+        user_agent: "knockport-relay/0.1".to_string(),
+        // Proxy caps, enforced while streaming (redirect-hop bodies included).
+        max_response_bytes: Some(MAX_RESPONSE_BODY as u64),
+        // Relay security model needs a FRESH resolution per request (the old
+        // relay re-resolved every time); tropel-http's k6 default caches DNS
+        // for 5 minutes, so disable the cache.
+        dns_ttl: Some("0s".to_string()),
+        // SSRF: never connect to non-public ranges (loopback/private/
+        // link-local/broadcast/CGNAT/ULA, v4-mapped included). The DNS
+        // resolver rejects an answer whose addresses all fall inside these;
+        // IP-literal hosts are rejected before any connect attempt.
+        blacklist_ips: SSRF_BLOCKLIST.iter().map(|s| s.to_string()).collect(),
+        ..Default::default()
+    };
+    let client =
+        HttpClient::new(&http_config).expect("failed to build tropel-http client");
 
     let token = std::env::var("KP_RELAY_TOKEN")
         .ok()
@@ -730,6 +762,7 @@ async fn main() {
 
     let state = Arc::new(AppState {
         client,
+        blocklist,
         metrics: Metrics::default(),
         rate: Mutex::new(HashMap::new()),
         token,

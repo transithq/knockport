@@ -297,7 +297,14 @@ export class RelayTransport implements Transport {
       const timings: ResponseTimings = {
         total: relay.timings?.total ?? endTime - startTime,
         ttfb: relay.timings?.ttfb ?? relay.timings?.total ?? endTime - startTime,
-        download: Math.max(0, (relay.timings?.total ?? 0) - (relay.timings?.ttfb ?? 0)),
+        // tropel-http reports real sub-timings; fall back to the coarse
+        // total-within-ttfb math for older relay builds.
+        dns: relay.timings?.dns,
+        tcp: relay.timings?.tcp,
+        tls: relay.timings?.tls,
+        download:
+          relay.timings?.download ??
+          Math.max(0, (relay.timings?.total ?? 0) - (relay.timings?.ttfb ?? 0)),
       };
 
       return {
@@ -339,7 +346,16 @@ interface RelayProxyResponse {
   headers: { key: string; value: string }[];
   body: string;
   encoding: "utf8" | "base64";
-  timings?: { total: number; ttfb: number };
+  timings?: {
+    total: number;
+    ttfb: number;
+    /** tropel-http sub-timings (older relays send only total/ttfb). */
+    download?: number;
+    dns?: number;
+    /** TCP connect — TLS is folded into this when not separable. */
+    tcp?: number;
+    tls?: number;
+  };
 }
 
 // ── Multipart wire format ────────────────────────────────────────────────────

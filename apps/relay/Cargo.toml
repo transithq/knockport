@@ -8,7 +8,8 @@ description = "KnockPort CORS relay — forwards browser API requests server-sid
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.6", features = ["cors"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "http2"] }
+tropel-http = { path = "D:/tropel/crates/tropel-http" }
+tropel-sdk = { path = "D:/tropel/crates/tropel-sdk" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
