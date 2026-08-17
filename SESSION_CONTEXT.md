@@ -5,7 +5,34 @@
 > Process: no AI/agent attribution in commits; `git add -u` + explicit paths (never `-A`);
 > gate every commit with `pnpm --filter web build` (tsc && vite build).
 
-## Latest session — 2026-08-16 (evening): sidebar nav/contents resize — committed
+## Latest session — 2026-08-16 ? 17: relay reqwest ? tropel-http swap — DONE
+
+- Commit `add7069` — feat(relay): apps/relay now runs through `tropel-http`
+  (path dep `D:/tropel/crates/tropel-http`). Proxy handler builds an
+  `SdkRequest` ? `HttpClient::execute`; tropel owns redirects (RFC 7231
+  rewrites), per-hop `blacklistIPs` SSRF (IP literals pre-connect + DNS
+  resolver), streamed 50 MB body cap (`max_response_bytes`), and real
+  connection sub-timings. Kept a thin initial-URL pre-check (403 clean shape,
+  exact parity) + `dns_ttl: "0s"` (per-request re-resolve like old relay).
+  Wire gains `dns`/`tcp`/`tls`/`download` timings; lossless `raw_headers`
+  (duplicate Set-Cookie lines survive — frontend depends on this).
+  E2E verified: GET/POST/multipart/cookies, loopback+private+nip.io+IPv6+
+  v4-mapped all 403, redirect chains, hop-level SSRF 403.
+- Commit `c0bd938` — TODO.md follow-up ticked.
+- Tropel side (D:\tropel, branch `fix/w2-path-var-length-sort`):
+  - Committed `e9f0343`: `SSRF_BLOCKLIST` const (dns.rs) +
+    `HttpConfig.max_response_bytes` (config.rs). 60 tropel-http tests pass.
+  - LEFT UNCOMMITTED on purpose: client.rs (`http_request_error` cause-chain
+    helper + `raw_headers` field + body-cap streaming — the relay's committed
+    code NEEDS these at runtime) is entangled with the concurrent W2 #203
+    `Request.headers: Vec<(String,String)>` migration (sdk submodule diff,
+    `trp.rs` currently breaks workspace build). Committing client.rs alone
+    would produce a file that doesn't compile without the W2 sdk change —
+    commit it TOGETHER with the W2 session once trp.rs/sandbox land.
+- D: disk got full mid-session (cargo LNK errors); freed 8.7 GB by cargo
+  clean in both D:\tropel and apps/relay. Watch disk on long builds.
+
+## Prior session — sidebar nav/contents resize — committed
 
 User wanted the sidebar's NAV MENU (Collections/Environments/APIs/…) and the CONTENTS box
 below it to be resizable against each other vertically (the sidebar width was already
