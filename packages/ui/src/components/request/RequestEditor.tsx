@@ -23,6 +23,7 @@ import {
   collectionVariablesMap,
   environmentVariableMap,
   findCollectionOfRequest,
+  globalsVariableMap,
   resolveRequest,
 } from "../../store/variables";
 import { AssertionsEditor } from "../common/AssertionsEditor";
@@ -67,8 +68,10 @@ export function RequestEditor({ tabId }: { tabId: string }) {
   // Variable names for `{{…}}` Tab-completion in the URL bar.
   const variableNames = useMemo(() => {
     const env = environments.find((e) => e.id === activeEnvironmentId);
+    const globals = environments.find((e) => e.isDefault);
     const collection = findCollectionOfRequest(collections, request?.id ?? "");
     return new Set<string>([
+      ...(globals?.variables ?? []).map((v) => v.key),
       ...(env?.variables ?? []).map((v) => v.key),
       ...(collection?.variables ?? []).map((v) => v.key),
       ...getPredefinedVariableNames(),
@@ -772,6 +775,7 @@ export async function handleSend(tabId: string) {
       const opts = {
         environment: environmentVariableMap(store),
         collectionVariables: collectionVariablesMap(store),
+        globals: globalsVariableMap(store),
         request,
       };
       if (collection?.scripts?.pre?.trim()) {
@@ -811,6 +815,7 @@ export async function handleSend(tabId: string) {
       const post = await runPostResponseScript(response, postScript, vars, {
         environment: environmentVariableMap(store),
         collectionVariables: collectionVariablesMap(store),
+        globals: globalsVariableMap(store),
         request: resolved,
       });
       postSummary = post.summary;
@@ -831,6 +836,7 @@ export async function handleSend(tabId: string) {
             assertions,
             environment: environmentVariableMap(store),
             collectionVariables: collectionVariablesMap(store),
+            globals: globalsVariableMap(store),
             request: resolved,
           })
         : null;

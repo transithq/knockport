@@ -47,6 +47,8 @@ export interface RunTestsOptions {
   environment?: Record<string, string>;
   /** Collection-scoped variables (pm.collectionVariables.*). */
   collectionVariables?: Record<string, string>;
+  /** Global-scoped variables (pm.globals.*). */
+  globals?: Record<string, string>;
   /** The resolved request (pm.request.*). */
   request?: Request;
 }
@@ -232,7 +234,7 @@ function createRealm(
     vars: { ...variables },
     env: { ...(opts.environment ?? {}) },
     colVars: { ...(opts.collectionVariables ?? {}) },
-    globals: {},
+    globals: { ...(opts.globals ?? {}) },
     response: undefined,
     request: opts.request,
   };
@@ -397,6 +399,7 @@ export async function runPostResponseScript(
   host.vars = { ...variables };
   host.env = { ...(opts.environment ?? {}) };
   host.colVars = { ...(opts.collectionVariables ?? {}) };
+  host.globals = { ...(opts.globals ?? {}) };
   const { run } = createRealmWithHost(host, tests);
 
   let scriptError: string | undefined;

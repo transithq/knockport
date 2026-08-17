@@ -18,6 +18,7 @@ import {
   buildVariableMap,
   collectionVariablesMap,
   environmentVariableMap,
+  globalsVariableMap,
   resolveRequest,
 } from "../../store/variables";
 
@@ -122,6 +123,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
         const opts = {
           environment: environmentVariableMap(state),
           collectionVariables: collectionVariablesMap(state),
+          globals: globalsVariableMap(state),
           request: req,
         };
         if (collection.scripts?.pre?.trim()) {
@@ -165,6 +167,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
               assertions,
               environment: environmentVariableMap(state),
               collectionVariables: collectionVariablesMap(state),
+              globals: globalsVariableMap(state),
               request: resolved,
             });
             testSummary = summary;

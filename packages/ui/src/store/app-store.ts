@@ -299,6 +299,8 @@ export interface AppStore {
   addEnvironment: (env: Environment) => void;
   setActiveEnvironment: (id: string | null) => void;
   updateEnvironment: (id: string, changes: Partial<Environment>) => void;
+  /** Mark/unmark the global environment (isDefault; lowest-precedence layer). */
+  setGlobalEnvironment: (id: string | null) => void;
   deleteEnvironment: (id: string) => void;
   loadEnvironments: () => Promise<void>;
 
@@ -721,6 +723,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }));
     const e = get().environments.find((x) => x.id === id);
     if (e) persistEnvironment(e);
+  },
+  setGlobalEnvironment: (id) => {
+    set((s) => ({
+      environments: s.environments.map((e) => ({
+        ...e,
+        isDefault: id !== null && e.id === id,
+      })),
+    }));
+    // isDefault is part of the record — persist every touched environment.
+    for (const e of get().environments) persistEnvironment(e);
   },
   deleteEnvironment: (id) => {
     set((s) => ({

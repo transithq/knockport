@@ -463,6 +463,15 @@ body {
   border-radius: 50%;
   background: var(--kp-accent);
 }
+.kp-global-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--kp-accent-muted);
+  color: var(--kp-accent);
+  font-weight: 600;
+  flex-shrink: 0;
+}
 .kp-empty-hint {
   padding: 12px;
   font-size: 12px;

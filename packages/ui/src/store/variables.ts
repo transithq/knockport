@@ -3,13 +3,29 @@ import { resolveVariables } from "@knockport/core";
 import type { AppStore } from "./app-store";
 
 // ── Variable resolution ──────────────────────────────────────────────────────
-// Precedence (low → high): collection variables, then environment variables.
-// Environment values override collection values for the same key.
+// Precedence (low → high): global environment (the environment marked
+// isDefault), then collection variables, then the active environment.
+// Higher layers override lower ones for the same key.
+
+/** The environment acting as the global scope (isDefault flag). */
+export function getGlobalsEnvironment(
+  state: Pick<AppStore, "environments">,
+): import("@knockport/core").Environment | undefined {
+  return state.environments.find((e) => e.isDefault);
+}
 
 export function buildVariableMap(state: Pick<AppStore, "collections" | "environments" | "activeEnvironmentId">): Record<string, string> {
   const map: Record<string, string> = {};
 
-  // Collection variables (lowest precedence)
+  // Global environment variables (lowest precedence)
+  const globals = getGlobalsEnvironment(state);
+  if (globals) {
+    for (const v of globals.variables ?? []) {
+      if (v.enabled) map[v.key] = v.value;
+    }
+  }
+
+  // Collection variables (override globals)
   for (const collection of state.collections) {
     for (const v of collection.variables ?? []) {
       if (v.enabled) map[v.key] = v.value;
@@ -33,6 +49,18 @@ export function environmentVariableMap(state: Pick<AppStore, "environments" | "a
   const env = state.environments.find((e) => e.id === state.activeEnvironmentId);
   if (env) {
     for (const v of env.variables ?? []) {
+      if (v.enabled) map[v.key] = v.value;
+    }
+  }
+  return map;
+}
+
+/** Global environment variables (pm.globals.* scope). */
+export function globalsVariableMap(state: Pick<AppStore, "environments">): Record<string, string> {
+  const map: Record<string, string> = {};
+  const globals = getGlobalsEnvironment(state);
+  if (globals) {
+    for (const v of globals.variables ?? []) {
       if (v.enabled) map[v.key] = v.value;
     }
   }

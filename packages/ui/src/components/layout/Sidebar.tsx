@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Cloud as CloudIcon,
   FolderClosed,
+  Globe,
   History as HistoryIcon,
   LayoutDashboard,
   Moon,
@@ -288,8 +289,20 @@ export function Sidebar() {
                     <span className="kp-truncate" style={{ flex: 1 }}>
                       {e.name}
                     </span>
+                    {e.isDefault && <span className="kp-global-badge" title="Global environment — lowest precedence">Global</span>}
                     {e.id === activeEnvironmentId && <span className="kp-active-dot" />}
                     <span className="kp-tree-actions">
+                      <button
+                        type="button"
+                        className="kp-icon-btn"
+                        title={e.isDefault ? "Unset as global" : "Set as global (lowest precedence)"}
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          useAppStore.getState().setGlobalEnvironment(e.isDefault ? null : e.id);
+                        }}
+                      >
+                        <Globe size={12} />
+                      </button>
                       <button
                         type="button"
                         className="kp-icon-btn"
