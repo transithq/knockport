@@ -1,6 +1,27 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Request } from "@knockport/core";
-import { buildBody, buildHeaderList, parseSetCookie, parseSetCookies } from "./index";
+import {
+  DirectTransport,
+  RelayTransport,
+  buildBody,
+  buildHeaderList,
+  parseSetCookie,
+  parseSetCookies,
+} from "./index";
+
+function makeRequest(overrides: Partial<Request> = {}): Request {
+  return {
+    id: "q1",
+    name: "q1",
+    method: "GET",
+    url: "https://example.com/image.png",
+    headers: [],
+    params: [],
+    body: { type: "none" },
+    auth: { type: "none" },
+    ...overrides,
+  };
+}
 
 describe("parseSetCookie", () => {
   it("parses a minimal cookie", () => {
@@ -105,5 +126,87 @@ describe("graphql body serialization", () => {
     });
     expect(headers).toContainEqual({ key: "content-type", value: "application/graphql" });
     expect(headers.filter((h) => h.key.toLowerCase() === "content-type")).toHaveLength(1);
+  });
+});
+
+describe("DirectTransport binary capture (F1)", () => {
+  it("base64-encodes media bodies and leaves the text body empty", async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const headers = new Map<string, string>([["content-type", "image/png"]]);
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: {
+        get: (k: string) => headers.get(k.toLowerCase()) ?? null,
+        forEach: (cb: (v: string, k: string) => void) => headers.forEach((v, k) => cb(v, k)),
+      },
+      arrayBuffer: () => Promise.resolve(png.buffer),
+      text: () => Promise.resolve(""),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const res = await new DirectTransport().execute(makeRequest());
+      expect(res.body).toBe("");
+      expect(res.bodyBase64).toBe("iVBORw0KGgo=");
+      expect(res.bodySize).toBe(8);
+      expect(res.contentType).toBe("image/png");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps text capture for text responses (no bodyBase64)", async () => {
+    const headers = new Map<string, string>([["content-type", "application/json"]]);
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: {
+        get: (k: string) => headers.get(k.toLowerCase()) ?? null,
+        forEach: (cb: (v: string, k: string) => void) => headers.forEach((v, k) => cb(v, k)),
+      },
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+      text: () => Promise.resolve('{"ok":true}'),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const res = await new DirectTransport().execute(makeRequest());
+      expect(res.body).toBe('{"ok":true}');
+      expect(res.bodyBase64).toBeUndefined();
+      expect(res.bodySize).toBe(11);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("RelayTransport binary capture (F1)", () => {
+  it("keeps base64 bytes for media responses", async () => {
+    const headers = new Map<string, string>([["content-type", "image/png"]]);
+    const relay = {
+      status: 200,
+      statusText: "OK",
+      headers: [{ key: "content-type", value: "image/png" }],
+      body: "iVBORw0KGgo=",
+      encoding: "base64",
+      timings: { total: 50, ttfb: 10, download: 40 },
+    };
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: (k: string) => headers.get(k.toLowerCase()) ?? null },
+      json: () => Promise.resolve(relay),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const res = await new RelayTransport("https://relay.example").execute(makeRequest());
+      expect(res.body).toBe("");
+      expect(res.bodyBase64).toBe("iVBORw0KGgo=");
+      expect(res.bodySize).toBe(8);
+      expect(res.contentType).toBe("image/png");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

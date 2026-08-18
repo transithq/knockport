@@ -1,10 +1,15 @@
-import type { ResponseCookie } from "@knockport/core";
+import type { MediaKind, ResponseCookie } from "@knockport/core";
+import { mediaKind, normalizeContentType } from "@knockport/core";
 import { clsx } from "clsx";
 import { Check, ChevronDown, Copy, Download, PanelBottom, PanelRight, WrapText } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LARGE_RESPONSE_BYTES, useAppStore } from "../../store/app-store";
 import { CodeViewer, type ViewerLanguage } from "../common/CodeViewer";
-import { downloadResponseText, filenameForResponse } from "./response-export";
+import {
+  downloadResponseBase64,
+  downloadResponseText,
+  filenameForResponse,
+} from "./response-export";
 import { type ResponseFormat, detectResponseFormat, formatLabel } from "./response-format";
 
 type ViewTab = "pretty" | "raw" | "preview";
@@ -156,13 +161,84 @@ function CookieCard({ cookie }: { cookie: ResponseCookie }) {
   );
 }
 
+// ── Media lens (F1) ──────────────────────────────────────────────────────────
+/** Render a base64 media body through a blob URL. Revoked on unmount. */
+function MediaLens({
+  kind,
+  mime,
+  base64,
+}: { kind: MediaKind; mime: string; base64: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    try {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+      setUrl(objectUrl);
+    } catch {
+      setUrl(null);
+    }
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [base64, mime]);
+
+  if (!url) {
+    return (
+      <div className="kp-empty-center">
+        <p className="kp-empty-title">Unable to render {kind}</p>
+        <p className="kp-empty-sub">The response body could not be decoded as {mime}</p>
+      </div>
+    );
+  }
+
+  if (kind === "image") {
+    return (
+      <div className="kp-media-lens kp-scroll">
+        <img src={url} alt="response image" />
+      </div>
+    );
+  }
+  if (kind === "audio") {
+    return (
+      <div className="kp-media-lens kp-media-center">
+        <audio controls src={url} />
+      </div>
+    );
+  }
+  if (kind === "video") {
+    return (
+      <div className="kp-media-lens kp-media-center">
+        <video controls src={url} />
+      </div>
+    );
+  }
+  // PDF: a blob URL in a sandboxed iframe (data: URLs are blocked for PDFs).
+  return (
+    <iframe
+      title="response-pdf"
+      className="kp-media-pdf"
+      src={url}
+      sandbox=""
+    />
+  );
+}
+
 // ── Body panel ───────────────────────────────────────────────────────────────
 function BodyPanel({
   tabId,
   response,
 }: {
   tabId: string;
-  response: { body: string; contentType?: string; bodySize: number; url?: string };
+  response: {
+    body: string;
+    bodyBase64?: string;
+    contentType?: string;
+    bodySize: number;
+    url?: string;
+  };
 }) {
   const requestUrl = useAppStore((s) => s.requests[tabId]?.url ?? "");
   const largeDismissed = useAppStore((s) => s.largeBodyDismissed[tabId] === true);
@@ -222,6 +298,29 @@ function BodyPanel({
   const displayText =
     activeFormat === "xml" || activeFormat === "html" ? (asyncPretty ?? prettyText) : prettyText;
 
+  const wrap = userWrap || viewTab === "raw";
+  // F6 large-response guard: rendering multi-MB bodies through CodeMirror
+  // freezes the UI thread, so hold them behind an explicit "show anyway".
+  // The dismissal is per tab and resets when a new response lands (the send
+  // path clears it before storing the response).
+  const guarded = response.bodySize > LARGE_RESPONSE_BYTES && !largeDismissed;
+
+  // F1 media lens: when the response carries renderable bytes, show the
+  // native preview instead of the pretty/raw/preview text pipeline.
+  const detectedMedia = mediaKind(response.contentType);
+  const media = detectedMedia !== null && response.bodyBase64 ? detectedMedia : null;
+  const mime = normalizeContentType(response.contentType);
+
+  const saveBody = async () => {
+    if (media) {
+      downloadResponseBase64(response.bodyBase64!, response.url ?? requestUrl, response.contentType);
+      return;
+    }
+    const text = await formatBody(response.body, activeFormat);
+    const name = filenameForResponse(response.url ?? requestUrl, response.contentType, text);
+    downloadResponseText(text, name, response.contentType);
+  };
+
   const copyBody = async () => {
     try {
       const text = await formatBody(response.body, activeFormat);
@@ -233,18 +332,25 @@ function BodyPanel({
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const saveBody = async () => {
-    const text = await formatBody(response.body, activeFormat);
-    const name = filenameForResponse(response.url ?? requestUrl, response.contentType, text);
-    downloadResponseText(text, name, response.contentType);
-  };
-
-  const wrap = userWrap || viewTab === "raw";
-  // F6 large-response guard: rendering multi-MB bodies through CodeMirror
-  // freezes the UI thread, so hold them behind an explicit "show anyway".
-  // The dismissal is per tab and resets when a new response lands (the send
-  // path clears it before storing the response).
-  const guarded = response.bodySize > LARGE_RESPONSE_BYTES && !largeDismissed;
+  if (media) {
+    return (
+      <>
+        <div className="kp-view-row">
+          <span className="kp-media-badge">{mime}</span>
+        </div>
+        <MediaLens kind={media} mime={mime} base64={response.bodyBase64!} />
+        <div className="kp-body-statusbar">
+          <span>{mime}</span>
+          <span className="kp-status-right">
+            <span>Size: {formatSize(response.bodySize)}</span>
+            <button type="button" className="kp-save-btn" title="Download the media body" onClick={saveBody}>
+              <Download size={13} /> Save
+            </button>
+          </span>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

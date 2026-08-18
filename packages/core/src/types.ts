@@ -204,7 +204,10 @@ export interface Response {
   status: number;
   statusText: string;
   headers: Record<string, string>;
+  /** Text body (UTF-8). Empty for binary/media responses that carry bytes. */
   body: string;
+  /** Raw bytes for binary/media responses, base64-encoded (F1). */
+  bodyBase64?: string;
   bodySize: number;
   contentType?: string;
   timings: ResponseTimings;

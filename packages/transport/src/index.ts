@@ -1,4 +1,5 @@
 import type { Request, Response, ResponseTimings } from "@knockport/core";
+import { isBinaryContentType } from "@knockport/core";
 
 // ── Transport Interface ──────────────────────────────────────────────────────
 /**
@@ -291,8 +292,27 @@ export class RelayTransport implements Transport {
       }
       if (setCookieValues.length > 0) responseHeaders["set-cookie"] = setCookieValues.join(", ");
 
-      const decodedBody =
-        relay.encoding === "base64" ? decodeBase64ToBinaryText(relay.body) : relay.body;
+      const contentType = responseHeaders["content-type"];
+
+      // F1 media/binary: keep the relay's base64 bytes for the media lenses.
+      // Text base64 payloads still round-trip through the latin-1 decode.
+      let responseBody: string;
+      let responseBodyBase64: string | undefined;
+      let responseBodySize: number;
+      if (relay.encoding === "base64") {
+        if (isBinaryContentType(contentType)) {
+          responseBodyBase64 = relay.body;
+          responseBody = "";
+          const pad = relay.body.endsWith("==") ? 2 : relay.body.endsWith("=") ? 1 : 0;
+          responseBodySize = Math.floor((relay.body.length * 3) / 4) - pad;
+        } else {
+          responseBody = decodeBase64ToBinaryText(relay.body);
+          responseBodySize = new TextEncoder().encode(responseBody).length;
+        }
+      } else {
+        responseBody = relay.body;
+        responseBodySize = new TextEncoder().encode(responseBody).length;
+      }
 
       const timings: ResponseTimings = {
         total: relay.timings?.total ?? endTime - startTime,
@@ -314,9 +334,10 @@ export class RelayTransport implements Transport {
         status: relay.status,
         statusText: relay.statusText,
         headers: responseHeaders,
-        body: decodedBody,
-        bodySize: new TextEncoder().encode(decodedBody).length,
-        contentType: responseHeaders["content-type"],
+        body: responseBody,
+        bodyBase64: responseBodyBase64,
+        bodySize: responseBodySize,
+        contentType,
         timings,
         cookies: parseSetCookies(setCookieValues),
         timestamp: new Date().toISOString(),
@@ -463,7 +484,20 @@ export class DirectTransport implements Transport {
       });
 
       const ttfbEnd = performance.now();
-      const responseBody = await fetchResponse.text();
+      const contentType = fetchResponse.headers.get("content-type") ?? undefined;
+      // F1 media/binary: capture raw bytes (base64) so the response viewer
+      // can render media lenses. Text responses keep the UTF-8 body string.
+      let responseBody = "";
+      let bodyBase64: string | undefined;
+      let bodySize: number;
+      if (isBinaryContentType(contentType)) {
+        const bytes = new Uint8Array(await fetchResponse.arrayBuffer());
+        bodyBase64 = bytesToBase64(bytes);
+        bodySize = bytes.length;
+      } else {
+        responseBody = await fetchResponse.text();
+        bodySize = new TextEncoder().encode(responseBody).length;
+      }
       const endTime = performance.now();
 
       const responseHeaders: Record<string, string> = {};
@@ -476,8 +510,6 @@ export class DirectTransport implements Transport {
         ttfb: ttfbEnd - ttfbStart,
         download: endTime - ttfbEnd,
       };
-
-      const contentType = fetchResponse.headers.get("content-type") ?? undefined;
 
       const cookies = parseSetCookies(
         typeof fetchResponse.headers.getSetCookie === "function"
@@ -495,7 +527,8 @@ export class DirectTransport implements Transport {
         statusText: fetchResponse.statusText,
         headers: responseHeaders,
         body: responseBody,
-        bodySize: new TextEncoder().encode(responseBody).length,
+        bodyBase64,
+        bodySize,
         contentType,
         timings,
         cookies,
