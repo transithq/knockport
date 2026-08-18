@@ -820,6 +820,7 @@ export async function handleSend(tabId: string) {
         request,
         envName: environmentName(store),
         collectionName: collection?.name,
+        cookieJar: useAppStore.getState().cookieJar,
       };
       for (const script of preScripts) {
         vars = runPreScript(script, vars, opts).variables;
@@ -870,6 +871,7 @@ export async function handleSend(tabId: string) {
         request: resolved,
         envName: environmentName(store),
         collectionName: collection?.name,
+        cookieJar: useAppStore.getState().cookieJar,
       });
       scriptVars = resVars.vars;
       store.setExtractedVars(tabId, scriptVars, request.responseVars.map((v) => v.key));
@@ -904,6 +906,7 @@ export async function handleSend(tabId: string) {
         request: resolved,
         envName: environmentName(store),
         collectionName: collection?.name,
+        cookieJar: useAppStore.getState().cookieJar,
       });
       summaries.push(post.summary);
       scriptVars = post.variables;
@@ -924,6 +927,7 @@ export async function handleSend(tabId: string) {
           request: resolved,
           envName: environmentName(store),
           collectionName: collection?.name,
+          cookieJar: useAppStore.getState().cookieJar,
         }),
       );
     }
@@ -932,6 +936,9 @@ export async function handleSend(tabId: string) {
       tabId,
       summaries.length ? summaries.reduce(mergeTestSummaries) : null,
     );
+    // C8: persist any bru.cookies.* mutations made by scripts (the jar is
+    // mutated in place by the engine) so they survive and the manager shows them.
+    store.syncCookieJar();
 
     // Scrub secret-typed variable values out of the resolved request before
     // it reaches history (the auth headers/params may carry live credentials).

@@ -53,6 +53,16 @@ describe("kp completions", () => {
     expect(deep?.options.map((o) => o.label)).not.toContain("code");
   });
 
+  it("offers bru.utils and bru.cookies member groups (C9/C8)", () => {
+    const utils = kpCompletions(ctx("bru.utils."));
+    expect(utils!.options.map((o) => o.label)).toContain("minifyJson");
+    const cookies = kpCompletions(ctx("bru.cookies."));
+    const labels = cookies!.options.map((o) => o.label);
+    expect(labels).toContain("get");
+    expect(labels).toContain("upsert");
+    expect(labels).toContain("jar");
+  });
+
   it("offers the chai global", () => {
     const result = kpCompletions(ctx("ch"));
     expect(result).not.toBeNull();

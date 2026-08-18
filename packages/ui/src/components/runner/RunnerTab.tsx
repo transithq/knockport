@@ -176,6 +176,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           request: req,
           envName: environmentName(state, override),
           collectionName: collection.name,
+          cookieJar: state.cookieJar,
         };
         // Scripts + assertions chain collection → folder chain → request
         // (J1); the runner's prompt collection covers every layer.
@@ -252,6 +253,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
               request: resolved,
               envName: environmentName(state, override),
               collectionName: collection.name,
+              cookieJar: state.cookieJar,
             });
             testSummary = summary;
             testsPassed = summary.passed;
@@ -264,6 +266,9 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
             testsTotal = testSummary.tests.length;
             testsOk = testsOk && postSummary.failed === 0 && !postSummary.scriptError;
           }
+          // C8: persist any bru.cookies.* mutations made by this request's
+          // scripts (the jar is mutated in place by the engine).
+          useAppStore.getState().syncCookieJar();
           failed = !(res.status >= 200 && res.status < 400 && testsOk);
           all.push({
             name: req.name,

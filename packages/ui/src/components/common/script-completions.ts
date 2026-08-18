@@ -77,11 +77,26 @@ const BRU_TOP: Entry[] = [
   { label: "getEnvName", display: "getEnvName()", info: "name of the executing environment", type: "function", apply: "getEnvName()" },
   { label: "getCollectionName", display: "getCollectionName()", info: "name of the request's collection", type: "function", apply: "getCollectionName()" },
   { label: "utils", display: "utils", info: "bru.utils — minifyJson / minifyXml", type: "property" },
+  { label: "cookies", display: "cookies", info: "bru.cookies — cookie jar API (get/one/all/has/add/upsert/remove/clear/jar)", type: "property" },
 ];
 
 const BRU_UTILS: Entry[] = [
   { label: "minifyJson", display: "minifyJson(json)", info: "compact a JSON string or object", type: "function", apply: "minifyJson(" },
   { label: "minifyXml", display: "minifyXml(xml)", info: "compact an XML string", type: "function", apply: "minifyXml(" },
+];
+
+const BRU_COOKIES: Entry[] = [
+  { label: "get", display: "get(name)", info: "value of the first cookie with key === name", type: "function", apply: 'get("name")' },
+  { label: "one", display: "one(name)", info: "first cookie object with key === name", type: "function", apply: 'one("name")' },
+  { label: "all", display: "all()", info: "all cookies scoped to the request URL", type: "function", apply: "all()" },
+  { label: "has", display: "has(name)", info: "true when a cookie with this name exists", type: "function", apply: 'has("name")' },
+  { label: "count", display: "count()", info: "number of cookies scoped to the request URL", type: "function", apply: "count()" },
+  { label: "toObject", display: "toObject()", info: "cookie map key → value", type: "function", apply: "toObject()" },
+  { label: "add", display: "add({key, value})", info: "add/overwrite a cookie for the request URL", type: "function", apply: 'add({ key: "name", value: "value" })' },
+  { label: "upsert", display: "upsert({key, value})", info: "add/overwrite a cookie for the request URL", type: "function", apply: 'upsert({ key: "name", value: "value" })' },
+  { label: "remove", display: "remove(name)", info: "delete cookies with this name for the request URL", type: "function", apply: 'remove("name")' },
+  { label: "clear", display: "clear()", info: "delete all cookies scoped to the request URL", type: "function", apply: "clear()" },
+  { label: "jar", display: "jar()", info: "cookie jar handle for arbitrary URLs (getCookie/getCookies/setCookie/…)", type: "function", apply: "jar()" },
 ];
 
 const GLOBALS: Entry[] = [
@@ -99,8 +114,13 @@ function topFor(ns: string): Entry[] {
 }
 
 function groupMembers(ns: string, member: string): Entry[] {
-  // bru exposes flat variable helpers plus the utils object (C9)
-  if (ns === "bru") return member === "utils" ? BRU_UTILS : [];
+  // bru exposes flat variable helpers plus the utils (C9) and cookies (C8)
+  // objects
+  if (ns === "bru") {
+    if (member === "utils") return BRU_UTILS;
+    if (member === "cookies") return BRU_COOKIES;
+    return [];
+  }
   return (KP_ROOT as Record<string, Entry[]>)[member] ?? [];
 }
 

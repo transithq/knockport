@@ -9,7 +9,7 @@
  * via `new Function` — NOT a security sandbox (user's own scripts, own
  * browser); true isolation arrives with QuickJS wasm in M3.
  */
-import type { Assertion, Request, Response, ResponseVariable } from "@knockport/core";
+import type { Assertion, CookieJar, Request, Response, ResponseVariable } from "@knockport/core";
 import { defaultBundle, render } from "@tropel/shims";
 import xmlFormat from "xml-formatter";
 
@@ -41,6 +41,17 @@ export interface PreScriptResult {
   error?: string;
 }
 
+/** A cookie as exposed to scripts (bru.cookies.*). Mirrors Bruno's shape. */
+export interface CookieScriptCookie {
+  key: string;
+  value: string;
+  domain?: string;
+  path?: string;
+  secure?: boolean;
+  httpOnly?: boolean;
+  expires?: number;
+}
+
 export interface RunTestsOptions {
   script?: string;
   assertions?: Assertion[];
@@ -58,6 +69,9 @@ export interface RunTestsOptions {
   envName?: string;
   /** Name of the collection the request lives in (bru.getCollectionName()). */
   collectionName?: string;
+  /** The application cookie jar (bru.cookies.*). Optional — without it
+   *  bru.cookies reads/writes are no-ops over an empty list. */
+  cookieJar?: CookieJar;
 }
 
 // ── Host state ───────────────────────────────────────────────────────────────
@@ -73,6 +87,8 @@ interface Host {
   envName?: string;
   /** Collection name the request lives in (bru.getCollectionName(), C9). */
   collectionName?: string;
+  /** Application cookie jar (bru.cookies.*, C8). */
+  cookieJar?: CookieJar;
 }
 
 function headerLookup(headers: Record<string, string>, key: string): string | undefined {
@@ -258,6 +274,52 @@ function buildBridges(host: Host, tests: TestResult[]): Record<string, (...args:
         // busy-wait fallback
       }
     },
+    // ── bru.cookies (C8): cookie jar API over the application jar ────────
+    // The frozen bru-shim ships no cookie surface (tropel-http cookie
+    // handling lives in reqwest::Jar, load-gen only — the relay executes
+    // plain and passes Set-Cookie through raw). KnockPort owns a persistent
+    // TS jar in the page, so scripts reach it through these bridges keyed by
+    // the executing request URL.
+    __tropel_cookies_current_url: () => host.request?.url ?? "",
+    __tropel_cookies_all: (url: string) => {
+      const jar = host.cookieJar;
+      if (!jar || !url) return [];
+      return jar.cookiesFor(url).map((c) => ({
+        key: c.key,
+        value: c.value,
+        domain: c.domain,
+        path: c.path,
+        secure: c.secure,
+        httpOnly: c.httpOnly,
+        ...(c.expires !== undefined ? { expires: c.expires } : {}),
+      }));
+    },
+    __tropel_cookies_set: (url: string, cookie: CookieScriptCookie) => {
+      const jar = host.cookieJar;
+      if (!jar || !url || !cookie || cookie.key === undefined || cookie.key === "") return;
+      jar.upsert(url, {
+        key: String(cookie.key),
+        value: String(cookie.value ?? ""),
+        path: cookie.path,
+        secure: Boolean(cookie.secure),
+        httpOnly: Boolean(cookie.httpOnly),
+        expires: cookie.expires,
+      });
+    },
+    __tropel_cookies_delete: (url: string, name: string) => {
+      const jar = host.cookieJar;
+      if (!jar || !url || !name) return;
+      for (const c of jar.cookiesFor(url)) {
+        if (c.key === name) jar.deleteCookie(c.domain, c.path, c.key);
+      }
+    },
+    __tropel_cookies_clear: (url: string) => {
+      if (!url) return;
+      host.cookieJar?.deleteCookiesForUrl(url);
+    },
+    __tropel_cookies_clear_all: () => {
+      host.cookieJar?.clear();
+    },
   };
 }
 
@@ -284,6 +346,124 @@ bru.utils = {
   minifyJson: function (j) { return __tropel_minify_json(j); },
   minifyXml: function (x) { return __tropel_minify_xml(x); }
 };
+/* C8 — bru.cookies: Bruno's CookieList API over the host cookie jar. The
+   frozen bru-shim ships no cookie surface; this is host-side glue. Write
+   methods are synchronous (this page engine has no async boundary), and
+   since await on a non-promise resolves immediately, Bruno scripts that
+   await bru.cookies.add(...) still work verbatim. jar() URLs interpolate
+   {{vars}} like Bruno (runtime variable store only). */
+bru.cookies = (function () {
+  var current = function () { return __tropel_cookies_current_url(); };
+  var all = function () { return __tropel_cookies_all(current()); };
+  return {
+    get: function (name) {
+      var a = all();
+      for (var i = 0; i < a.length; i++) if (a[i].key === name) return a[i].value;
+      return undefined;
+    },
+    one: function (name) {
+      var a = all();
+      for (var i = 0; i < a.length; i++) if (a[i].key === name) return a[i];
+      return undefined;
+    },
+    all: function () { return all().slice(); },
+    idx: function (i) { return all()[i]; },
+    count: function () { return all().length; },
+    has: function (name, value) {
+      var a = all();
+      for (var i = 0; i < a.length; i++) {
+        if (a[i].key === name && (arguments.length < 2 || a[i].value === value)) return true;
+      }
+      return false;
+    },
+    find: function (fn) {
+      var a = all();
+      for (var i = 0; i < a.length; i++) if (fn(a[i], i)) return a[i];
+      return undefined;
+    },
+    filter: function (fn) { return all().filter(fn); },
+    indexOf: function (item) {
+      var a = all();
+      for (var i = 0; i < a.length; i++) {
+        var c = a[i];
+        if (c.key === item.key && c.value === item.value &&
+            (item.domain === undefined || c.domain === item.domain) &&
+            (item.path === undefined || c.path === item.path)) return i;
+      }
+      return -1;
+    },
+    each: function (fn) { all().forEach(fn); },
+    map: function (fn) { return all().map(fn); },
+    reduce: function (fn, init) {
+      var a = all();
+      return arguments.length > 1 ? a.reduce(fn, init) : a.reduce(fn);
+    },
+    toObject: function () {
+      var out = {};
+      var a = all();
+      for (var i = 0; i < a.length; i++) out[a[i].key] = a[i].value;
+      return out;
+    },
+    toString: function () {
+      var a = all();
+      var parts = [];
+      for (var i = 0; i < a.length; i++) parts.push(a[i].key + '=' + a[i].value);
+      return parts.join('; ');
+    },
+    toJSON: function () { return all().slice(); },
+    add: function (cookieObj) { __tropel_cookies_set(current(), cookieObj); },
+    upsert: function (cookieObj) { __tropel_cookies_set(current(), cookieObj); },
+    remove: function (name) { __tropel_cookies_delete(current(), name); },
+    delete: function (name) { __tropel_cookies_delete(current(), name); },
+    clear: function () { __tropel_cookies_clear(current()); },
+    jar: function () {
+      var interp = function (u) {
+        if (!u) return u;
+        // Note: this regex lives in a TS template literal, so the backslashes
+        // are doubled here (the literal drops them to a single backslash).
+        return String(u).replace(/\\{\\{([\\w.$]+)\\}\\}/g, function (m, k) {
+          try {
+            var raw = __tropel_pm_variables_get(k);
+            if (raw !== null && raw !== undefined) {
+              var v;
+              try { v = JSON.parse(raw); } catch (e) { v = raw; }
+              return v === null || v === undefined ? m : String(v);
+            }
+          } catch (e) {}
+          return m;
+        });
+      };
+      return {
+        getCookie: function (url, name) {
+          var a = __tropel_cookies_all(interp(url));
+          for (var i = 0; i < a.length; i++) if (a[i].key === name) return a[i];
+          return undefined;
+        },
+        getCookies: function (url) { return __tropel_cookies_all(interp(url)).slice(); },
+        setCookie: function (url, nameOrObj, value) {
+          if (nameOrObj && typeof nameOrObj === 'object') {
+            __tropel_cookies_set(interp(url), nameOrObj);
+          } else {
+            __tropel_cookies_set(interp(url), { key: nameOrObj, value: value === undefined ? '' : String(value) });
+          }
+        },
+        setCookies: function (url, arr) {
+          var u = interp(url);
+          if (!arr) return;
+          for (var i = 0; i < arr.length; i++) __tropel_cookies_set(u, arr[i]);
+        },
+        deleteCookie: function (url, name) { __tropel_cookies_delete(interp(url), name); },
+        deleteCookies: function (url) { __tropel_cookies_clear(interp(url)); },
+        hasCookie: function (url, name) {
+          var a = __tropel_cookies_all(interp(url));
+          for (var i = 0; i < a.length; i++) if (a[i].key === name) return true;
+          return false;
+        },
+        clear: function () { __tropel_cookies_clear_all(); }
+      };
+    }
+  };
+})();
 var response = __kp_response();
 return function (__kp_script) { return eval(__kp_script); };
 `;
@@ -304,7 +484,7 @@ function getRealmFactory() {
 }
 
 function emptyHost(): Host {
-  return { vars: {}, env: {}, colVars: {}, globals: {} };
+  return { vars: {}, env: {}, colVars: {}, globals: {}, cookieJar: undefined };
 }
 
 interface Realm {
@@ -326,6 +506,7 @@ function createRealm(
     collectionName: opts.collectionName,
     response: undefined,
     request: opts.request,
+    cookieJar: opts.cookieJar,
   };
   return createRealmWithHost(host, tests);
 }
@@ -396,6 +577,7 @@ export async function runTests(
   host.vars = { ...(opts.variables ?? {}) };
   host.envName = opts.envName;
   host.collectionName = opts.collectionName;
+  host.cookieJar = opts.cookieJar;
 
   let scriptError: string | undefined;
   const script = opts.script?.trim();
@@ -495,6 +677,7 @@ export async function runPostResponseScript(
   host.globals = { ...(opts.globals ?? {}) };
   host.envName = opts.envName;
   host.collectionName = opts.collectionName;
+  host.cookieJar = opts.cookieJar;
   const { run } = createRealmWithHost(host, tests);
 
   let scriptError: string | undefined;
@@ -569,6 +752,7 @@ export function runPostResponseVars(
   host.globals = { ...(opts.globals ?? {}) };
   host.envName = opts.envName;
   host.collectionName = opts.collectionName;
+  host.cookieJar = opts.cookieJar;
   const { run } = createRealmWithHost(host, tests);
 
   const errors: Record<string, string> = {};

@@ -383,6 +383,8 @@ export interface AppStore {
   // Actions — Cookie jar (G1/G2)
   /** Capture a completed response's Set-Cookie headers into the jar. */
   captureResponseCookies: (response: Response) => void;
+  /** Persist the jar (bru.cookies.* script mutations) and rehydrate (C8). */
+  syncCookieJar: () => void;
   /** Set or replace a cookie manually (G2 edit / import). */
   setCookie: (url: string, cookie: { key: string; value: string; path?: string; secure?: boolean; httpOnly?: boolean; sameSite?: "Strict" | "Lax" | "None"; expires?: number }) => void;
   /** Replace a stored cookie in place, preserving its exact scope (G2 edit). */
@@ -1301,6 +1303,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
   clearCookieJar: () =>
     set((s) => {
       s.cookieJar.clear();
+      persistCookieJar(s.cookieJar);
+      return { cookieJar: loadCookieJar() };
+    }),
+
+  // Persist script-side jar mutations (bru.cookies.* in pre/post/test
+  // scripts mutate the store's jar object in place) and rehydrate so the
+  // cookie manager reflects them.
+  syncCookieJar: () =>
+    set((s) => {
       persistCookieJar(s.cookieJar);
       return { cookieJar: loadCookieJar() };
     }),

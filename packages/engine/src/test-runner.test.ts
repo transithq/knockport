@@ -1,4 +1,5 @@
-import type { Response } from "@knockport/core";
+import type { Request, Response } from "@knockport/core";
+import { CookieJar } from "@knockport/core";
 import { describe, expect, it } from "vitest";
 import {
   mergeTestSummaries,
@@ -7,6 +8,19 @@ import {
   runPreScript,
   runTests,
 } from "./test-runner";
+
+function makeRequest(url: string): Request {
+  return {
+    id: "q1",
+    name: "q1",
+    method: "GET",
+    url,
+    headers: [],
+    params: [],
+    body: { type: "none" },
+    auth: { type: "none" },
+  };
+}
 
 function makeResponse(overrides: Partial<Response> = {}): Response {
   return {
@@ -376,5 +390,103 @@ describe("bru utility API (C9)", () => {
     expect(s.scriptError).toBeUndefined();
     expect(s.failed).toBe(0);
     expect(s.passed).toBe(1);
+  });
+});
+
+describe("bru.cookies (C8)", () => {
+  it("reads cookies scoped to the executing request URL", async () => {
+    const jar = new CookieJar();
+    jar.upsert("https://api.example.com/things", { key: "session", value: "s1", path: "/" });
+    jar.upsert("https://other.example.com/", { key: "session", value: "other", path: "/" });
+    const s = await runTests(makeResponse(), {
+      request: makeRequest("https://api.example.com/things"),
+      cookieJar: jar,
+      script: `
+        kp.test("get returns value", () => kp.expect(bru.cookies.get("session")).to.eql("s1"));
+        kp.test("one returns cookie", () => kp.expect(bru.cookies.one("session").value).to.eql("s1"));
+        kp.test("has by name", () => kp.expect(bru.cookies.has("session")).to.eql(true));
+        kp.test("scoped count", () => kp.expect(bru.cookies.count()).to.eql(1));
+        kp.test("toObject", () => kp.expect(bru.cookies.toObject().session).to.eql("s1"));
+        kp.test("toString", () => kp.expect(bru.cookies.toString()).to.eql("session=s1"));
+      `,
+    });
+    expect(s.scriptError).toBeUndefined();
+    expect(s.failed).toBe(0);
+    expect(s.passed).toBe(6);
+  });
+
+  it("writes cookies through add/upsert and reads them back (pre-request)", () => {
+    const jar = new CookieJar();
+    const result = runPreScript(
+      `
+        bru.cookies.add({ key: "theme", value: "dark", path: "/" });
+        bru.cookies.upsert({ key: "theme", value: "dark2", path: "/" });
+      `,
+      {},
+      { request: makeRequest("https://api.example.com/things"), cookieJar: jar },
+    );
+    expect(result.error).toBeUndefined();
+    const stored = jar.cookiesFor("https://api.example.com/things");
+    expect(stored).toHaveLength(1);
+    expect(stored[0].key).toBe("theme");
+    expect(stored[0].value).toBe("dark2");
+  });
+
+  it("delete/remove and clear scoped to the URL", async () => {
+    const jar = new CookieJar();
+    jar.upsert("https://api.example.com/a", { key: "one", value: "1", path: "/" });
+    jar.upsert("https://api.example.com/a", { key: "two", value: "2", path: "/" });
+    jar.upsert("https://keep.example.com/", { key: "one", value: "1", path: "/" });
+    const s = await runTests(makeResponse(), {
+      request: makeRequest("https://api.example.com/a"),
+      cookieJar: jar,
+      script: `
+        bru.cookies.delete("one");
+        kp.test("delete removes by name", () => kp.expect(bru.cookies.has("one")).to.eql(false));
+        kp.test("other cookie survives", () => kp.expect(bru.cookies.has("two")).to.eql(true));
+        bru.cookies.clear();
+        kp.test("clear empties scope", () => kp.expect(bru.cookies.count()).to.eql(0));
+      `,
+    });
+    expect(s.scriptError).toBeUndefined();
+    expect(s.failed).toBe(0);
+    expect(s.passed).toBe(3);
+    expect(jar.cookiesFor("https://keep.example.com/")).toHaveLength(1);
+  });
+
+  it("jar() handle operates on arbitrary interpolated URLs", async () => {
+    const jar = new CookieJar();
+    const s = await runTests(makeResponse(), {
+      request: makeRequest("https://api.example.com/things"),
+      variables: { host: JSON.stringify("api.example.com") },
+      cookieJar: jar,
+      script: `
+        bru.cookies.jar().setCookie("https://{{host}}/login", "token", "abc");
+        kp.test("jar setCookie writes", () => kp.expect(bru.cookies.jar().getCookie("https://api.example.com/login", "token").value).to.eql("abc"));
+        kp.test("jar hasCookie", () => kp.expect(bru.cookies.jar().hasCookie("https://api.example.com/login", "token")).to.eql(true));
+        kp.test("jar deleteCookie", () => {
+          bru.cookies.jar().deleteCookie("https://api.example.com/login", "token");
+          kp.expect(bru.cookies.jar().hasCookie("https://api.example.com/login", "token")).to.eql(false);
+        });
+      `,
+    });
+    expect(s.scriptError).toBeUndefined();
+    expect(s.failed).toBe(0);
+    expect(s.passed).toBe(3);
+  });
+
+  it("reads and writes stay isolated without a jar (no-ops, empty list)", async () => {
+    const s = await runTests(makeResponse(), {
+      request: makeRequest("https://api.example.com/a"),
+      script: `
+        kp.test("no jar yields empty list", () => kp.expect(bru.cookies.count()).to.eql(0));
+        kp.test("no jar get is undefined", () => kp.expect(bru.cookies.get("x")).to.eql(undefined));
+        bru.cookies.add({ key: "x", value: "y" });
+        kp.test("no jar add is a no-op", () => kp.expect(bru.cookies.count()).to.eql(0));
+      `,
+    });
+    expect(s.scriptError).toBeUndefined();
+    expect(s.failed).toBe(0);
+    expect(s.passed).toBe(3);
   });
 });
