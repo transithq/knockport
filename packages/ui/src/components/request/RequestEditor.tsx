@@ -711,6 +711,16 @@ function ScriptEditor({ tabId }: { tabId: string }) {
             ? "Runs after the response, before tests. Use it for side effects — extract tokens, prep the next request."
             : "Runs after the response. Record checks with kp.test / pm.test."}
       </p>
+      <div className="kp-scripts-toolbar">
+        <button
+          type="button"
+          className="kp-btn"
+          onClick={() => useAppStore.getState().setInheritScriptsRequest(tabId)}
+          title="Collection + folder scripts that also run for this request"
+        >
+          View inherited scripts
+        </button>
+      </div>
       <CodeEditor
         value={value}
         onChange={(v) => updateRequest(tabId, { scripts: { ...scripts, [which]: v } })}

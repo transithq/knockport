@@ -277,6 +277,8 @@ export interface AppStore {
   importOpen: boolean;
   /** Pending prompt-variable dialog (A5): answers resolve on Send. */
   promptVars: { names: string[]; resolve: (answers: Record<string, string> | null) => void } | null;
+  /** Inherited-scripts viewer (C10): the request whose script chain is shown; null = closed. */
+  inheritScriptsRequest: string | null;
 
   // ── WebSocket workspace (single tab; state survives tab switches) ──
   wsUrl: string;
@@ -388,6 +390,7 @@ export interface AppStore {
   setPromptVars: (
     pending: { names: string[]; resolve: (answers: Record<string, string> | null) => void } | null,
   ) => void;
+  setInheritScriptsRequest: (requestId: string | null) => void;
   openWebSocketTab: () => void;
   openApiTab: () => void;
   openMockTab: () => void;
@@ -477,6 +480,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   codegenOpen: false,
   importOpen: false,
   promptVars: null,
+  inheritScriptsRequest: null,
   wsUrl: (typeof localStorage !== "undefined" && localStorage.getItem("kp-ws-url")) || "wss://echo.websocket.org",
   wsStatus: "idle" as WsTabStatus,
   wsLog: [],
@@ -1249,6 +1253,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setCodegenOpen: (open) => set({ codegenOpen: open }),
   setImportOpen: (open) => set({ importOpen: open }),
   setPromptVars: (pending) => set({ promptVars: pending }),
+  setInheritScriptsRequest: (requestId) => set({ inheritScriptsRequest: requestId }),
   openWebSocketTab: () => {
     const s = get();
     const existing = s.tabs.find((t) => t.kind === "websocket");

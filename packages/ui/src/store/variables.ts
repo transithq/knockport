@@ -7,6 +7,7 @@ import type {
   Collection,
   Folder,
   Environment,
+  RequestScripts,
 } from "@knockport/core";
 import { resolveVariables } from "@knockport/core";
 import type { AppStore } from "./app-store";
@@ -390,6 +391,42 @@ export function effectiveAssertions(
   }
   out.push(...(request.assertions ?? []));
   return out;
+}
+
+/**
+ * One labeled script layer for the inherited-scripts viewer (C10): the same
+ * execution chain the effective* helpers produce, annotated with its source
+ * ("collection", each folder name on the chain, "request").
+ */
+export interface ScriptLayer {
+  source: string;
+  script: string;
+}
+
+/**
+ * The scripts a request's execution will run for one phase, in execution
+ * order, labeled by origin (collection → folder chain root→parent →
+ * request). Layers with empty scripts are omitted.
+ */
+export function effectiveScriptLayers(
+  request: Request,
+  collection: Collection | undefined,
+  phase: keyof RequestScripts,
+): ScriptLayer[] {
+  const layers: ScriptLayer[] = [];
+  const colScript = collection?.scripts?.[phase]?.trim();
+  if (collection && colScript) {
+    layers.push({ source: "collection", script: collection.scripts?.[phase] ?? "" });
+  }
+  if (collection) {
+    for (const f of findFolderPath(collection, request.id) ?? []) {
+      const s = f.scripts?.[phase]?.trim();
+      if (s) layers.push({ source: `folder · ${f.name}`, script: f.scripts?.[phase] ?? "" });
+    }
+  }
+  const reqScript = request.scripts?.[phase]?.trim();
+  if (reqScript) layers.push({ source: "request", script: request.scripts?.[phase] ?? "" });
+  return layers;
 }
 
 /** Resolve `inherit` auth against the nearest folder ancestor, then the collection. */

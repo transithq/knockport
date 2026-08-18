@@ -7,6 +7,7 @@ import {
   effectiveHeaders,
   effectivePostScripts,
   effectivePreScripts,
+  effectiveScriptLayers,
   effectiveTestScripts,
   environmentVariableMap,
   findFolderPath,
@@ -379,5 +380,75 @@ describe("J2 collection-level headers", () => {
 
   it("falls back to only the request's own headers without a collection context", () => {
     expect(effectiveHeaders(leaf, undefined)).toEqual([]);
+  });
+});
+
+describe("effectiveScriptLayers (C10 inherited-scripts viewer)", () => {
+  const leaf: Request = {
+    id: "req_leaf_c10",
+    name: "Leaf",
+    method: "GET",
+    url: "",
+    headers: [],
+    params: [],
+    body: { type: "none" },
+    auth: { type: "inherit" },
+    scripts: { pre: "R", postResponse: "R-post" },
+  };
+  const inner: Folder = {
+    id: "fld_c10_inner",
+    name: "Inner",
+    scripts: { pre: "INNER" },
+    folders: [],
+    requests: [leaf],
+    order: [],
+  };
+  const outer: Folder = {
+    id: "fld_c10_outer",
+    name: "Outer",
+    scripts: { test: "OUTER-test" },
+    folders: [inner],
+    requests: [],
+    order: [],
+  };
+  const col: Collection = {
+    ...collection,
+    scripts: { pre: "COL", test: "COL-test" },
+    folders: [outer],
+    requests: [],
+  };
+
+  it("labels each layer by origin in execution order", () => {
+    const layers = effectiveScriptLayers(leaf, col, "pre");
+    expect(layers.map((l) => `${l.source} :: ${l.script}`)).toEqual([
+      "collection :: COL",
+      "folder · Inner :: INNER",
+      "request :: R",
+    ]);
+    // Test phase: collection + outer folder only (leaf has no test script).
+    expect(effectiveScriptLayers(leaf, col, "test").map((l) => l.source)).toEqual([
+      "collection",
+      "folder · Outer",
+    ]);
+  });
+
+  it("matches the effective*Scripts output for the same phase", () => {
+    for (const phase of ["pre", "postResponse", "test"] as const) {
+      const layerScripts = effectiveScriptLayers(leaf, col, phase).map((l) => l.script);
+      const expected =
+        phase === "pre"
+          ? effectivePreScripts(leaf, col)
+          : phase === "postResponse"
+            ? effectivePostScripts(leaf, col)
+            : effectiveTestScripts(leaf, col);
+      expect(layerScripts).toEqual(expected);
+    }
+  });
+
+  it("omits empty layers and returns [] without collection context", () => {
+    expect(effectiveScriptLayers(leaf, undefined, "pre")).toEqual([
+      { source: "request", script: "R" },
+    ]);
+    expect(effectiveScriptLayers(leaf, undefined, "test")).toEqual([]);
   });
 });

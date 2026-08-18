@@ -1230,6 +1230,10 @@ body.kp-resizing-y .kp-resize-handle {
   flex-direction: column;
   gap: 10px;
 }
+.kp-scripts-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
 .kp-seg-row {
   display: inline-flex;
   gap: 2px;
@@ -1956,6 +1960,31 @@ body.kp-resizing-y .kp-resize-handle {
   justify-content: flex-end;
   gap: 8px;
   padding: 0 14px;
+}
+.kp-modal-footer .kp-hint {
+  margin-right: auto;
+  align-self: center;
+}
+/* Inherited-scripts viewer (C10) */
+.kp-inherit-scripts {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.kp-inherit-layer {
+  display: flex;
+  flex-direction: column;
+}
+.kp-inherit-source {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--kp-accent);
+  margin-bottom: 4px;
+}
+.kp-inherit-layer .kp-code-block {
+  margin: 0;
 }
 .kp-import-error {
   padding: 0 14px;

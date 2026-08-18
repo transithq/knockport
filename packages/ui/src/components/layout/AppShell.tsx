@@ -9,7 +9,7 @@ import { CommandPalette } from "../command/CommandPalette";
 import { useResizer } from "../common/useResizer";
 import { DropdownMenu } from "../common/DropdownMenu";
 import { EnvironmentEditor } from "../environments/EnvironmentEditor";
-import { CodegenModal, ImportModal, PromptVariablesModal } from "../modals/Modals";
+import { CodegenModal, ImportModal, InheritedScriptsModal, PromptVariablesModal } from "../modals/Modals";
 import { RequestEditor, handleSend } from "../request/RequestEditor";
 import { ResponseBody } from "../response/ResponseBody";
 import { ResponseSummary } from "../response/ResponseSummary";
@@ -410,6 +410,7 @@ export function AppShell() {
         const s = useAppStore.getState();
         if (s.codegenOpen) s.setCodegenOpen(false);
         else if (s.importOpen) s.setImportOpen(false);
+        else if (s.inheritScriptsRequest) s.setInheritScriptsRequest(null);
       }
     };
     window.addEventListener("keydown", handler);
@@ -470,6 +471,7 @@ export function AppShell() {
       <CodegenModal />
       <ImportModal />
       <PromptVariablesModal />
+      <InheritedScriptsModal />
     </div>
   );
 }

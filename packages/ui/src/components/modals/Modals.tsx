@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Copy, X, Download, Send } from "lucide-react";
 import { clsx } from "clsx";
 import { useAppStore } from "../../store/app-store";
-import { buildVariableMap, resolveRequest } from "../../store/variables";
+import {
+  buildVariableMap,
+  effectiveScriptLayers,
+  findCollectionOfRequest,
+  resolveRequest,
+} from "../../store/variables";
 import { generateCode, importAuto, type CodegenTarget } from "@knockport/format";
 
 // ── Lightweight syntax highlighting for generated code ──────────────────────
@@ -248,6 +253,79 @@ export function ImportModal() {
           <button type="button" className="kp-btn primary" onClick={doImport} disabled={!text.trim()}>
             <Download size={14} /> Import
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Inherited Scripts Modal (C10) ────────────────────────────────────────────
+// Read-only viewer of the script chain a request's execution will run:
+// collection, then each folder on the chain (root→parent), then the
+// request's own — the same order the engine executes. Three phase tabs
+// (pre / post / tests) with per-source labeled code blocks.
+export function InheritedScriptsModal() {
+  const requestId = useAppStore((s) => s.inheritScriptsRequest);
+  const setOpen = useAppStore((s) => s.setInheritScriptsRequest);
+  const collections = useAppStore((s) => s.collections);
+  const requests = useAppStore((s) => s.requests);
+  const [phase, setPhase] = useState<"pre" | "postResponse" | "test">("pre");
+
+  const chain = useMemo(() => {
+    if (!requestId) return null;
+    const request = requests[requestId];
+    if (!request) return null;
+    const collection = findCollectionOfRequest(collections, requestId);
+    return {
+      request,
+      collection,
+      layers: effectiveScriptLayers(request, collection, phase),
+    };
+  }, [requestId, collections, requests, phase]);
+
+  if (!requestId || !chain) return null;
+
+  return (
+    <div className="kp-cmdk-overlay" onClick={() => setOpen(null)}>
+      <div className="kp-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="kp-modal-header">
+          <span>Scripts that run on send — {chain.request.name}</span>
+          <button type="button" className="kp-icon-btn" onClick={() => setOpen(null)}>
+            <X size={14} />
+          </button>
+        </div>
+        <div className="kp-seg-row" style={{ padding: "0 14px" }}>
+          {(
+            [
+              { id: "pre", label: "Pre-request" },
+              { id: "postResponse", label: "Post-response" },
+              { id: "test", label: "Tests" },
+            ] as const
+          ).map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className={clsx("kp-seg", phase === p.id && "active")}
+              onClick={() => setPhase(p.id)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="kp-modal-code kp-inherit-scripts">
+          {chain.layers.length === 0 ? (
+            <p className="kp-hint">No scripts in this phase — the request runs with none.</p>
+          ) : (
+            chain.layers.map((layer, i) => (
+              <div className="kp-inherit-layer" key={i}>
+                <div className="kp-inherit-source">{layer.source}</div>
+                <pre className="kp-code-block kp-mono">{layer.script}</pre>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="kp-modal-footer">
+          <span className="kp-hint">Executed top-to-bottom in the order shown.</span>
         </div>
       </div>
     </div>
