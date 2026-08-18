@@ -14,7 +14,7 @@ function response(url: string, setCookies: ResponseCookie[]): Response {
     body: "",
     bodySize: 0,
     contentType: "application/json",
-    timings: { total: 1, ttfb: 1 },
+    timings: { total: 1, ttfb: 1, download: 0 },
     cookies: setCookies,
     timestamp: new Date().toISOString(),
   };

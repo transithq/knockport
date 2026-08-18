@@ -1,6 +1,6 @@
 import { createId } from "@knockport/core";
 import type { Request } from "@knockport/core";
-import { Boxes, Braces, ChevronDown, Cloud, Folder, MoreHorizontal, Play, Plus, Radio, Server, Settings, X, Zap } from "lucide-react";
+import { Boxes, Braces, ChevronDown, Cloud, Cookie, Folder, MoreHorizontal, Play, Plus, Radio, Server, Settings, X, Zap } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useAppStore } from "../../store/app-store";
 import { CollectionEditor } from "../collections/CollectionEditor";
@@ -21,6 +21,7 @@ import { MockTab } from "../mock/MockTab";
 import { SseTab } from "../sse/SseTab";
 import { MqttTab } from "../mqtt/MqttTab";
 import { Sidebar } from "./Sidebar";
+import { CookieManagerTab } from "../cookies/CookieManagerTab";
 
 // ── Resizable workspace (request | response, with analytics rail) ────────────
 // Pane constraints, Bruno-style pixel clamping.
@@ -253,6 +254,8 @@ function TabBar() {
                 <Zap size={12} className="kp-env-tab-icon" />
               ) : tab.kind === "mqtt" ? (
                 <Cloud size={12} className="kp-env-tab-icon" />
+              ) : tab.kind === "cookies" ? (
+                <Cookie size={12} className="kp-env-tab-icon" />
               ) : (
                 <span
                   className="kp-method-tag"
@@ -460,6 +463,8 @@ export function AppShell() {
             <SseTab />
           ) : activeTab.kind === "mqtt" ? (
             <MqttTab />
+          ) : activeTab.kind === "cookies" ? (
+            <CookieManagerTab />
           ) : (
             <WorkspaceGrid tabId={activeTab.id} />
           )

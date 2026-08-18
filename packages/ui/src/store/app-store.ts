@@ -38,7 +38,8 @@ export interface RequestTab {
     | "api"
     | "mock"
     | "sse"
-    | "mqtt";
+    | "mqtt"
+    | "cookies";
   envId?: string;
   collectionId?: string;
 }
@@ -358,6 +359,7 @@ export interface AppStore {
   openFolderTab: (collectionId: string, folderId: string) => void;
   openRunnerTab: (collectionId: string) => void;
   openSettingsTab: () => void;
+  openCookieJarTab: () => void;
   closeTab: (tabId: string) => void;
   saveRequestTab: (tabId: string) => void;
   setActiveTab: (tabId: string | null) => void;
@@ -383,6 +385,8 @@ export interface AppStore {
   captureResponseCookies: (response: Response) => void;
   /** Set or replace a cookie manually (G2 edit / import). */
   setCookie: (url: string, cookie: { key: string; value: string; path?: string; secure?: boolean; httpOnly?: boolean; sameSite?: "Strict" | "Lax" | "None"; expires?: number }) => void;
+  /** Replace a stored cookie in place, preserving its exact scope (G2 edit). */
+  updateCookie: (cookie: import("@knockport/core").StoredCookie) => void;
   /** Delete one stored cookie by exact domain/path/name (G2). */
   deleteCookie: (domain: string, path: string, key: string) => void;
   /** Delete every cookie scoped to a URL (C8 `clear` from the manager). */
@@ -1125,6 +1129,29 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }));
   },
 
+  openCookieJarTab: () => {
+    const s = get();
+    const existing = s.tabs.find((t) => t.kind === "cookies");
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return;
+    }
+    const tabId = createId("tab");
+    set((st) => ({
+      tabs: [
+        ...st.tabs,
+        {
+          id: tabId,
+          requestId: "cookies",
+          kind: "cookies",
+          name: "Cookie Jar",
+          isDirty: false,
+        },
+      ],
+      activeTabId: tabId,
+    }));
+  },
+
   // ── Request Actions ──────────────────────────────────────────────────────
   updateRequest: (tabId, changes) =>
     set((s) => ({
@@ -1239,6 +1266,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setCookie: (url, cookie) =>
     set((s) => {
       s.cookieJar.upsert(url, cookie);
+      persistCookieJar(s.cookieJar);
+      return { cookieJar: loadCookieJar() };
+    }),
+
+  updateCookie: (cookie) =>
+    set((s) => {
+      s.cookieJar.setStored(cookie);
       persistCookieJar(s.cookieJar);
       return { cookieJar: loadCookieJar() };
     }),

@@ -14,6 +14,7 @@ import {
   Download,
   Upload,
   Play,
+  Cookie,
 } from "lucide-react";
 
 interface Command {
@@ -109,6 +110,10 @@ export function CommandPalette() {
       const colId = s.activeCollectionId ?? s.collections[0]?.id;
       setCommandPaletteOpen(false);
       if (colId) openRunnerTab(colId);
+    } },
+    { id: "open-cookie-jar", label: "Open Cookie Jar", icon: <Cookie size={14} />, group: "Actions", action: () => {
+      useAppStore.getState().openCookieJarTab();
+      setCommandPaletteOpen(false);
     } },
     { id: "export-collection", label: "Export Collection (Postman v2.1)", icon: <Upload size={14} />, group: "Actions", action: () => {
       const s = useAppStore.getState();

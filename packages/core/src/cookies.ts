@@ -240,6 +240,17 @@ export class CookieJar {
     return this.cookies.delete(id);
   }
 
+  /**
+   * Replace (or insert) a fully-specified stored cookie (G2 manager edit).
+   * Unlike {@link upsert}, this preserves the cookie's exact scope —
+   * including domain-scoped (`hostOnly: false`) entries and creation time.
+   */
+  setStored(c: StoredCookie): void {
+    const id = cookieIdentity(c);
+    const existing = this.cookies.get(id);
+    this.cookies.set(id, { ...c, created: existing?.created ?? c.created });
+  }
+
   /** Delete every stored cookie matching a URL's domain + path scope (C8 `clear`). */
   deleteCookiesForUrl(url: string): number {
     let parsed: URL;

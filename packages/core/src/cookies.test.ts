@@ -188,6 +188,18 @@ describe("CookieJar manual ops (G2 manager)", () => {
     jar.clear();
     expect(jar.count()).toBe(0);
   });
+
+  it("setStored preserves a domain-scoped cookie's exact scope", () => {
+    const jar = new CookieJar();
+    jar.setFromResponse("https://api.example.com/", [setCookie("lang", "en", { domain: ".example.com" })], NOW);
+    const before = jar.all()[0];
+    expect(before.hostOnly).toBe(false);
+    jar.setStored({ ...before, value: "fr" });
+    const after = jar.all()[0];
+    expect(after.value).toBe("fr");
+    expect(after.hostOnly).toBe(false);
+    expect(after.domain).toBe("example.com");
+  });
 });
 
 describe("CookieJar persistence", () => {
