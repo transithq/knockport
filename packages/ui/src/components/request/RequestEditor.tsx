@@ -744,7 +744,8 @@ function TestsPanel({ tabId }: { tabId: string }) {
     <div className="kp-hint-block">
       <p>
         Quick assertions evaluated against <code className="kp-mono kp-accent-text">response</code>{" "}
-        — must return <code className="kp-mono kp-accent-text">true</code> to pass:
+        — must return <code className="kp-mono kp-accent-text">true</code> to pass. Tab for
+        operator templates (eq/contains/between/isJson/… — Bruno's full set):
       </p>
       <AssertionsEditor assertions={assertions} onChange={setAssertions} />
       <p>
