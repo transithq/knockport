@@ -240,6 +240,9 @@ export interface Collection {
   name: string;
   description?: string;
   auth?: AuthConfig;
+  /** Headers applied to every request in the collection (entries set on a
+   *  folder or on the request itself win on duplicate names). */
+  headers?: KeyValuePair[];
   scripts?: RequestScripts;
   /** Declarative assertions applied to every request in the collection. */
   assertions?: Assertion[];

@@ -217,6 +217,7 @@ function collectionToYamlDoc(c: Collection): Record<string, any> {
     name: c.name,
     description: c.description,
     auth: c.auth?.type !== "none" ? serializeAuth(c.auth) : undefined,
+    headers: serializePairs(c.headers ?? []),
     scripts: c.scripts
       ? { pre: c.scripts.pre, test: c.scripts.test, postResponse: c.scripts.postResponse }
       : undefined,
@@ -318,6 +319,7 @@ interface RawCollection {
   name: string;
   description?: string;
   auth?: any;
+  headers?: any[];
   scripts?: { pre?: string; test?: string; postResponse?: string };
   variables?: any[];
   order?: string[];
@@ -331,6 +333,7 @@ function rawToCollection(raw: RawCollection): Collection {
     name: raw.name ?? "Imported Collection",
     description: raw.description,
     auth: raw.auth ? deserializeAuth(raw.auth) : undefined,
+    headers: (raw.headers ?? []).map(deserializePair),
     scripts: raw.scripts,
     variables: (raw.variables ?? []).map(deserializeVariable),
     folders: (raw.folders ?? []).map(rawToFolder),

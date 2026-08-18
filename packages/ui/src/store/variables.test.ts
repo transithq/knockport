@@ -251,26 +251,32 @@ describe("J1 folder inheritance — headers, auth, scripts, assertions", () => {
   const j1Collection: Collection = {
     ...collection,
     auth: { type: "bearer", bearer: { token: "collection-token" } },
+    headers: [
+      { key: "X-Collection", value: "col", enabled: true },
+      { key: "X-Shared", value: "from-collection", enabled: true },
+    ],
     scripts: { pre: "COL", postResponse: "COL-post", test: "COL-test" },
     assertions: [{ expression: "col === true" }],
     folders: [outer],
     requests: [rootReq],
   };
 
-  it("effectiveHeaders merges folder chain then request, request wins on dup", () => {
+  it("effectiveHeaders merges collection, folder chain then request, request wins on dup", () => {
     const headers = effectiveHeaders(baseReq, j1Collection).map((h) => `${h.key}=${h.value}`);
-    // Folder headers first (outer then inner by name), then request's own.
+    // Collection headers first, then folder headers (outer then inner by
+    // name), then the request's own.
+    expect(headers).toContain("X-Collection=col");
     expect(headers).toContain("X-Outer=outer");
     expect(headers).toContain("X-Inner=inner");
     expect(headers).toContain("X-Req=req");
-    // Duplicate name: request wins over both folders
+    // Duplicate name: request wins over collection + both folders.
     expect(headers).toContain("X-Shared=from-request");
   });
 
   it("effectiveHeaders keeps only one entry per duplicate header name", () => {
     const headers = effectiveHeaders(baseReq, j1Collection).filter((h) => h.key === "X-Shared");
-    // Both folders define X-Shared, but the request's own entry wins and no
-    // folder copy survives the merge.
+    // Collection + both folders define X-Shared, but the request's own entry
+    // wins and no ancestor copy survives the merge.
     expect(headers).toHaveLength(1);
     expect(headers[0].value).toBe("from-request");
   });
@@ -307,5 +313,71 @@ describe("J1 folder inheritance — headers, auth, scripts, assertions", () => {
       "inner === true",
       "req === true",
     ]);
+  });
+});
+
+describe("J2 collection-level headers", () => {
+  const leaf: Request = {
+    id: "req_leaf_j2",
+    name: "Leaf",
+    method: "GET",
+    url: "",
+    headers: [],
+    params: [],
+    body: { type: "none" },
+    auth: { type: "inherit" },
+  };
+
+  it("collection headers apply to root requests", () => {
+    const col: Collection = {
+      ...collection,
+      headers: [{ key: "X-From-Collection", value: "1", enabled: true }],
+      folders: [],
+      requests: [leaf],
+    };
+    const headers = effectiveHeaders(leaf, col).map((h) => `${h.key}=${h.value}`);
+    expect(headers).toEqual(["X-From-Collection=1"]);
+  });
+
+  it("folder headers override collection headers with the same name", () => {
+    const inner: Folder = {
+      id: "fld_j2",
+      name: "Inner",
+      headers: [{ key: "X-Shared", value: "folder", enabled: true }],
+      folders: [],
+      requests: [leaf],
+      order: [],
+    };
+    const col: Collection = {
+      ...collection,
+      headers: [
+        { key: "X-Shared", value: "collection", enabled: true },
+        { key: "X-Only-Collection", value: "c", enabled: true },
+      ],
+      folders: [inner],
+      requests: [],
+    };
+    const headers = effectiveHeaders(leaf, col).map((h) => `${h.key}=${h.value}`);
+    expect(headers).toContain("X-Shared=folder");
+    expect(headers).not.toContain("X-Shared=collection");
+    expect(headers).toContain("X-Only-Collection=c");
+  });
+
+  it("request headers override collection headers with the same name", () => {
+    const col: Collection = {
+      ...collection,
+      headers: [{ key: "X-Shared", value: "collection", enabled: true }],
+      folders: [],
+      requests: [{ ...leaf, headers: [{ key: "X-Shared", value: "request", enabled: true }] }],
+    };
+    const headers = effectiveHeaders(col.requests[0], col).filter((h) =>
+      h.key.toLowerCase() === "x-shared",
+    );
+    expect(headers).toHaveLength(1);
+    expect(headers[0].value).toBe("request");
+  });
+
+  it("falls back to only the request's own headers without a collection context", () => {
+    expect(effectiveHeaders(leaf, undefined)).toEqual([]);
   });
 });

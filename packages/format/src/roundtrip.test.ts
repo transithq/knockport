@@ -214,6 +214,19 @@ describe("native YAML round-trip", () => {
     expect(f.auth?.bearer?.token).toBe("folder-tok");
   });
 
+  it("round-trips collection-level headers (J2)", () => {
+    const original = makeCollection();
+    original.headers = [
+      { key: "X-Collection", value: "one", enabled: true },
+      { key: "X-Disabled", value: "off", enabled: false },
+    ];
+    const imported = importKnockportYaml(serializeCollection(original)) as Collection;
+    expect(imported.headers).toEqual([
+      { key: "X-Collection", value: "one", enabled: true },
+      { key: "X-Disabled", value: "off", enabled: false },
+    ]);
+  });
+
   it("byte-stability: serializing twice yields identical output", () => {
     const original = makeCollection();
     expect(serializeCollection(original)).toBe(serializeCollection(original));

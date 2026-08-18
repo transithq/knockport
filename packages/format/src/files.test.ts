@@ -44,6 +44,7 @@ function makeCollection(): Collection {
     name: "Disk API",
     description: "disk-backed test",
     auth: { type: "bearer", bearer: { token: "{{token}}" } },
+    headers: [{ key: "X-Team", value: "disk", enabled: true }],
     scripts: { pre: "kp.variables.set('nonce','1');" },
     variables: [{ key: "baseUrl", value: "https://api.x.test", type: "string", enabled: true }],
     folders: [authFolder],
@@ -76,6 +77,7 @@ describe("collectionToFiles / filesToCollection", () => {
     expect(restored.name).toBe("Disk API");
     expect(restored.auth?.type).toBe("bearer");
     expect(restored.auth?.bearer?.token).toBe("{{token}}");
+    expect(restored.headers).toEqual([{ key: "X-Team", value: "disk", enabled: true }]);
     expect(restored.variables[0].value).toBe("https://api.x.test");
     expect(restored.order).toEqual(["fld_auth", "req_users"]);
     expect(restored.folders[0].id).toBe("fld_auth");

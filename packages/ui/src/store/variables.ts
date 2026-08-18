@@ -290,13 +290,15 @@ export function folderVariablesFor(collection: Collection, requestId: string): R
 }
 
 /**
- * Inherited headers (J1): every folder's headers root→parent, then the
- * request's own headers — later layers (deeper folder, then request) win on
- * duplicate names, case-insensitively.
+ * Inherited headers (J1/J2): collection headers first, then every folder's
+ * headers root→parent, then the request's own headers — later layers
+ * (collection < folder < request) win on duplicate names,
+ * case-insensitively.
  */
 export function effectiveHeaders(request: Request, collection?: Collection): KeyValuePair[] {
   const layers: KeyValuePair[][] = [];
   if (collection) {
+    layers.push(collection.headers ?? []);
     for (const f of findFolderPath(collection, request.id) ?? []) {
       layers.push(f.headers ?? []);
     }

@@ -98,6 +98,7 @@ function collectionDoc(c: Collection): Record<string, any> {
     name: c.name,
     description: c.description,
     auth: c.auth,
+    headers: c.headers?.length ? c.headers : undefined,
     scripts: c.scripts,
     variables: c.variables,
     order: c.order,

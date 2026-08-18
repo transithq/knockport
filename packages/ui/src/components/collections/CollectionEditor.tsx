@@ -5,9 +5,10 @@ import { useState } from "react";
 import { useAppStore } from "../../store/app-store";
 import { AuthEditor } from "../common/AuthEditor";
 import { CodeEditor } from "../common/CodeEditor";
+import { HeadersTable } from "../common/HeadersTable";
 import { VariablesTable } from "../common/VariablesTable";
 
-type SubTab = "overview" | "auth" | "scripts" | "variables" | "runs";
+type SubTab = "overview" | "auth" | "headers" | "scripts" | "variables" | "runs";
 // Tests are written in the Post-response script (kp.test / pm.test) — the
 // former Tests column is deprecated, like Hoppscotch's script-only tests.
 type CollectionScriptPhase = "pre" | "postResponse";
@@ -28,8 +29,10 @@ function countFolders(collection: Collection): number {
 
 /**
  * Full-area collection editor tab (Postman/Bruno style): Overview,
- * Authorization, Scripts, Variables and Runs subtabs. Edits apply
- * immediately and persist to IndexedDB via updateCollection.
+ * Authorization, Headers, Scripts, Variables and Runs subtabs. Collection
+ * headers (J2) apply to every request in the collection; folder and request
+ * entries override them on duplicate names. Edits apply immediately and
+ * persist to IndexedDB via updateCollection.
  */
 export function CollectionEditor({ collectionId }: { collectionId: string }) {
   const collections = useAppStore((s) => s.collections);
@@ -49,6 +52,7 @@ export function CollectionEditor({ collectionId }: { collectionId: string }) {
   const subTabs: { id: SubTab; label: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "auth", label: "Authorization" },
+    { id: "headers", label: "Headers" },
     { id: "scripts", label: "Scripts" },
     { id: "variables", label: "Variables" },
     { id: "runs", label: "Runs" },
@@ -125,6 +129,19 @@ export function CollectionEditor({ collectionId }: { collectionId: string }) {
             <AuthEditor
               auth={collection.auth ?? { type: "none" }}
               onChange={(a) => set({ auth: a })}
+            />
+          </div>
+        )}
+
+        {sub === "headers" && (
+          <div className="kp-collection-section">
+            <p className="kp-hint">
+              Applied to every request in this collection (and every folder in it). A header
+              set on a folder or directly on a request wins on duplicate names.
+            </p>
+            <HeadersTable
+              pairs={collection.headers ?? []}
+              onChange={(h) => set({ headers: h })}
             />
           </div>
         )}
