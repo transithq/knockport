@@ -8,6 +8,7 @@ import type {
   HttpMethod,
   KeyValuePair,
   Request,
+  RequestExample,
   Response,
 } from "@knockport/core";
 import { createId } from "@knockport/core";
@@ -45,7 +46,7 @@ export interface RequestTab {
 }
 
 export type ActivePanel = "params" | "headers" | "auth" | "body" | "vars" | "scripts" | "tests";
-export type ResponsePanel = "body" | "cookies" | "headers" | "tests";
+export type ResponsePanel = "body" | "cookies" | "headers" | "tests" | "examples";
 export type SidebarTab = "collections" | "environments" | "history";
 
 /** Response pane placement (F6, Bruno parity). */
@@ -372,6 +373,16 @@ export interface AppStore {
   updateRequestParams: (tabId: string, params: KeyValuePair[]) => void;
   updateRequestBody: (tabId: string, body: BodyContent) => void;
   updateRequestAuth: (tabId: string, auth: AuthConfig) => void;
+
+  // Actions — Request examples (F4)
+  /** Save the tab's current request + response as an example on the request. */
+  saveRequestExample: (tabId: string) => void;
+  /** Delete one saved example by id. */
+  deleteRequestExample: (tabId: string, exampleId: string) => void;
+  /** Delete every saved example on the request. */
+  deleteAllRequestExamples: (tabId: string) => void;
+  /** Open a saved example: load its request into a tab and show its response. */
+  openRequestExample: (example: RequestExample) => void;
 
   // Actions — Response
   setResponse: (tabId: string, response: Response | null) => void;
@@ -996,6 +1007,101 @@ export const useAppStore = create<AppStore>((set, get) => ({
         tabs: st.tabs.map((t) => (t.id === tabId ? { ...t, isDirty: false } : t)),
       }));
     }
+  },
+
+  // ── Request examples (F4) ─────────────────────────────────────────────────
+  // Examples live on the Request object itself (persisted with the collection
+  // through the usual replaceRequestInFolders + persistCollection path), and
+  // on the tab copy so the response pane / tab label stay in sync.
+  saveRequestExample: (tabId) => {
+    const prev = get();
+    const tab = prev.tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+    const current = prev.requests[tabId];
+    const response = prev.responses[tabId];
+    if (!current || !response) return;
+    const example: RequestExample = {
+      id: createId("ex"),
+      request: current,
+      response,
+      timestamp: new Date().toISOString(),
+    };
+    const withExample = (r: Request): Request => ({
+      ...r,
+      examples: [...(r.examples ?? []), example],
+    });
+    set((s) => ({
+      requests: { ...s.requests, [tabId]: withExample(current) },
+    }));
+    const col = findOwningCollection(prev.collections, current.id);
+    if (col) {
+      const updated: Collection = {
+        ...col,
+        requests: col.requests.map((r) => (r.id === current.id ? withExample(r) : r)),
+        folders: replaceRequestInFolders(col.folders, current.id, {
+          ...current,
+          examples: [...(current.examples ?? []), example],
+        }),
+      };
+      set((st) => ({
+        collections: st.collections.map((c) => (c.id === col.id ? updated : c)),
+      }));
+      persistCollection(updated);
+    }
+  },
+
+  deleteRequestExample: (tabId, exampleId) => {
+    const prev = get();
+    const current = prev.requests[tabId];
+    if (!current) return;
+    const without = (r: Request): Request => ({
+      ...r,
+      examples: (r.examples ?? []).filter((e) => e.id !== exampleId),
+    });
+    set((s) => ({
+      requests: { ...s.requests, [tabId]: without(current) },
+    }));
+    const col = findOwningCollection(prev.collections, current.id);
+    if (col) {
+      const updated: Collection = {
+        ...col,
+        requests: col.requests.map((r) => (r.id === current.id ? without(r) : r)),
+        folders: replaceRequestInFolders(col.folders, current.id, without(current)),
+      };
+      set((st) => ({
+        collections: st.collections.map((c) => (c.id === col.id ? updated : c)),
+      }));
+      persistCollection(updated);
+    }
+  },
+
+  deleteAllRequestExamples: (tabId) => {
+    const prev = get();
+    const current = prev.requests[tabId];
+    if (!current) return;
+    const cleared = (r: Request): Request => ({ ...r, examples: undefined });
+    set((s) => ({
+      requests: { ...s.requests, [tabId]: cleared(current) },
+    }));
+    const col = findOwningCollection(prev.collections, current.id);
+    if (col) {
+      const updated: Collection = {
+        ...col,
+        requests: col.requests.map((r) => (r.id === current.id ? cleared(r) : r)),
+        folders: replaceRequestInFolders(col.folders, current.id, cleared(current)),
+      };
+      set((st) => ({
+        collections: st.collections.map((c) => (c.id === col.id ? updated : c)),
+      }));
+      persistCollection(updated);
+    }
+  },
+
+  openRequestExample: (example) => {
+    const s = get();
+    s.openTab({ ...example.request });
+    const active = get().tabs.find((t) => t.requestId === example.request.id);
+    if (active) get().setResponse(active.id, example.response);
   },
 
   openEnvironmentTab: (envId) => {

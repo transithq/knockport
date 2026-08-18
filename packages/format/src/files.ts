@@ -75,6 +75,7 @@ function requestDoc(r: Request): Record<string, any> {
     scripts: r.scripts,
     assertions: r.assertions?.length ? r.assertions : undefined,
     load: r.load,
+    examples: r.examples?.length ? r.examples : undefined,
   };
 }
 

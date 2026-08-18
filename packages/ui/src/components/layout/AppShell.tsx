@@ -265,6 +265,11 @@ function TabBar() {
                 </span>
               )}
               <span className="kp-truncate kp-tab-name">{tab.name}</span>
+              {req?.examples?.length ? (
+                <span className="kp-tab-count" title={`${req.examples.length} saved example${req.examples.length === 1 ? "" : "s"}`}>
+                  {req.examples.length}
+                </span>
+              ) : null}
               {active && (
                 <button
                   type="button"

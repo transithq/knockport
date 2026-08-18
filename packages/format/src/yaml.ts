@@ -7,6 +7,8 @@ import type {
   HttpMethod,
   KeyValuePair,
   Request,
+  RequestExample,
+  Response,
   Variable,
 } from "@knockport/core";
 import { createId, redactVariables } from "@knockport/core";
@@ -265,6 +267,33 @@ function requestToYamlDoc(r: Request): Record<string, any> {
     load: r.load
       ? { vus: r.load.vus, duration: r.load.duration, thresholds: r.load.thresholds }
       : undefined,
+    examples: r.examples?.length ? r.examples.map(exampleToYamlDoc) : undefined,
+  };
+}
+
+function exampleToYamlDoc(e: RequestExample): Record<string, any> {
+  return {
+    id: e.id,
+    timestamp: e.timestamp,
+    request: requestToYamlDoc(e.request),
+    response: responseToYamlDoc(e.response),
+  };
+}
+
+function responseToYamlDoc(res: Response): Record<string, any> {
+  return {
+    id: res.id,
+    requestId: res.requestId,
+    status: res.status,
+    statusText: res.statusText,
+    headers: res.headers,
+    body: res.body,
+    bodySize: res.bodySize,
+    contentType: res.contentType,
+    bodyBase64: res.bodyBase64,
+    timings: res.timings,
+    cookies: res.cookies,
+    timestamp: res.timestamp,
   };
 }
 
@@ -388,6 +417,30 @@ function rawToRequest(raw: any): Request {
     scripts: raw.scripts,
     assertions: raw.assertions,
     load: raw.load,
+    examples: (raw.examples ?? []).map(deserializeExample),
+  };
+}
+
+/** Example round-trip (F4): a nested raw request + response pair. */
+function deserializeExample(raw: any): RequestExample {
+  return {
+    id: raw.id ?? "",
+    timestamp: raw.timestamp ?? new Date(0).toISOString(),
+    request: rawToRequest(raw.request ?? {}),
+    response: {
+      id: raw.response?.id ?? "",
+      requestId: raw.response?.requestId ?? "",
+      status: raw.response?.status ?? 0,
+      statusText: raw.response?.statusText ?? "",
+      headers: raw.response?.headers ?? {},
+      body: raw.response?.body ?? "",
+      bodyBase64: raw.response?.bodyBase64,
+      bodySize: raw.response?.bodySize ?? 0,
+      contentType: raw.response?.contentType,
+      timings: raw.response?.timings ?? { total: 0, ttfb: 0, download: 0 },
+      cookies: raw.response?.cookies ?? [],
+      timestamp: raw.response?.timestamp ?? raw.timestamp ?? new Date(0).toISOString(),
+    },
   };
 }
 

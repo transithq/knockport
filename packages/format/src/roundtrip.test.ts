@@ -103,6 +103,48 @@ describe("native YAML round-trip", () => {
     expect(imported.folders[0].requests[0].auth.type).toBe("bearer");
   });
 
+  it("round-trips request examples (F4)", () => {
+    const original = makeCollection();
+    original.requests[0].examples = [
+      {
+        id: "ex_1",
+        timestamp: "2026-01-02T03:04:05.000Z",
+        request: {
+          id: "req_a",
+          name: "Get Users",
+          method: "GET",
+          url: "{{baseUrl}}/users",
+          headers: [],
+          params: [],
+          body: { type: "none" },
+          auth: { type: "inherit" },
+        },
+        response: {
+          id: "resp_1",
+          requestId: "req_a",
+          status: 200,
+          statusText: "OK",
+          headers: { "content-type": "application/json" },
+          body: '{"users":[]}',
+          bodySize: 12,
+          contentType: "application/json",
+          timings: { total: 12, ttfb: 5, download: 7 },
+          cookies: [],
+          timestamp: "2026-01-02T03:04:05.000Z",
+        },
+      },
+    ];
+    const yaml = serializeCollection(original);
+    const imported = importKnockportYaml(yaml) as Collection;
+    const examples = imported.requests[0].examples ?? [];
+    expect(examples).toHaveLength(1);
+    expect(examples[0].id).toBe("ex_1");
+    expect(examples[0].request.method).toBe("GET");
+    expect(examples[0].response.status).toBe(200);
+    expect(examples[0].response.body).toBe('{"users":[]}');
+    expect(examples[0].response.contentType).toBe("application/json");
+  });
+
   it("round-trips the full OAuth2 auth block (B1 fields)", () => {
     const original = makeCollection();
     original.auth = {

@@ -140,6 +140,8 @@ export interface Request {
   load?: LoadConfig;
   settings?: RequestSettings;
   metadata?: RequestMetadata;
+  /** Saved request+response pairs (F4 "save as example"). */
+  examples?: RequestExample[];
 }
 
 /** Plain key/value pair with an enabled flag (no type dropdown — values flow
@@ -193,6 +195,17 @@ export interface RequestMetadata {
   createdAt: string;
   updatedAt: string;
   tags?: string[];
+}
+
+/** A saved request+response pair attached to a request (F4). */
+export interface RequestExample {
+  id: string;
+  /** The request as it produced this response (may carry {{var}} refs). */
+  request: Request;
+  /** The captured response. */
+  response: Response;
+  /** When the example was saved. */
+  timestamp: string;
 }
 
 // ── Response ─────────────────────────────────────────────────────────────────

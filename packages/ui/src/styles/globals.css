@@ -1578,6 +1578,64 @@ body.kp-resizing-y .kp-resize-handle {
   border-radius: var(--kp-radius-md);
   margin: 8px 12px;
 }
+
+/* ── Request examples (F4) ───────────────────────────────────────────────── */
+.kp-examples-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.kp-examples-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.kp-examples-toolbar .kp-hint {
+  flex: 1;
+}
+.kp-example-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--kp-border-primary);
+  border-radius: var(--kp-radius-md);
+}
+.kp-example-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.kp-example-method {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--kp-font-mono, ui-monospace, monospace);
+  flex-shrink: 0;
+}
+.kp-example-url {
+  font-size: 12.5px;
+  color: var(--kp-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kp-example-meta {
+  font-size: 11px;
+  color: var(--kp-text-tertiary);
+  flex-shrink: 0;
+}
+.kp-example-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
 .kp-body-statusbar {
   display: flex;
   align-items: center;

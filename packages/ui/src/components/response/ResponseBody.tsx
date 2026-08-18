@@ -1,7 +1,7 @@
 import type { MediaKind, ResponseCookie } from "@knockport/core";
 import { mediaKind, normalizeContentType, query } from "@knockport/core";
 import { clsx } from "clsx";
-import { Check, ChevronDown, Copy, Download, PanelBottom, PanelRight, WrapText, X } from "lucide-react";
+import { Check, ChevronDown, Copy, Download, PanelBottom, PanelRight, Play, Save, Trash2, WrapText, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LARGE_RESPONSE_BYTES, useAppStore } from "../../store/app-store";
 import { CodeViewer, type ViewerLanguage } from "../common/CodeViewer";
@@ -13,6 +13,16 @@ import {
 import { type ResponseFormat, detectResponseFormat, formatLabel } from "./response-format";
 
 type ViewTab = "pretty" | "raw" | "preview";
+
+const methodColor: Record<string, string> = {
+  GET: "#22c55e",
+  POST: "#f59e0b",
+  PUT: "#3b82f6",
+  PATCH: "#a855f7",
+  DELETE: "#ef4444",
+  HEAD: "#64748b",
+  OPTIONS: "#64748b",
+};
 
 /** Viewer language for each format (XML/HTML fall back to text highlighting). */
 function viewerLanguageFor(format: ResponseFormat): ViewerLanguage {
@@ -500,6 +510,12 @@ export function ResponseBody({ tabId }: { tabId: string }) {
   // request tab switches like the request panel does.
   const bodyTab = useAppStore((s) => s.activeResponsePanel);
   const setBodyTab = useAppStore((s) => s.setActiveResponsePanel);
+  // F4 request examples: stored on the request object (tab copy).
+  const requestExamples = useAppStore((s) => s.requests[tabId]?.examples ?? []);
+  const saveExample = useAppStore((s) => s.saveRequestExample);
+  const deleteExample = useAppStore((s) => s.deleteRequestExample);
+  const deleteAllExamples = useAppStore((s) => s.deleteAllRequestExamples);
+  const openExample = useAppStore((s) => s.openRequestExample);
 
   if (!response) {
     return (
@@ -553,6 +569,14 @@ export function ResponseBody({ tabId }: { tabId: string }) {
               {testResults.passed}/{testResults.tests.length}
             </span>
           )}
+        </button>
+        <button
+          type="button"
+          className={clsx("kp-req-tab", bodyTab === "examples" && "active")}
+          onClick={() => setBodyTab("examples")}
+        >
+          Examples{" "}
+          {requestExamples.length > 0 && <span className="kp-tab-count">{requestExamples.length}</span>}
         </button>
         <span className="kp-req-tabs-spacer" />
         <button
@@ -628,6 +652,73 @@ export function ResponseBody({ tabId }: { tabId: string }) {
               ))}
             </>
           )}
+        </div>
+      )}
+
+      {bodyTab === "examples" && (
+        <div className="kp-examples-list kp-scroll">
+          <div className="kp-examples-toolbar">
+            <span className="kp-hint">
+              Saved request + response pairs for this request
+            </span>
+            <button
+              type="button"
+              className="kp-btn small"
+              disabled={!response}
+              title="Save the current request and response as an example"
+              onClick={() => saveExample(tabId)}
+            >
+              <Save size={13} /> Save current
+            </button>
+            {requestExamples.length > 0 && (
+              <button
+                type="button"
+                className="kp-btn small danger"
+                title="Delete all saved examples"
+                onClick={() => deleteAllExamples(tabId)}
+              >
+                <Trash2 size={13} /> Clear all
+              </button>
+            )}
+          </div>
+          {requestExamples.length === 0 && (
+            <div className="kp-empty-center">
+              <p className="kp-empty-title">No saved examples</p>
+              <p className="kp-empty-sub">Send a request, then save it as an example</p>
+            </div>
+          )}
+          {requestExamples.map((ex) => (
+            <div className="kp-example-row" key={ex.id}>
+              <div className="kp-example-main">
+                <span className="kp-example-method" style={{ color: methodColor[ex.request.method] }}>
+                  {ex.request.method}
+                </span>
+                <span className="kp-example-url kp-mono">{ex.request.url || ex.request.name}</span>
+                <span className="kp-example-meta">
+                  {ex.response.status} {ex.response.statusText} ·{" "}
+                  {new Date(ex.timestamp).toLocaleString()}
+                </span>
+              </div>
+              <div className="kp-example-actions">
+                <button
+                  type="button"
+                  className="kp-btn small"
+                  title="Open this example's request and response"
+                  onClick={() => openExample(ex)}
+                >
+                  <Play size={13} /> Open
+                </button>
+                <button
+                  type="button"
+                  className="kp-icon-btn kp-icon-btn-danger"
+                  title="Delete this example"
+                  onClick={() => deleteExample(tabId, ex.id)}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
