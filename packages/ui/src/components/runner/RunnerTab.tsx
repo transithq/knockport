@@ -18,6 +18,10 @@ import { promptForVariables } from "../../store/prompts";
 import {
   buildVariableMap,
   collectionVariablesMap,
+  effectiveAssertions,
+  effectivePostScripts,
+  effectivePreScripts,
+  effectiveTestScripts,
   environmentVariableMap,
   folderVariablesFor,
   globalsVariableMap,
@@ -115,7 +119,16 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
     };
 
     // Prompt variables (A5): asked once at run start (Bruno semantics — one
-    // dialog per run), carried into every request/iteration. Cancel aborts.
+    // dialog per run), carried into every request/iteration. The script
+    // sources now include every folder in the tree (J1). Cancel aborts.
+    const folderScripts: string[] = [];
+    const walkFolderScripts = (f: Folder) => {
+      if (f.scripts?.pre?.trim()) folderScripts.push(f.scripts.pre);
+      if (f.scripts?.test?.trim()) folderScripts.push(f.scripts.test);
+      if (f.scripts?.postResponse?.trim()) folderScripts.push(f.scripts.postResponse);
+      for (const sub of f.folders) walkFolderScripts(sub);
+    };
+    for (const f of collection.folders) walkFolderScripts(f);
     const promptNames = [
       ...new Set([
         ...included.flatMap((r) => collectRequestPromptVariables(r)),
@@ -123,6 +136,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           collection.scripts?.pre ?? "",
           collection.scripts?.test ?? "",
           collection.scripts?.postResponse ?? "",
+          ...folderScripts,
         ),
       ]),
     ];
@@ -159,11 +173,14 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           globals: globalsVariableMap(state),
           request: req,
         };
-        if (collection.scripts?.pre?.trim()) {
-          vars = runPreScript(collection.scripts.pre, vars, opts).variables;
-        }
-        if (req.scripts?.pre?.trim()) {
-          vars = runPreScript(req.scripts.pre, vars, opts).variables;
+        // Scripts + assertions chain collection → folder chain → request
+        // (J1); the runner's prompt collection covers every layer.
+        const preScripts = effectivePreScripts(req, collection);
+        const postScripts = effectivePostScripts(req, collection);
+        const testScripts = effectiveTestScripts(req, collection);
+        const reqAssertions = effectiveAssertions(req, collection);
+        for (const script of preScripts) {
+          vars = runPreScript(script, vars, opts).variables;
         }
         const resolved = resolveRequest(req, vars, collection);
         // OAuth2 (B1): attach the stored token; refresh first when expired.
@@ -190,10 +207,9 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           }
 
           // Post-response phase (Bruno ordering): runs before the test
-          // phase. Its variable mutations carry into the next request.
-          const postScript = [collection.scripts?.postResponse, req.scripts?.postResponse]
-            .filter((s) => s?.trim())
-            .join("\n");
+          // phase. Its variable mutations carry into the next request. The
+          // effective list already chains collection → folders → request.
+          const postScript = postScripts.join("\n");
           let postSummary = null;
           let finalVars = vars;
           if (postScript.trim()) {
@@ -214,10 +230,8 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           let testsTotal: number | undefined;
           let testsOk = true;
           let testSummary = null;
-          const testScript = [collection.scripts?.test, req.scripts?.test]
-            .filter((s) => s?.trim())
-            .join("\n");
-          const assertions = [...(collection.assertions ?? []), ...(req.assertions ?? [])];
+          const testScript = testScripts.join("\n");
+          const assertions = reqAssertions;
           if (testScript.trim() || assertions.length) {
             const summary = await runTests(res, {
               script: testScript || undefined,

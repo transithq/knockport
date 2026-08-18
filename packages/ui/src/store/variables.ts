@@ -209,7 +209,13 @@ function resolveAuth(auth: AuthConfig, vars: Record<string, string>): AuthConfig
 /** Return a fully-resolved copy of the request for execution. */
 export function resolveRequest(request: Request, vars: Record<string, string>, collection?: Collection): Request {
   const auth = resolveAuth(effectiveAuth(request, collection), vars);
-  let headers = resolvePairs(request.headers, vars);
+  // Inherited headers (J1) are merged here so transports/codegen/runner
+  // results all see the final set; request entries win on duplicate names
+  // (enabled-flag filtering stays with the transports).
+  let headers = resolvePairs(
+    collection ? effectiveHeaders(request, collection) : request.headers,
+    vars,
+  );
   let params = resolvePairs(request.params, vars);
 
   // Inject credentials so transports/codegen see a self-contained request.
@@ -283,10 +289,102 @@ export function folderVariablesFor(collection: Collection, requestId: string): R
   return [...map.values()];
 }
 
-/** Resolve `inherit` auth against the parent collection. */
+/**
+ * Inherited headers (J1): every folder's headers root→parent, then the
+ * request's own headers — later layers (deeper folder, then request) win on
+ * duplicate names, case-insensitively.
+ */
+export function effectiveHeaders(request: Request, collection?: Collection): KeyValuePair[] {
+  const layers: KeyValuePair[][] = [];
+  if (collection) {
+    for (const f of findFolderPath(collection, request.id) ?? []) {
+      layers.push(f.headers ?? []);
+    }
+  }
+  layers.push(request.headers);
+  const merged: KeyValuePair[] = [];
+  for (const layer of layers) {
+    for (const h of layer) {
+      const i = merged.findIndex((m) => m.key.toLowerCase() === h.key.toLowerCase());
+      if (i >= 0) merged[i] = h;
+      else merged.push(h);
+    }
+  }
+  return merged;
+}
+
+/**
+ * Pre-request scripts (J1) in execution order: collection, then each folder in
+ * the chain (root→parent), then the request's own script.
+ */
+export function effectivePreScripts(request: Request, collection?: Collection): string[] {
+  const scripts: string[] = [];
+  if (collection?.scripts?.pre?.trim()) scripts.push(collection.scripts.pre);
+  if (collection) {
+    for (const f of findFolderPath(collection, request.id) ?? []) {
+      if (f.scripts?.pre?.trim()) scripts.push(f.scripts.pre);
+    }
+  }
+  if (request.scripts?.pre?.trim()) scripts.push(request.scripts.pre);
+  return scripts;
+}
+
+/**
+ * Post-response scripts (J1) in execution order: collection, then each folder
+ * in the chain (root→parent), then the request's own script.
+ */
+export function effectivePostScripts(request: Request, collection?: Collection): string[] {
+  const scripts: string[] = [];
+  if (collection?.scripts?.postResponse?.trim()) scripts.push(collection.scripts.postResponse);
+  if (collection) {
+    for (const f of findFolderPath(collection, request.id) ?? []) {
+      if (f.scripts?.postResponse?.trim()) scripts.push(f.scripts.postResponse);
+    }
+  }
+  if (request.scripts?.postResponse?.trim()) scripts.push(request.scripts.postResponse);
+  return scripts;
+}
+
+/**
+ * Test scripts (J1) in execution order: collection, then each folder in the
+ * chain (root→parent), then the request's own script.
+ */
+export function effectiveTestScripts(request: Request, collection?: Collection): string[] {
+  const scripts: string[] = [];
+  if (collection?.scripts?.test?.trim()) scripts.push(collection.scripts.test);
+  if (collection) {
+    for (const f of findFolderPath(collection, request.id) ?? []) {
+      if (f.scripts?.test?.trim()) scripts.push(f.scripts.test);
+    }
+  }
+  if (request.scripts?.test?.trim()) scripts.push(request.scripts.test);
+  return scripts;
+}
+
+/** Assertions (J1) in execution order: collection, then folder chain, then request. */
+export function effectiveAssertions(
+  request: Request,
+  collection?: Collection,
+): import("@knockport/core").Assertion[] {
+  const out: import("@knockport/core").Assertion[] = [...(collection?.assertions ?? [])];
+  if (collection) {
+    for (const f of findFolderPath(collection, request.id) ?? []) {
+      out.push(...(f.assertions ?? []));
+    }
+  }
+  out.push(...(request.assertions ?? []));
+  return out;
+}
+
+/** Resolve `inherit` auth against the nearest folder ancestor, then the collection. */
 export function effectiveAuth(request: Request, collection?: Collection): AuthConfig {
   const own = request.auth ?? { type: "inherit" };
   if (own.type !== "inherit") return own;
+  if (collection) {
+    for (const f of [...findFolderPath(collection, request.id) ?? []].reverse()) {
+      if (f.auth && f.auth.type !== "inherit" && f.auth.type !== "none") return f.auth;
+    }
+  }
   const col = collection?.auth;
   return col && col.type !== "inherit" ? col : { type: "none" };
 }

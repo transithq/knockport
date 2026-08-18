@@ -22,6 +22,10 @@ import { promptForVariables } from "../../store/prompts";
 import {
   buildVariableMap,
   collectionVariablesMap,
+  effectiveAssertions,
+  effectivePostScripts,
+  effectivePreScripts,
+  effectiveTestScripts,
   environmentVariableMap,
   findCollectionOfRequest,
   folderVariablesFor,
@@ -770,17 +774,17 @@ export async function handleSend(tabId: string) {
     // Folder-inherited variables (A2): the request's folder chain, merged
     // over the collection/env layers and under request variables.
     const folderVars = collection ? folderVariablesFor(collection, request.id) : undefined;
-    // Prompt variables (A5): `{{$prompt.name}}` placeholders (request +
-    // collection scripts) pause the send for an answer each, merged into
-    // the map before pre-request scripts. Cancelling aborts the send.
+    const preScripts = collection ? effectivePreScripts(request, collection) : request.scripts?.pre?.trim() ? [request.scripts.pre] : [];
+    const postScripts = collection ? effectivePostScripts(request, collection) : request.scripts?.postResponse?.trim() ? [request.scripts.postResponse] : [];
+    const testScripts = collection ? effectiveTestScripts(request, collection) : request.scripts?.test?.trim() ? [request.scripts.test] : [];
+    const assertions = collection ? effectiveAssertions(request, collection) : (request.assertions ?? []);
+    // Prompt variables (A5): `{{$prompt.name}}` placeholders (scripts of the
+    // collection, folder chain + request) pause the send for an answer each,
+    // merged into the map before pre-request scripts. Cancelling aborts.
     const answers = await promptForVariables([
       ...new Set([
         ...collectRequestPromptVariables(request),
-        ...collectPromptVariableNames(
-          collection?.scripts?.pre ?? "",
-          collection?.scripts?.test ?? "",
-          collection?.scripts?.postResponse ?? "",
-        ),
+        ...collectPromptVariableNames(...preScripts, ...postScripts, ...testScripts),
       ]),
     ]);
     if (answers === null) {
@@ -794,7 +798,7 @@ export async function handleSend(tabId: string) {
       }),
       answers,
     );
-    if (collection?.scripts?.pre?.trim() || request.scripts?.pre?.trim()) {
+    if (preScripts.length) {
       const { runPreScript } = await import("@knockport/engine");
       const opts = {
         environment: environmentVariableMap(store),
@@ -802,11 +806,8 @@ export async function handleSend(tabId: string) {
         globals: globalsVariableMap(store),
         request,
       };
-      if (collection?.scripts?.pre?.trim()) {
-        vars = runPreScript(collection.scripts.pre, vars, opts).variables;
-      }
-      if (request.scripts?.pre?.trim()) {
-        vars = runPreScript(request.scripts.pre, vars, opts).variables;
+      for (const script of preScripts) {
+        vars = runPreScript(script, vars, opts).variables;
       }
     }
     const resolved = resolveRequest(request, vars, collection);
@@ -867,12 +868,11 @@ export async function handleSend(tabId: string) {
       store.setExtractedVars(tabId, null);
     }
 
-    // Script phases (Bruno ordering): post-response runs before tests. The
-    // runner loop carries post-response variable mutations into the next
-    // request; a single send has no follow-up so they are ephemeral.
-    const postScript = [collection?.scripts?.postResponse, request.scripts?.postResponse]
-      .filter((s) => s?.trim())
-      .join("\n");
+    // Script phases (Bruno ordering): post-response runs before tests; the
+    // effective lists already chain collection → folders → request, so a
+    // folder's post-response script runs after the collection's and before
+    // the request's own.
+    const postScript = postScripts.join("\n");
     if (postScript.trim()) {
       const { runPostResponseScript } = await import("@knockport/engine");
       const post = await runPostResponseScript(response, postScript, scriptVars, {
@@ -886,11 +886,7 @@ export async function handleSend(tabId: string) {
     }
 
     // Run test scripts + assertions (interim TS runner; wasm engine in M3)
-    // Collection-level scripts/assertions run before the request's own.
-    const testScript = [collection?.scripts?.test, request.scripts?.test]
-      .filter((s) => s?.trim())
-      .join("\n");
-    const assertions = [...(collection?.assertions ?? []), ...(request.assertions ?? [])];
+    const testScript = testScripts.join("\n");
     if (testScript.trim() || assertions.length) {
       const { runTests } = await import("@knockport/engine");
       summaries.push(

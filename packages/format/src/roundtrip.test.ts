@@ -197,6 +197,23 @@ describe("native YAML round-trip", () => {
     ]);
   });
 
+  it("round-trips the full folder settings block (J1)", () => {
+    const original = makeCollection();
+    original.folders[0].description = "User folder docs";
+    original.folders[0].headers = [{ key: "X-Api", value: "v2", enabled: true }];
+    original.folders[0].scripts = { pre: "kp.env.set('x','1');" };
+    original.folders[0].assertions = [{ expression: "response.status === 200" }];
+    original.folders[0].auth = { type: "bearer", bearer: { token: "folder-tok" } };
+    const imported = importKnockportYaml(serializeCollection(original)) as Collection;
+    const f = imported.folders[0];
+    expect(f.description).toBe("User folder docs");
+    expect(f.headers).toEqual([{ key: "X-Api", value: "v2", enabled: true }]);
+    expect(f.scripts?.pre).toBe("kp.env.set('x','1');");
+    expect(f.assertions?.[0].expression).toBe("response.status === 200");
+    expect(f.auth?.type).toBe("bearer");
+    expect(f.auth?.bearer?.token).toBe("folder-tok");
+  });
+
   it("byte-stability: serializing twice yields identical output", () => {
     const original = makeCollection();
     expect(serializeCollection(original)).toBe(serializeCollection(original));

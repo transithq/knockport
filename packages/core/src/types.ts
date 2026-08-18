@@ -253,11 +253,18 @@ export interface Collection {
 export interface Folder {
   id: string;
   name: string;
+  /** Markdown docs (B§9 folderRootSchema.docs), shown in the Overview pane. */
   description?: string;
+  /** Inherited by every request in the folder when its auth type is `inherit`. */
   auth?: AuthConfig;
+  /** Headers applied to every request in the folder (request entries win on
+   *  duplicate names). */
+  headers?: KeyValuePair[];
   scripts?: RequestScripts;
-  /** Folder-scoped variables (Bruno `folderVariables`): merge over the
-   *  collection + environment layers, under request variables. */
+  /** Assertions applied to every request in the folder. */
+  assertions?: Assertion[];
+  /** Folder-scoped variables: merge over the collection + environment
+   *  layers, under request variables. */
   variables?: FolderVariable[];
   folders: Folder[];
   requests: Request[];

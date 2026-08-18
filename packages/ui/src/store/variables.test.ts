@@ -1,7 +1,13 @@
-import type { Collection, Environment, Folder } from "@knockport/core";
+import type { Collection, Environment, Folder, Request } from "@knockport/core";
 import { describe, expect, it } from "vitest";
 import {
   buildVariableMap,
+  effectiveAssertions,
+  effectiveAuth,
+  effectiveHeaders,
+  effectivePostScripts,
+  effectivePreScripts,
+  effectiveTestScripts,
   environmentVariableMap,
   findFolderPath,
   folderVariablesFor,
@@ -195,5 +201,111 @@ describe("folder chain + folder variables (A2)", () => {
       { folderVars: folderVariablesFor(treeCollection, "req_deep") },
     );
     expect(map.off).toBeUndefined();
+  });
+});
+
+describe("J1 folder inheritance — headers, auth, scripts, assertions", () => {
+  const baseReq: Request = {
+    id: "req_leaf",
+    name: "Leaf",
+    method: "GET",
+    url: "",
+    headers: [
+      { key: "X-Req", value: "req", enabled: true },
+      { key: "X-Shared", value: "from-request", enabled: true },
+    ],
+    params: [],
+    body: { type: "none" },
+    auth: { type: "inherit" },
+    scripts: { pre: "R", postResponse: "R-post", test: "R-test" },
+    assertions: [{ expression: "req === true" }],
+  };
+  const rootReq: Request = { ...baseReq, id: "req_root_j1", name: "RootJ1" };
+  const inner: Folder = {
+    id: "fld_inner",
+    name: "Inner",
+    headers: [
+      { key: "X-Inner", value: "inner", enabled: true },
+      { key: "X-Shared", value: "from-inner", enabled: true },
+    ],
+    scripts: { pre: "INNER", postResponse: "INNER-post" },
+    assertions: [{ expression: "inner === true" }],
+    folders: [],
+    requests: [baseReq],
+    order: [],
+  };
+  const outer: Folder = {
+    id: "fld_outer",
+    name: "Outer",
+    headers: [
+      { key: "X-Outer", value: "outer", enabled: true },
+      { key: "X-Shared", value: "from-outer", enabled: true },
+    ],
+    scripts: { pre: "OUTER", test: "OUTER-test" },
+    auth: { type: "bearer", bearer: { token: "folder-token" } },
+    assertions: [{ expression: "outer === true" }],
+    folders: [inner],
+    requests: [],
+    order: [],
+  };
+  const j1Collection: Collection = {
+    ...collection,
+    auth: { type: "bearer", bearer: { token: "collection-token" } },
+    scripts: { pre: "COL", postResponse: "COL-post", test: "COL-test" },
+    assertions: [{ expression: "col === true" }],
+    folders: [outer],
+    requests: [rootReq],
+  };
+
+  it("effectiveHeaders merges folder chain then request, request wins on dup", () => {
+    const headers = effectiveHeaders(baseReq, j1Collection).map((h) => `${h.key}=${h.value}`);
+    // Folder headers first (outer then inner by name), then request's own.
+    expect(headers).toContain("X-Outer=outer");
+    expect(headers).toContain("X-Inner=inner");
+    expect(headers).toContain("X-Req=req");
+    // Duplicate name: request wins over both folders
+    expect(headers).toContain("X-Shared=from-request");
+  });
+
+  it("effectiveHeaders keeps only one entry per duplicate header name", () => {
+    const headers = effectiveHeaders(baseReq, j1Collection).filter((h) => h.key === "X-Shared");
+    // Both folders define X-Shared, but the request's own entry wins and no
+    // folder copy survives the merge.
+    expect(headers).toHaveLength(1);
+    expect(headers[0].value).toBe("from-request");
+  });
+
+  it("effectiveAuth resolves inherit against the nearest folder first, then collection", () => {
+    // Leaf request → walk chain reverse (inner→outer→collection): inner has no auth, outer wins.
+    const leafAuth = effectiveAuth(baseReq, j1Collection);
+    expect(leafAuth.type).toBe("bearer");
+    expect(leafAuth.bearer?.token).toBe("folder-token");
+    // Root request (no folder chain) falls back to the collection auth.
+    const rootAuth = effectiveAuth(rootReq, j1Collection);
+    expect(rootAuth.bearer?.token).toBe("collection-token");
+    // A request with its own auth never inherits.
+    const ownAuth = effectiveAuth({ ...baseReq, auth: { type: "none" } }, j1Collection);
+    expect(ownAuth.type).toBe("none");
+  });
+
+  it("effectivePreScripts orders collection → folders (root→parent) → request", () => {
+    expect(effectivePreScripts(baseReq, j1Collection)).toEqual(["COL", "OUTER", "INNER", "R"]);
+    // Root request: collection then request only.
+    expect(effectivePreScripts(rootReq, j1Collection)).toEqual(["COL", "R"]);
+  });
+
+  it("effectivePostScripts and effectiveTestScripts chain the same way", () => {
+    expect(effectivePostScripts(baseReq, j1Collection)).toEqual(["COL-post", "INNER-post", "R-post"]);
+    expect(effectiveTestScripts(baseReq, j1Collection)).toEqual(["COL-test", "OUTER-test", "R-test"]);
+  });
+
+  it("effectiveAssertions concatenates collection + folder chain + request in order", () => {
+    const exprs = effectiveAssertions(baseReq, j1Collection).map((a) => a.expression);
+    expect(exprs).toEqual([
+      "col === true",
+      "outer === true",
+      "inner === true",
+      "req === true",
+    ]);
   });
 });
