@@ -70,6 +70,8 @@ function requestDoc(r: Request): Record<string, any> {
     params: r.params.length ? r.params : undefined,
     body: body.type !== "none" ? diskBody : undefined,
     auth: r.auth?.type !== "inherit" ? r.auth : undefined,
+    requestVars: r.requestVars?.length ? r.requestVars : undefined,
+    responseVars: r.responseVars?.length ? r.responseVars : undefined,
     scripts: r.scripts,
     assertions: r.assertions?.length ? r.assertions : undefined,
     load: r.load,

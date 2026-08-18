@@ -168,6 +168,22 @@ describe("native YAML round-trip", () => {
     expect(imported.variables[1].enabled).toBe(false);
   });
 
+  it("round-trips request-level variables (A1)", () => {
+    const original = makeCollection();
+    original.requests[0].requestVars = [
+      { key: "page", value: "1", enabled: true },
+      { key: "off", value: "x", enabled: false },
+    ];
+    original.requests[0].responseVars = [{ key: "token", value: "response.json().token" }];
+    const imported = importKnockportYaml(serializeCollection(original)) as Collection;
+    const r = imported.requests[0];
+    expect(r.requestVars).toHaveLength(2);
+    expect(r.requestVars?.[0]).toEqual({ key: "page", value: "1" });
+    expect(r.requestVars?.[1]).toEqual({ key: "off", value: "x", enabled: false });
+    expect(r.responseVars?.[0].key).toBe("token");
+    expect(r.responseVars?.[0].value).toBe("response.json().token");
+  });
+
   it("byte-stability: serializing twice yields identical output", () => {
     const original = makeCollection();
     expect(serializeCollection(original)).toBe(serializeCollection(original));

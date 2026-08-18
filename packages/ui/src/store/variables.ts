@@ -1,11 +1,21 @@
-import type { Request, KeyValuePair, AuthConfig, BodyContent, Collection, Folder, Environment } from "@knockport/core";
+import type {
+  Request,
+  RequestVariable,
+  KeyValuePair,
+  AuthConfig,
+  BodyContent,
+  Collection,
+  Folder,
+  Environment,
+} from "@knockport/core";
 import { resolveVariables } from "@knockport/core";
 import type { AppStore } from "./app-store";
 
 // ── Variable resolution ──────────────────────────────────────────────────────
-// Precedence (low → high): global environment (the environment marked
-// isDefault), then collection variables, then the active environment.
-// Higher layers override lower ones for the same key.
+// Precedence (low → high, Bruno merge order): global environment (the
+// environment marked isDefault) → collection variables → environment layer
+// (active or runner-picked) → folder variables (A2) → request variables
+// (A1). Runtime/prompt layers are merged by the callers on top of the map.
 
 /** The environment acting as the global scope (isDefault flag). */
 export function getGlobalsEnvironment(
@@ -27,6 +37,18 @@ export interface RunnerEnvOverride {
   includeActiveEnv?: boolean;
 }
 
+/**
+ * Extra per-execution layers applied on top of the environment layer
+ * (A1 request variables). Folder variables (A2) slot in between the
+ * collection variables and the request variables.
+ */
+export interface ExecutionVarLayers {
+  /** Folder-inherited variables: collection vars < folder vars < request vars. */
+  folderVars?: RequestVariable[];
+  /** Request-scoped variables: override every other data/env layer. */
+  requestVars?: RequestVariable[];
+}
+
 function applyEnvLayer(map: Record<string, string>, env: Environment | undefined): void {
   if (!env) return;
   for (const v of env.variables ?? []) {
@@ -34,9 +56,26 @@ function applyEnvLayer(map: Record<string, string>, env: Environment | undefined
   }
 }
 
+function applyVarList(
+  map: Record<string, string>,
+  vars: import("@knockport/core").RequestVariable[] | undefined,
+): void {
+  for (const v of vars ?? []) {
+    if (v.enabled !== false && v.key) map[v.key] = v.value;
+  }
+}
+
+/** Enabled request-scoped (req) variables as a plain map (A1). */
+export function requestVariableMap(vars: RequestVariable[] | undefined): Record<string, string> {
+  const map: Record<string, string> = {};
+  applyVarList(map, vars);
+  return map;
+}
+
 export function buildVariableMap(
   state: Pick<AppStore, "collections" | "environments" | "activeEnvironmentId">,
   runnerOverride?: RunnerEnvOverride,
+  layers?: ExecutionVarLayers,
 ): Record<string, string> {
   const map: Record<string, string> = {};
 
@@ -59,6 +98,12 @@ export function buildVariableMap(
   } else {
     applyEnvLayer(map, active);
   }
+
+  // Folder-inherited variables (A2): override collection/env layers.
+  applyVarList(map, layers?.folderVars);
+
+  // Request-scoped variables (A1): highest data-layer precedence.
+  applyVarList(map, layers?.requestVars);
 
   return map;
 }

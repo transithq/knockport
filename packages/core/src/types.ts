@@ -128,11 +128,34 @@ export interface Request {
   params: KeyValuePair[];
   body: BodyContent;
   auth: AuthConfig;
+  /** Request-scoped variables (req side): seed the interpolation map above
+   *  the environment layer (Bruno/Hoppscotch `vars:pre-request`). */
+  requestVars?: RequestVariable[];
+  /** Response variables (res side): JS expressions evaluated against the
+   *  response after it arrives; results enter the runtime variable scope for
+   *  post-response/test scripts and the runner's next request. */
+  responseVars?: ResponseVariable[];
   scripts?: RequestScripts;
   assertions?: Assertion[];
   load?: LoadConfig;
   settings?: RequestSettings;
   metadata?: RequestMetadata;
+}
+
+/** Plain key/value pair with an enabled flag (no type dropdown — values flow
+ *  through `{{...}}` interpolation as strings). */
+export interface RequestVariable {
+  key: string;
+  value: string;
+  enabled?: boolean;
+}
+
+/** Post-response variable: `value` is a JS expression evaluated against the
+ *  response object (`res.json()…`, `res.header(...)`, `res.status`, …). */
+export interface ResponseVariable {
+  key: string;
+  value: string;
+  enabled?: boolean;
 }
 
 export interface RequestScripts {

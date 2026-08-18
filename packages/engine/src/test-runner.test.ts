@@ -1,6 +1,12 @@
 import type { Response } from "@knockport/core";
 import { describe, expect, it } from "vitest";
-import { mergeTestSummaries, runPostResponseScript, runPreScript, runTests } from "./test-runner";
+import {
+  mergeTestSummaries,
+  runPostResponseScript,
+  runPostResponseVars,
+  runPreScript,
+  runTests,
+} from "./test-runner";
 
 function makeResponse(overrides: Partial<Response> = {}): Response {
   return {
@@ -235,5 +241,62 @@ describe("mergeTestSummaries", () => {
     expect(m.passed).toBe(1);
     expect(m.failed).toBe(1);
     expect(m.scriptError).toBe("err");
+  });
+});
+
+describe("runPostResponseVars (A1 res side)", () => {
+  const vars = [
+    { key: "dataName", value: "response.json().data.name" },
+    { key: "reqId", value: "res.getHeader('x-request-id')" },
+    { key: "status", value: "response.status" },
+  ];
+
+  it("evaluates each expression against the response", () => {
+    const r = runPostResponseVars(makeResponse(), vars, {});
+    expect(r.vars.dataName).toBe("knockport");
+    expect(r.vars.reqId).toBe("abc123");
+    expect(r.vars.status).toBe("200");
+    expect(r.errors).toEqual({});
+  });
+
+  it("JSON-encodes object results", () => {
+    const r = runPostResponseVars(
+      makeResponse(),
+      [{ key: "data", value: "JSON.parse(res.getBody()).data" }],
+      {},
+    );
+    expect(r.vars.data).toBe(JSON.stringify({ id: 7, name: "knockport" }));
+  });
+
+  it("seeds the runtime scope and keeps unrelated seed values", () => {
+    const r = runPostResponseVars(makeResponse(), vars, { seed: "kept" });
+    expect(r.vars.seed).toBe("kept");
+  });
+
+  it("skips disabled variables and collects per-variable errors", () => {
+    const r = runPostResponseVars(makeResponse(), [
+      { key: "bad", value: "this is not valid js {{{" },
+      { key: "off", value: "res.getStatus()", enabled: false },
+    ]);
+    expect(r.vars.off).toBeUndefined();
+    expect(r.vars.bad).toBeUndefined();
+    expect(Object.keys(r.errors)).toEqual(["bad"]);
+  });
+
+  it("an empty variable list is a no-op", () => {
+    const r = runPostResponseVars(makeResponse(), []);
+    expect(r.vars).toEqual({});
+    expect(r.errors).toEqual({});
+  });
+});
+
+describe("runTests — runtime variable visibility (A1)", () => {
+  it("exposes provided variables through kp.variables", async () => {
+    const s = await runTests(makeResponse(), {
+      script: `kp.test("var visible", () => kp.expect(kp.variables.get("dataName")).to.eql("knockport"));`,
+      variables: { dataName: "knockport" },
+    });
+    expect(s.failed).toBe(0);
+    expect(s.passed).toBe(1);
   });
 });

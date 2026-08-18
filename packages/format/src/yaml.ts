@@ -252,6 +252,8 @@ function requestToYamlDoc(r: Request): Record<string, any> {
     params: serializePairs(r.params),
     body: serializeBody(r.body),
     auth: r.auth?.type !== "inherit" ? serializeAuth(r.auth) : undefined,
+    requestVars: r.requestVars?.length ? r.requestVars : undefined,
+    responseVars: r.responseVars?.length ? r.responseVars : undefined,
     scripts: r.scripts
       ? { pre: r.scripts.pre, test: r.scripts.test, postResponse: r.scripts.postResponse }
       : undefined,
@@ -372,9 +374,20 @@ function rawToRequest(raw: any): Request {
           ? { type: "text", content: body }
           : { type: "none" },
     auth: raw.auth ? deserializeAuth(raw.auth) : { type: "inherit" },
+    requestVars: (raw.requestVars ?? []).map(deserializeVarPair),
+    responseVars: (raw.responseVars ?? []).map(deserializeVarPair),
     scripts: raw.scripts,
     assertions: raw.assertions,
     load: raw.load,
+  };
+}
+
+/** Request/response variable round-trip (A1): key + value expression, enabled. */
+function deserializeVarPair(raw: any): { key: string; value: string; enabled?: boolean } {
+  return {
+    key: raw.key ?? "",
+    value: raw.value ?? "",
+    ...(raw.enabled === false ? { enabled: false } : {}),
   };
 }
 

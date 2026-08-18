@@ -1095,6 +1095,15 @@ body.kp-resizing-y .kp-resize-handle {
   min-height: 140px;
   padding: 14px 16px;
 }
+/* Request Variables (A1): name + value rows. */
+.kp-req-panel .kp-vars-table .kp-kv-row {
+  grid-template-columns: 28px 1fr 1fr 26px;
+}
+.kp-req-panel .kp-kv .kp-hint {
+  margin: 2px 0 6px;
+  font-size: 11.5px;
+  color: var(--kp-text-muted);
+}
 
 /* Key-value table */
 .kp-kv-title {

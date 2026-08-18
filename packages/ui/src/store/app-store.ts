@@ -40,7 +40,7 @@ export interface RequestTab {
   collectionId?: string;
 }
 
-export type ActivePanel = "params" | "headers" | "auth" | "body" | "scripts" | "tests";
+export type ActivePanel = "params" | "headers" | "auth" | "body" | "vars" | "scripts" | "tests";
 export type ResponsePanel = "body" | "cookies" | "headers" | "tests";
 export type SidebarTab = "collections" | "environments" | "history";
 
@@ -255,6 +255,8 @@ export interface AppStore {
   requests: Record<string, Request>;
   responses: Record<string, Response | null>;
   testResults: Record<string, TestRunSummary | null>;
+  /** A1: last send's extracted response variables (vars.post-response). */
+  extractedVars: Record<string, Record<string, string> | null>;
   isLoading: Record<string, boolean>;
 
   // History
@@ -360,6 +362,8 @@ export interface AppStore {
 
   // Actions — Response
   setResponse: (tabId: string, response: Response | null) => void;
+  /** A1: record the extracted response variables (null = none this send). */
+  setExtractedVars: (tabId: string, vars: Record<string, string> | null, keys?: string[]) => void;
   setTestResults: (tabId: string, results: TestRunSummary | null) => void;
   setLoading: (tabId: string, loading: boolean) => void;
 
@@ -455,6 +459,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   requests: {},
   responses: {},
   testResults: {},
+  extractedVars: {},
   isLoading: {},
 
   history: [],
@@ -714,6 +719,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const doomed = s.tabs.filter((t) => t.requestId === requestId).map((t) => t.id);
       let { tabs, activeTabId, requests, responses, isLoading } = s;
       const testResults = { ...s.testResults };
+      const extractedVars = { ...s.extractedVars };
       if (doomed.length > 0) {
         tabs = tabs.filter((t) => t.requestId !== requestId);
         if (activeTabId && doomed.includes(activeTabId)) activeTabId = tabs[0]?.id ?? null;
@@ -725,11 +731,21 @@ export const useAppStore = create<AppStore>((set, get) => ({
           delete responses[id];
           delete testResults[id];
           delete isLoading[id];
+          delete extractedVars[id];
         }
       }
       const c = collections.find((x) => x.id === collectionId);
       if (c) persistCollection(c);
-      return { collections, tabs, activeTabId, requests, responses, testResults, isLoading };
+      return {
+        collections,
+        tabs,
+        activeTabId,
+        requests,
+        responses,
+        testResults,
+        isLoading,
+        extractedVars,
+      };
     }),
 
   loadCollections: async () => {
@@ -872,10 +888,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const newResponses = { ...s.responses };
       const newTestResults = { ...s.testResults };
       const newLoading = { ...s.isLoading };
+      const newExtractedVars = { ...s.extractedVars };
       delete newRequests[tabId];
       delete newResponses[tabId];
       delete newTestResults[tabId];
       delete newLoading[tabId];
+      delete newExtractedVars[tabId];
       // Drop runner-tab session state when the runner tab closes
       let runnerStates = s.runnerStates;
       if (tab?.kind === "runner" && tab.collectionId && runnerStates[tab.collectionId]) {
@@ -889,6 +907,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         responses: newResponses,
         testResults: newTestResults,
         isLoading: newLoading,
+        extractedVars: newExtractedVars,
         runnerStates,
       };
     });
@@ -1082,6 +1101,21 @@ export const useAppStore = create<AppStore>((set, get) => ({
     })),
 
   // ── Response Actions ─────────────────────────────────────────────────────
+  setExtractedVars: (tabId, vars, keys) =>
+    set((s) => {
+      const extractedVars = { ...s.extractedVars };
+      if (!vars) {
+        delete extractedVars[tabId];
+      } else {
+        const picked: Record<string, string> = {};
+        for (const k of keys ?? Object.keys(vars)) {
+          if (vars[k] !== undefined) picked[k] = vars[k];
+        }
+        extractedVars[tabId] = picked;
+      }
+      return { extractedVars };
+    }),
+
   setResponse: (tabId, response) =>
     set((s) => {
       // A fresh response resets the large-body guard dismissal for this tab

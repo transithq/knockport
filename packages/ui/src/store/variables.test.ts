@@ -1,6 +1,6 @@
 import type { Collection, Environment } from "@knockport/core";
 import { describe, expect, it } from "vitest";
-import { buildVariableMap, environmentVariableMap } from "./variables";
+import { buildVariableMap, environmentVariableMap, requestVariableMap } from "./variables";
 
 function env(id: string, name: string, vars: [string, string][], isDefault = false): Environment {
   return {
@@ -76,5 +76,34 @@ describe("environmentVariableMap (pm.environment scope)", () => {
         includeActiveEnv: false,
       }),
     ).toEqual({ k: "picked", other: "x" });
+  });
+});
+
+describe("requestVariableMap + request-vars layer (A1)", () => {
+  const active = env("env-active", "Active", [
+    ["shared", "active"],
+    ["envOnly", "envval"],
+  ]);
+
+  it("requestVariableMap keeps enabled variables, drops disabled", () => {
+    const map = requestVariableMap([
+      { key: "a", value: "1", enabled: true },
+      { key: "b", value: "2", enabled: false },
+      { key: "", value: "3" },
+    ]);
+    expect(map).toEqual({ a: "1" });
+  });
+
+  it("request vars override env vars for the same key", () => {
+    const map = buildVariableMap(state("env-active", [active]), undefined, {
+      requestVars: [{ key: "shared", value: "reqval" }],
+    });
+    expect(map.shared).toBe("reqval");
+    expect(map.envOnly).toBe("envval");
+  });
+
+  it("no request vars leaves the baseline untouched", () => {
+    const map = buildVariableMap(state("env-active", [active]));
+    expect(map.shared).toBe("active");
   });
 });

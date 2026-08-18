@@ -33,6 +33,7 @@ import { CodeEditor } from "../common/CodeEditor";
 import { type Suggestion, SuggestInput } from "../common/SuggestInput";
 import { DropdownMenu } from "../common/DropdownMenu";
 import { displayUrl, parseQuery, splitQuery } from "./url-params";
+import { VarsPanel } from "./VarsPanel";
 
 const methodColor: Record<string, string> = {
   GET: "var(--kp-method-get)",
@@ -75,9 +76,10 @@ export function RequestEditor({ tabId }: { tabId: string }) {
       ...(globals?.variables ?? []).map((v) => v.key),
       ...(env?.variables ?? []).map((v) => v.key),
       ...(collection?.variables ?? []).map((v) => v.key),
+      ...(request?.requestVars ?? []).map((v) => v.key),
       ...getPredefinedVariableNames(),
     ]);
-  }, [environments, activeEnvironmentId, collections, request?.id]);
+  }, [environments, activeEnvironmentId, collections, request?.id, request?.requestVars]);
 
   const urlSuggestions = useCallback(
     (raw: string): Suggestion[] => {
@@ -129,6 +131,9 @@ export function RequestEditor({ tabId }: { tabId: string }) {
   if (!request) return null;
   const loading = isLoading[tabId] ?? false;
 
+  const reqVarCount = (request.requestVars ?? []).filter((v) => v.enabled !== false).length;
+  const resVarCount = (request.responseVars ?? []).filter((v) => v.enabled !== false).length;
+
   const requestTabs: { id: ActivePanel; label: string; dot?: boolean; count?: number }[] = [
     { id: "params", label: "Params", dot: request.params.some((p) => p.enabled) },
     {
@@ -138,6 +143,11 @@ export function RequestEditor({ tabId }: { tabId: string }) {
     },
     { id: "auth", label: "Authorization" },
     { id: "body", label: "Body" },
+    {
+      id: "vars",
+      label: "Variables",
+      count: reqVarCount + resVarCount || undefined,
+    },
     { id: "scripts", label: "Scripts" },
     { id: "tests", label: "Tests" },
   ];
@@ -271,6 +281,7 @@ export function RequestEditor({ tabId }: { tabId: string }) {
             onChange={(b) => useAppStore.getState().updateRequestBody(tabId, b)}
           />
         )}
+        {activeRequestPanel === "vars" && <VarsPanel tabId={tabId} />}
         {activeRequestPanel === "scripts" && <ScriptEditor tabId={tabId} />}
         {activeRequestPanel === "tests" && <TestsPanel tabId={tabId} />}
       </div>
@@ -770,7 +781,10 @@ export async function handleSend(tabId: string) {
       store.setLoading(tabId, false);
       return;
     }
-    let vars = withPromptAnswers(buildVariableMap(store), answers);
+    let vars = withPromptAnswers(
+      buildVariableMap(store, undefined, { requestVars: request.requestVars }),
+      answers,
+    );
     if (collection?.scripts?.pre?.trim() || request.scripts?.pre?.trim()) {
       const { runPreScript } = await import("@knockport/engine");
       const opts = {
@@ -812,22 +826,54 @@ export async function handleSend(tabId: string) {
     }
     store.setResponse(tabId, response);
 
+    const summaries: TestRunSummary[] = [];
+    // Response variables (A1 res side): each enabled variable's JS expression
+    // is evaluated against the response; the results land in the runtime
+    // scope for post-response/test scripts and the runner's next request.
+    let scriptVars = vars;
+    if (request.responseVars?.length) {
+      const { runPostResponseVars } = await import("@knockport/engine");
+      const resVars = runPostResponseVars(response, request.responseVars, vars, {
+        environment: environmentVariableMap(store),
+        collectionVariables: collectionVariablesMap(store),
+        globals: globalsVariableMap(store),
+        request: resolved,
+      });
+      scriptVars = resVars.vars;
+      store.setExtractedVars(tabId, scriptVars, request.responseVars.map((v) => v.key));
+      const errors = Object.entries(resVars.errors);
+      if (errors.length) {
+        summaries.push({
+          tests: errors.map(([key, message]) => ({
+            name: `vars.post-response: ${key}`,
+            passed: false,
+            message,
+          })),
+          passed: 0,
+          failed: errors.length,
+          duration: 0,
+        });
+      }
+    } else {
+      store.setExtractedVars(tabId, null);
+    }
+
     // Script phases (Bruno ordering): post-response runs before tests. The
     // runner loop carries post-response variable mutations into the next
     // request; a single send has no follow-up so they are ephemeral.
     const postScript = [collection?.scripts?.postResponse, request.scripts?.postResponse]
       .filter((s) => s?.trim())
       .join("\n");
-    let postSummary: TestRunSummary | null = null;
     if (postScript.trim()) {
       const { runPostResponseScript } = await import("@knockport/engine");
-      const post = await runPostResponseScript(response, postScript, vars, {
+      const post = await runPostResponseScript(response, postScript, scriptVars, {
         environment: environmentVariableMap(store),
         collectionVariables: collectionVariablesMap(store),
         globals: globalsVariableMap(store),
         request: resolved,
       });
-      postSummary = post.summary;
+      summaries.push(post.summary);
+      scriptVars = post.variables;
     }
 
     // Run test scripts + assertions (interim TS runner; wasm engine in M3)
@@ -836,27 +882,25 @@ export async function handleSend(tabId: string) {
       .filter((s) => s?.trim())
       .join("\n");
     const assertions = [...(collection?.assertions ?? []), ...(request.assertions ?? [])];
-    const hasTests = Boolean(testScript.trim() || assertions.length);
-    if (hasTests || postSummary) {
-      const { runTests, mergeTestSummaries } = await import("@knockport/engine");
-      const summary = hasTests
-        ? await runTests(response, {
-            script: testScript || undefined,
-            assertions,
-            environment: environmentVariableMap(store),
-            collectionVariables: collectionVariablesMap(store),
-            globals: globalsVariableMap(store),
-            request: resolved,
-          })
-        : null;
-      if (postSummary && summary) {
-        store.setTestResults(tabId, mergeTestSummaries(postSummary, summary));
-      } else {
-        store.setTestResults(tabId, summary ?? postSummary);
-      }
-    } else {
-      store.setTestResults(tabId, null);
+    if (testScript.trim() || assertions.length) {
+      const { runTests } = await import("@knockport/engine");
+      summaries.push(
+        await runTests(response, {
+          script: testScript || undefined,
+          assertions,
+          environment: environmentVariableMap(store),
+          collectionVariables: collectionVariablesMap(store),
+          globals: globalsVariableMap(store),
+          variables: scriptVars,
+          request: resolved,
+        }),
+      );
     }
+    const { mergeTestSummaries } = await import("@knockport/engine");
+    store.setTestResults(
+      tabId,
+      summaries.length ? summaries.reduce(mergeTestSummaries) : null,
+    );
 
     // Scrub secret-typed variable values out of the resolved request before
     // it reaches history (the auth headers/params may carry live credentials).

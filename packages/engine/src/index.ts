@@ -12,13 +12,14 @@
  * once @tropel/runtime-wasm is published.
  */
 
-export { runTests, runPreScript, runPostResponseScript, mergeTestSummaries } from "./test-runner";
+export { runTests, runPreScript, runPostResponseScript, runPostResponseVars, mergeTestSummaries } from "./test-runner";
 export type {
   TestResult,
   TestRunSummary,
   RunTestsOptions,
   PreScriptResult,
   PostResponseResult,
+  ResponseVarsResult,
 } from "./test-runner";
 
 import { runPostResponseScript, runPreScript, runTests } from "./test-runner";

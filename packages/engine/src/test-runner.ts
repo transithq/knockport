@@ -9,7 +9,7 @@
  * via `new Function` — NOT a security sandbox (user's own scripts, own
  * browser); true isolation arrives with QuickJS wasm in M3.
  */
-import type { Assertion, Request, Response } from "@knockport/core";
+import type { Assertion, Request, Response, ResponseVariable } from "@knockport/core";
 import { defaultBundle, render } from "@tropel/shims";
 
 // Subset of the engine's ShimBundle::default() — pm/chai/bru only; the
@@ -49,6 +49,8 @@ export interface RunTestsOptions {
   collectionVariables?: Record<string, string>;
   /** Global-scoped variables (pm.globals.*). */
   globals?: Record<string, string>;
+  /** Runtime variables (pm.variables.* / kp.variables.*) visible to the script. */
+  variables?: Record<string, string>;
   /** The resolved request (pm.request.*). */
   request?: Request;
 }
@@ -303,6 +305,8 @@ export async function runTests(
   host.request = opts.request;
   host.env = { ...(opts.environment ?? {}) };
   host.colVars = { ...(opts.collectionVariables ?? {}) };
+  host.globals = { ...(opts.globals ?? {}) };
+  host.vars = { ...(opts.variables ?? {}) };
 
   let scriptError: string | undefined;
   const script = opts.script?.trim();
@@ -435,4 +439,54 @@ export function mergeTestSummaries(a: TestRunSummary, b: TestRunSummary): TestRu
     duration: a.duration + b.duration,
     scriptError: a.scriptError ?? b.scriptError,
   };
+}
+
+// ── Post-response variables (vars:post-response) ────────────────────────────
+/**
+ * Result of evaluating a request's response variables (A1 res side): the
+ * computed values merged into the runtime scope, plus a per-variable error
+ * report (never throws — Bruno collects errors and surfaces them as a toast).
+ */
+export interface ResponseVarsResult {
+  vars: Record<string, string>;
+  errors: Record<string, string>;
+}
+
+/**
+ * Evaluate each enabled response variable as a JS expression against the
+ * response (Bruno's `-vars:post-response` semantics). The result of each
+ * expression lands in the runtime variable store for post-response/test
+ * scripts and the runner's next request. Non-primitive results are
+ * JSON-encoded.
+ */
+export function runPostResponseVars(
+  response: Response,
+  variables: ResponseVariable[],
+  seed: Record<string, string> = {},
+  opts: RunTestsOptions = {},
+): ResponseVarsResult {
+  const enabled = variables.filter((v) => v.enabled !== false && v.key.trim());
+  if (enabled.length === 0) return { vars: {}, errors: {} };
+
+  const tests: TestResult[] = [];
+  const host = emptyHost();
+  host.response = response;
+  host.request = opts.request;
+  host.vars = { ...seed };
+  host.env = { ...(opts.environment ?? {}) };
+  host.colVars = { ...(opts.collectionVariables ?? {}) };
+  host.globals = { ...(opts.globals ?? {}) };
+  const { run } = createRealmWithHost(host, tests);
+
+  const errors: Record<string, string> = {};
+  for (const v of enabled) {
+    try {
+      const value = run(v.value);
+      host.vars[v.key] =
+        typeof value === "object" && value !== null ? JSON.stringify(value) : String(value);
+    } catch (e) {
+      errors[v.key] = e instanceof Error ? e.message : String(e);
+    }
+  }
+  return { vars: decodeVars(host.vars), errors };
 }

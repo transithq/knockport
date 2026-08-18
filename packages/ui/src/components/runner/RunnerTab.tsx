@@ -85,9 +85,13 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
     if (included.length === 0) return;
     patch({ phase: "running", results: [], selectedIdx: null, stoppedReason: undefined });
     const { getTransport } = await import("@knockport/transport");
-    const { runTests, runPreScript, runPostResponseScript, mergeTestSummaries } = await import(
-      "@knockport/engine"
-    );
+    const {
+      runTests,
+      runPreScript,
+      runPostResponseScript,
+      runPostResponseVars,
+      mergeTestSummaries,
+    } = await import("@knockport/engine");
     const transport = getTransport({
       useRelay: useAppStore.getState().useRelay,
       relayUrl: useAppStore.getState().relayUrl,
@@ -139,7 +143,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
         );
         const req = (liveTab && state.requests[liveTab.id]) || collectionCopy;
         let vars = {
-          ...buildVariableMap(state, override),
+          ...buildVariableMap(state, override, { requestVars: req.requestVars }),
           ...carryVars,
           ...promptVars,
         };
@@ -169,18 +173,35 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           const res = await transport.execute(resolved, { signal: abort.signal });
           clearTimeout(timer);
 
+          // Response variables (A1 res side): expressions evaluated against
+          // the response; results merge into the carried runtime scope.
+          // Only the post-response delta carries into the next request (a
+          // request's own vars must not leak into its followers).
+          const prePostVars = vars;
+          if (req.responseVars?.length) {
+            const resVars = runPostResponseVars(res, req.responseVars, vars, opts);
+            vars = resVars.vars;
+          }
+
           // Post-response phase (Bruno ordering): runs before the test
           // phase. Its variable mutations carry into the next request.
           const postScript = [collection.scripts?.postResponse, req.scripts?.postResponse]
             .filter((s) => s?.trim())
             .join("\n");
           let postSummary = null;
+          let finalVars = vars;
           if (postScript.trim()) {
             const post = await runPostResponseScript(res, postScript, vars, opts);
-            // D3 keep-variable-values: when off, every request starts with a
-            // fresh runtime scope — mutations do not carry forward.
-            carryVars = rs.keepVariableValues ? post.variables : {};
+            finalVars = post.variables;
             postSummary = post.summary;
+          }
+          // D3 keep-variable-values: when off, every request starts with a
+          // fresh runtime scope — mutations do not carry forward.
+          carryVars = {};
+          if (rs.keepVariableValues) {
+            for (const [k, v] of Object.entries(finalVars)) {
+              if (prePostVars[k] !== v) carryVars[k] = v;
+            }
           }
 
           let testsPassed: number | undefined;
@@ -198,6 +219,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
               environment: environmentVariableMap(state, override),
               collectionVariables: collectionVariablesMap(state),
               globals: globalsVariableMap(state),
+              variables: vars,
               request: resolved,
             });
             testSummary = summary;
