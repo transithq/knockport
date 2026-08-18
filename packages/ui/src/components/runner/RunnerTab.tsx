@@ -22,6 +22,7 @@ import {
   effectivePostScripts,
   effectivePreScripts,
   effectiveTestScripts,
+  environmentName,
   environmentVariableMap,
   folderVariablesFor,
   globalsVariableMap,
@@ -172,6 +173,8 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           collectionVariables: collectionVariablesMap(state),
           globals: globalsVariableMap(state),
           request: req,
+          envName: environmentName(state, override),
+          collectionName: collection.name,
         };
         // Scripts + assertions chain collection → folder chain → request
         // (J1); the runner's prompt collection covers every layer.
@@ -241,6 +244,8 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
               globals: globalsVariableMap(state),
               variables: vars,
               request: resolved,
+              envName: environmentName(state, override),
+              collectionName: collection.name,
             });
             testSummary = summary;
             testsPassed = summary.passed;

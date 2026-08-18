@@ -20,7 +20,8 @@
   },
   "dependencies": {
     "@knockport/core": "workspace:*",
-    "@tropel/shims": "0.1.0"
+    "@tropel/shims": "0.1.0",
+    "xml-formatter": "^3.7.0"
   },
   "devDependencies": {
     "typescript": "^5.7.3",

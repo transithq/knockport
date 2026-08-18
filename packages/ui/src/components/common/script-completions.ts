@@ -74,6 +74,14 @@ const BRU_TOP: Entry[] = [
   { label: "getCollectionVar", display: "getCollectionVar(key)", info: "collection variable", type: "function", apply: 'getCollectionVar("key")' },
   { label: "setCollectionVar", display: "setCollectionVar(key, value)", info: "collection variable", type: "function", apply: 'setCollectionVar("key", "value")' },
   { label: "sleep", display: "sleep(ms)", info: "pause the script", type: "function", apply: "sleep(1000)" },
+  { label: "getEnvName", display: "getEnvName()", info: "name of the executing environment", type: "function", apply: "getEnvName()" },
+  { label: "getCollectionName", display: "getCollectionName()", info: "name of the request's collection", type: "function", apply: "getCollectionName()" },
+  { label: "utils", display: "utils", info: "bru.utils — minifyJson / minifyXml", type: "property" },
+];
+
+const BRU_UTILS: Entry[] = [
+  { label: "minifyJson", display: "minifyJson(json)", info: "compact a JSON string or object", type: "function", apply: "minifyJson(" },
+  { label: "minifyXml", display: "minifyXml(xml)", info: "compact an XML string", type: "function", apply: "minifyXml(" },
 ];
 
 const GLOBALS: Entry[] = [
@@ -91,8 +99,8 @@ function topFor(ns: string): Entry[] {
 }
 
 function groupMembers(ns: string, member: string): Entry[] {
-  // bru exposes flat variable helpers only — no nested member groups
-  if (ns === "bru") return [];
+  // bru exposes flat variable helpers plus the utils object (C9)
+  if (ns === "bru") return member === "utils" ? BRU_UTILS : [];
   return (KP_ROOT as Record<string, Entry[]>)[member] ?? [];
 }
 

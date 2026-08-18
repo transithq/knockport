@@ -11,6 +11,7 @@
  */
 import type { Assertion, Request, Response, ResponseVariable } from "@knockport/core";
 import { defaultBundle, render } from "@tropel/shims";
+import xmlFormat from "xml-formatter";
 
 // Subset of the engine's ShimBundle::default() — pm/chai/bru only; the
 // lodash/cryptojs/exec shims need bridges KnockPort doesn't host yet.
@@ -53,6 +54,10 @@ export interface RunTestsOptions {
   variables?: Record<string, string>;
   /** The resolved request (pm.request.*). */
   request?: Request;
+  /** Name of the executing environment (bru.getEnvName()). */
+  envName?: string;
+  /** Name of the collection the request lives in (bru.getCollectionName()). */
+  collectionName?: string;
 }
 
 // ── Host state ───────────────────────────────────────────────────────────────
@@ -64,6 +69,10 @@ interface Host {
   env: Record<string, string>;
   colVars: Record<string, string>;
   globals: Record<string, string>;
+  /** Executing environment name (bru.getEnvName(), C9). */
+  envName?: string;
+  /** Collection name the request lives in (bru.getCollectionName(), C9). */
+  collectionName?: string;
 }
 
 function headerLookup(headers: Record<string, string>, key: string): string | undefined {
@@ -80,6 +89,46 @@ function requestHeadersMap(request?: Request): Record<string, string> {
     if (h.enabled) out[h.key] = h.value;
   }
   return out;
+}
+
+// ── bru.utils helpers (C9) — minifyJson / minifyXml ──────────────────────────
+// Faithful ports of Bruno's `bru.utils` (bruno-js/src/bru.js). minifyXml runs
+// through xml-formatter, the same library Bruno uses.
+function minifyJson(json: unknown): string {
+  if (json === null || json === undefined) {
+    throw new Error("Failed to minify");
+  }
+  if (typeof json === "object") {
+    try {
+      return JSON.stringify(json);
+    } catch (err) {
+      throw new Error(`Failed to minify: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  if (typeof json === "string") {
+    const trimmed = json.trim();
+    if (trimmed === "") return trimmed;
+    try {
+      return JSON.stringify(JSON.parse(trimmed));
+    } catch (err) {
+      throw new Error(`Failed to minify: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  throw new TypeError("minifyJson expects a string or object");
+}
+
+function minifyXml(xml: unknown): string {
+  if (xml === null || xml === undefined) {
+    throw new Error("Failed to minify");
+  }
+  if (typeof xml === "string") {
+    try {
+      return xmlFormat.minify(xml, { collapseContent: false });
+    } catch (err) {
+      throw new Error(`Failed to minify: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  throw new TypeError("minifyXml expects a string");
 }
 
 function buildBridges(host: Host, tests: TestResult[]): Record<string, (...args: any[]) => any> {
@@ -184,6 +233,31 @@ function buildBridges(host: Host, tests: TestResult[]): Record<string, (...args:
       typeof host.request.body.content === "string"
         ? host.request.body.content
         : "",
+    // ── bru utility API (C9) ──────────────────────────────────────────────
+    // Environment / collection names (bru.getEnvName / bru.getCollectionName).
+    // The frozen bru-shim stubs getEnvName() → null; the real values come from
+    // the host, which knows the executing environment + owning collection.
+    __tropel_env_name: () => host.envName ?? null,
+    __tropel_collection_name: () => host.collectionName ?? null,
+    // bru.utils.minifyJson / minifyXml (faithful ports of Bruno's bru.utils).
+    __tropel_minify_json: (j: unknown) => minifyJson(j),
+    __tropel_minify_xml: (x: unknown) => minifyXml(x),
+    // bru.sleep / k6 sleep() native bridge. The shims are synchronous
+    // (QuickJS-era); in the browser a real blocking sleep is Atomics.wait on a
+    // SharedArrayBuffer (no busy-wait), with a busy-wait fallback where SAB is
+    // unavailable (no cross-origin isolation).
+    __tropel_native_sleep: (ms: number) => {
+      if (typeof ms !== "number" || !(ms > 0)) return;
+      const wait = Math.floor(ms);
+      if (typeof SharedArrayBuffer !== "undefined" && typeof Atomics !== "undefined") {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, wait);
+        return;
+      }
+      const end = Date.now() + wait;
+      while (Date.now() < end) {
+        // busy-wait fallback
+      }
+    },
   };
 }
 
@@ -198,6 +272,17 @@ const PRELUDE_TRAILER = `
 kp.env = {
   get: function (k) { return kp.variables.get(k); },
   set: function (k, v) { kp.variables.set(k, v); }
+};
+/* C9 — bru utility API: host-side glue over the frozen bru-shim. The shim
+   ships a null getEnvName stub and no getCollectionName/utils; the real
+   values live in the KnockPort host (executing env name, owning collection),
+   so we patch the object properties here (the global binding stays
+   read-only, the object itself is mutable). */
+bru.getEnvName = function () { return __tropel_env_name(); };
+bru.getCollectionName = function () { return __tropel_collection_name(); };
+bru.utils = {
+  minifyJson: function (j) { return __tropel_minify_json(j); },
+  minifyXml: function (x) { return __tropel_minify_xml(x); }
 };
 var response = __kp_response();
 return function (__kp_script) { return eval(__kp_script); };
@@ -237,6 +322,8 @@ function createRealm(
     env: { ...(opts.environment ?? {}) },
     colVars: { ...(opts.collectionVariables ?? {}) },
     globals: { ...(opts.globals ?? {}) },
+    envName: opts.envName,
+    collectionName: opts.collectionName,
     response: undefined,
     request: opts.request,
   };
@@ -307,6 +394,8 @@ export async function runTests(
   host.colVars = { ...(opts.collectionVariables ?? {}) };
   host.globals = { ...(opts.globals ?? {}) };
   host.vars = { ...(opts.variables ?? {}) };
+  host.envName = opts.envName;
+  host.collectionName = opts.collectionName;
 
   let scriptError: string | undefined;
   const script = opts.script?.trim();
@@ -404,6 +493,8 @@ export async function runPostResponseScript(
   host.env = { ...(opts.environment ?? {}) };
   host.colVars = { ...(opts.collectionVariables ?? {}) };
   host.globals = { ...(opts.globals ?? {}) };
+  host.envName = opts.envName;
+  host.collectionName = opts.collectionName;
   const { run } = createRealmWithHost(host, tests);
 
   let scriptError: string | undefined;
@@ -476,6 +567,8 @@ export function runPostResponseVars(
   host.env = { ...(opts.environment ?? {}) };
   host.colVars = { ...(opts.collectionVariables ?? {}) };
   host.globals = { ...(opts.globals ?? {}) };
+  host.envName = opts.envName;
+  host.collectionName = opts.collectionName;
   const { run } = createRealmWithHost(host, tests);
 
   const errors: Record<string, string> = {};

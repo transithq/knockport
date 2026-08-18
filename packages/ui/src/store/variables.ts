@@ -136,6 +136,20 @@ export function globalsVariableMap(state: Pick<AppStore, "environments">): Recor
   return map;
 }
 
+/**
+ * Name of the executing environment (C9 `bru.getEnvName()`). The runner
+ * override wins over the workspace's active environment.
+ */
+export function environmentName(
+  state: Pick<AppStore, "environments" | "activeEnvironmentId">,
+  runnerOverride?: RunnerEnvOverride,
+): string | undefined {
+  const env =
+    runnerOverride?.runnerEnv ??
+    state.environments.find((e) => e.id === state.activeEnvironmentId);
+  return env?.name;
+}
+
 /** Collection variables merged across all collections (pm.collectionVariables.* scope). */
 export function collectionVariablesMap(state: Pick<AppStore, "collections">): Record<string, string> {
   const map: Record<string, string> = {};

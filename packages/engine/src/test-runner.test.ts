@@ -300,3 +300,81 @@ describe("runTests — runtime variable visibility (A1)", () => {
     expect(s.passed).toBe(1);
   });
 });
+
+describe("bru utility API (C9)", () => {
+  it("bru.getEnvName + bru.getCollectionName come from the host options", async () => {
+    const s = await runTests(makeResponse(), {
+      script: `
+        kp.test("env name", () => kp.expect(bru.getEnvName()).to.eql("Staging"));
+        kp.test("collection name", () => kp.expect(bru.getCollectionName()).to.eql("Disk API"));
+      `,
+      envName: "Staging",
+      collectionName: "Disk API",
+    });
+    expect(s.scriptError).toBeUndefined();
+    expect(s.failed).toBe(0);
+    expect(s.passed).toBe(2);
+  });
+
+  it("names default to null without host options", async () => {
+    const s = await runTests(makeResponse(), {
+      script: `
+        kp.test("env null", () => kp.expect(bru.getEnvName()).to.eql(null));
+        kp.test("col null", () => kp.expect(bru.getCollectionName()).to.eql(null));
+      `,
+    });
+    expect(s.failed).toBe(0);
+    expect(s.passed).toBe(2);
+  });
+
+  it("bru.utils.minifyJson compacts strings and objects (Bruno semantics)", async () => {
+    const s = await runTests(makeResponse(), {
+      script: `
+        kp.test("minify string", () => kp.expect(bru.utils.minifyJson('{ "a" : 1 , "b": [1,2] }')).to.eql('{"a":1,"b":[1,2]}'));
+        kp.test("minify object", () => kp.expect(bru.utils.minifyJson({ a: 1 })).to.eql('{"a":1}'));
+        kp.test("minify empty string", () => kp.expect(bru.utils.minifyJson("   ")).to.eql(""));
+        kp.test("minify bad json throws", () => {
+          let threw = false;
+          try { bru.utils.minifyJson("{ bad"); } catch (e) { threw = true; }
+          kp.expect(threw).to.eql(true);
+        });
+      `,
+    });
+    expect(s.scriptError).toBeUndefined();
+    expect(s.failed).toBe(0);
+    expect(s.passed).toBe(4);
+  });
+
+  it("bru.utils.minifyXml collapses whitespace and rejects non-strings", async () => {
+    const s = await runTests(makeResponse(), {
+      script: `
+        kp.test("minify xml", () => kp.expect(bru.utils.minifyXml('<root>\\n  <a>1</a>\\n</root>').indexOf('\\n') === -1).to.eql(true));
+        kp.test("minify xml round-trips content", () => kp.expect(bru.utils.minifyXml('<root><a>1</a></root>')).to.include('<a>1</a>'));
+        kp.test("non-string throws", () => {
+          let threw = false;
+          try { bru.utils.minifyXml({ not: "xml" }); } catch (e) { threw = true; }
+          kp.expect(threw).to.eql(true);
+        });
+      `,
+    });
+    expect(s.scriptError).toBeUndefined();
+    expect(s.failed).toBe(0);
+    expect(s.passed).toBe(3);
+  });
+
+  it("bru.sleep pauses the script (host-side bridge)", async () => {
+    const s = await runTests(makeResponse(), {
+      script: `
+        kp.test("slept at least 60ms", () => {
+          const start = Date.now();
+          bru.sleep(60);
+          const elapsed = Date.now() - start;
+          kp.expect(elapsed >= 55).to.eql(true);
+        });
+      `,
+    });
+    expect(s.scriptError).toBeUndefined();
+    expect(s.failed).toBe(0);
+    expect(s.passed).toBe(1);
+  });
+});

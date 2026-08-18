@@ -26,6 +26,7 @@ import {
   effectivePostScripts,
   effectivePreScripts,
   effectiveTestScripts,
+  environmentName,
   environmentVariableMap,
   findCollectionOfRequest,
   folderVariablesFor,
@@ -805,6 +806,8 @@ export async function handleSend(tabId: string) {
         collectionVariables: collectionVariablesMap(store),
         globals: globalsVariableMap(store),
         request,
+        envName: environmentName(store),
+        collectionName: collection?.name,
       };
       for (const script of preScripts) {
         vars = runPreScript(script, vars, opts).variables;
@@ -848,6 +851,8 @@ export async function handleSend(tabId: string) {
         collectionVariables: collectionVariablesMap(store),
         globals: globalsVariableMap(store),
         request: resolved,
+        envName: environmentName(store),
+        collectionName: collection?.name,
       });
       scriptVars = resVars.vars;
       store.setExtractedVars(tabId, scriptVars, request.responseVars.map((v) => v.key));
@@ -880,6 +885,8 @@ export async function handleSend(tabId: string) {
         collectionVariables: collectionVariablesMap(store),
         globals: globalsVariableMap(store),
         request: resolved,
+        envName: environmentName(store),
+        collectionName: collection?.name,
       });
       summaries.push(post.summary);
       scriptVars = post.variables;
@@ -898,6 +905,8 @@ export async function handleSend(tabId: string) {
           globals: globalsVariableMap(store),
           variables: scriptVars,
           request: resolved,
+          envName: environmentName(store),
+          collectionName: collection?.name,
         }),
       );
     }
