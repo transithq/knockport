@@ -1,7 +1,7 @@
 import type { MediaKind, ResponseCookie } from "@knockport/core";
-import { mediaKind, normalizeContentType } from "@knockport/core";
+import { mediaKind, normalizeContentType, query } from "@knockport/core";
 import { clsx } from "clsx";
-import { Check, ChevronDown, Copy, Download, PanelBottom, PanelRight, WrapText } from "lucide-react";
+import { Check, ChevronDown, Copy, Download, PanelBottom, PanelRight, WrapText, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LARGE_RESPONSE_BYTES, useAppStore } from "../../store/app-store";
 import { CodeViewer, type ViewerLanguage } from "../common/CodeViewer";
@@ -311,6 +311,24 @@ function BodyPanel({
   const media = detectedMedia !== null && response.bodyBase64 ? detectedMedia : null;
   const mime = normalizeContentType(response.contentType);
 
+  // F2 body filter (bruno-query port): a dot-path expression evaluated
+  // against parsed JSON. Only offered for JSON bodies.
+  const [filterQuery, setFilterQuery] = useState("");
+  const filterActive = activeFormat === "json" && filterQuery.trim() !== "";
+  let filterResult: string | null = null;
+  let filterError: string | null = null;
+  if (filterActive) {
+    try {
+      filterResult = JSON.stringify(
+        query(JSON.parse(response.body), filterQuery.trim()),
+        null,
+        2,
+      );
+    } catch (e) {
+      filterError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
   const saveBody = async () => {
     if (media) {
       downloadResponseBase64(response.bodyBase64!, response.url ?? requestUrl, response.contentType);
@@ -367,6 +385,28 @@ function BodyPanel({
             </button>
           ))}
         </div>
+        {activeFormat === "json" && (
+          <div className="kp-query-box">
+            <span className="kp-query-label">Filter</span>
+            <input
+              className="kp-text-input kp-query-input"
+              placeholder="..items[0].amount"
+              value={filterQuery}
+              onChange={(e) => setFilterQuery(e.target.value)}
+              spellCheck={false}
+            />
+            {filterQuery && (
+              <button
+                type="button"
+                className="kp-icon-btn"
+                title="Clear filter"
+                onClick={() => setFilterQuery("")}
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        )}
         <FormatSelector format={activeFormat} onChange={(f) => setFormat(f)} />
       </div>
 
@@ -392,11 +432,18 @@ function BodyPanel({
         </div>
       )}
 
-      {!guarded && viewTab === "pretty" && (
+      {filterActive && filterError && (
+        <div className="kp-query-error">Query error: {filterError}</div>
+      )}
+      {filterActive && !filterError && (
+        <CodeViewer value={filterResult ?? ""} language="json" wrap={wrap} />
+      )}
+
+      {!filterActive && !guarded && viewTab === "pretty" && (
         <CodeViewer value={displayText} language={viewerLanguageFor(activeFormat)} wrap={wrap} />
       )}
-      {!guarded && viewTab === "raw" && <CodeViewer value={response.body} language="text" wrap />}
-      {!guarded && viewTab === "preview" && (
+      {!filterActive && !guarded && viewTab === "raw" && <CodeViewer value={response.body} language="text" wrap />}
+      {!filterActive && !guarded && viewTab === "preview" && (
         <PreviewFrame
           body={response.body}
           contentType={response.contentType}
@@ -406,8 +453,17 @@ function BodyPanel({
 
       <div className="kp-body-statusbar">
         <span>
-          {formatLabel(activeFormat)}
-          {format === null && <span className="kp-hint"> · auto-detected</span>}
+          {filterActive ? (
+            <>
+              <span className="kp-query-label">Filter</span> {filterQuery.trim()}
+              {filterError === null && <span className="kp-hint"> · {formatSize(new TextEncoder().encode(filterResult ?? "").length)}</span>}
+            </>
+          ) : (
+            <>
+              {formatLabel(activeFormat)}
+              {format === null && <span className="kp-hint"> · auto-detected</span>}
+            </>
+          )}
         </span>
         <span className="kp-status-right">
           <button
