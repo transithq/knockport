@@ -11,6 +11,8 @@ import type {
   Response,
 } from "@knockport/core";
 import { createId } from "@knockport/core";
+import type { CookieJar } from "@knockport/core";
+import { loadCookieJar, persistCookieJar } from "./cookie-jar";
 import type { TestRunSummary } from "@knockport/engine";
 import {
   collections as dbCollections,
@@ -260,6 +262,9 @@ export interface AppStore {
   extractedVars: Record<string, Record<string, string> | null>;
   isLoading: Record<string, boolean>;
 
+  // Persistent cookie jar (G1): captured from responses, re-attached on sends.
+  cookieJar: CookieJar;
+
   // History
   history: HistoryEntry[];
 
@@ -372,6 +377,20 @@ export interface AppStore {
   setExtractedVars: (tabId: string, vars: Record<string, string> | null, keys?: string[]) => void;
   setTestResults: (tabId: string, results: TestRunSummary | null) => void;
   setLoading: (tabId: string, loading: boolean) => void;
+
+  // Actions — Cookie jar (G1/G2)
+  /** Capture a completed response's Set-Cookie headers into the jar. */
+  captureResponseCookies: (response: Response) => void;
+  /** Set or replace a cookie manually (G2 edit / import). */
+  setCookie: (url: string, cookie: { key: string; value: string; path?: string; secure?: boolean; httpOnly?: boolean; sameSite?: "Strict" | "Lax" | "None"; expires?: number }) => void;
+  /** Delete one stored cookie by exact domain/path/name (G2). */
+  deleteCookie: (domain: string, path: string, key: string) => void;
+  /** Delete every cookie scoped to a URL (C8 `clear` from the manager). */
+  clearCookiesForUrl: (url: string) => void;
+  /** Delete all cookies for one domain (G2 per-domain clear). */
+  clearCookieDomain: (domain: string) => void;
+  /** Wipe the whole jar (G2 clear-all). */
+  clearCookieJar: () => void;
 
   // Actions — History
   addHistoryEntry: (entry: HistoryEntry) => void;
@@ -514,6 +533,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     (typeof localStorage !== "undefined" &&
       Number.parseInt(localStorage.getItem("kp-timeout-ms") ?? "", 10)) ||
     30000,
+
+  cookieJar: loadCookieJar(),
 
   // ── Sidebar Actions ──────────────────────────────────────────────────────
   setSidebarTab: (tab) => set({ sidebarTab: tab }),
@@ -1203,6 +1224,52 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set((s) => ({
       isLoading: { ...s.isLoading, [tabId]: loading },
     })),
+
+  // ── Cookie jar actions (G1/G2) ────────────────────────────────────────────
+  captureResponseCookies: (response) =>
+    set((s) => {
+      const jar = s.cookieJar;
+      if (!response.url) return {};
+      jar.setFromResponse(response.url, response.cookies);
+      persistCookieJar(jar);
+      // Rehydrate so the manager tab re-renders with the fresh set.
+      return { cookieJar: loadCookieJar() };
+    }),
+
+  setCookie: (url, cookie) =>
+    set((s) => {
+      s.cookieJar.upsert(url, cookie);
+      persistCookieJar(s.cookieJar);
+      return { cookieJar: loadCookieJar() };
+    }),
+
+  deleteCookie: (domain, path, key) =>
+    set((s) => {
+      s.cookieJar.deleteCookie(domain, path, key);
+      persistCookieJar(s.cookieJar);
+      return { cookieJar: loadCookieJar() };
+    }),
+
+  clearCookiesForUrl: (url) =>
+    set((s) => {
+      s.cookieJar.deleteCookiesForUrl(url);
+      persistCookieJar(s.cookieJar);
+      return { cookieJar: loadCookieJar() };
+    }),
+
+  clearCookieDomain: (domain) =>
+    set((s) => {
+      s.cookieJar.deleteDomain(domain);
+      persistCookieJar(s.cookieJar);
+      return { cookieJar: loadCookieJar() };
+    }),
+
+  clearCookieJar: () =>
+    set((s) => {
+      s.cookieJar.clear();
+      persistCookieJar(s.cookieJar);
+      return { cookieJar: loadCookieJar() };
+    }),
 
   // ── History Actions ──────────────────────────────────────────────────────
   addHistoryEntry: (entry) => {

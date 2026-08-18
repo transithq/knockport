@@ -18,6 +18,7 @@ import { clsx } from "clsx";
 import { ChevronDown, Code2, Loader2, MoreHorizontal, Paperclip, Save, Send, X } from "lucide-react";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { type ActivePanel, useAppStore } from "../../store/app-store";
+import { attachCookieJar } from "../../store/cookie-jar";
 import { promptForVariables } from "../../store/prompts";
 import {
   buildVariableMap,
@@ -825,6 +826,10 @@ export async function handleSend(tabId: string) {
       }
     }
     const resolved = resolveRequest(request, vars, collection);
+    // G1 cookie jar: attach stored cookies for this URL (an explicit Cookie
+    // header on the request wins). Execution uses the cookie-attached copy;
+    // history keeps the resolved request (the jar is dynamic session state).
+    const cookieAttached = attachCookieJar(resolved, useAppStore.getState().cookieJar);
     const transport = getTransport({
       useRelay: store.useRelay,
       relayUrl: store.relayUrl,
@@ -832,10 +837,10 @@ export async function handleSend(tabId: string) {
     });
     // OAuth2 (B1): attach the stored token; refresh first when expired. The
     // refresh write-back lands on the tab copy; it persists on the next save.
-    if (resolved.auth.type === "oauth2" && resolved.auth.oauth2?.accessToken) {
-      const oauth = await ensureOAuth2AndAttach(resolved, resolved.auth, transport, undefined);
+    if (cookieAttached.auth.type === "oauth2" && cookieAttached.auth.oauth2?.accessToken) {
+      const oauth = await ensureOAuth2AndAttach(cookieAttached, cookieAttached.auth, transport, undefined);
       if (oauth.refreshed && oauth.stored) {
-        useAppStore.getState().updateRequestAuth(tabId, resolved.auth);
+        useAppStore.getState().updateRequestAuth(tabId, cookieAttached.auth);
       }
     }
     // Enforce the global timeout via an abort signal (transports link it to
@@ -844,11 +849,12 @@ export async function handleSend(tabId: string) {
     const timer = setTimeout(() => abort.abort(), store.timeoutMs);
     let response;
     try {
-      response = await transport.execute(resolved, { signal: abort.signal });
+      response = await transport.execute(cookieAttached, { signal: abort.signal });
     } finally {
       clearTimeout(timer);
     }
     store.setResponse(tabId, response);
+    store.captureResponseCookies(response);
 
     const summaries: TestRunSummary[] = [];
     // Response variables (A1 res side): each enabled variable's JS expression

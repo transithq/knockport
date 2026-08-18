@@ -15,6 +15,7 @@ import {
   useAppStore,
 } from "../../store/app-store";
 import { promptForVariables } from "../../store/prompts";
+import { attachCookieJar } from "../../store/cookie-jar";
 import {
   buildVariableMap,
   collectionVariablesMap,
@@ -190,14 +191,19 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
         if (resolved.auth.type === "oauth2" && resolved.auth.oauth2?.accessToken) {
           await ensureOAuth2AndAttach(resolved, resolved.auth, transport);
         }
+        // G1 cookie jar: attach stored cookies for this URL (explicit Cookie
+        // headers on the request win). Execution uses the attached copy.
+        const cookieAttached = attachCookieJar(resolved, state.cookieJar);
         const start = performance.now();
         // Enforce the global timeout per request via an abort signal
         const abort = new AbortController();
         const timer = setTimeout(() => abort.abort(), state.timeoutMs);
         let failed = false;
         try {
-          const res = await transport.execute(resolved, { signal: abort.signal });
+          const res = await transport.execute(cookieAttached, { signal: abort.signal });
           clearTimeout(timer);
+          // G1: capture the response's Set-Cookie headers into the jar.
+          useAppStore.getState().captureResponseCookies(res);
 
           // Response variables (A1 res side): expressions evaluated against
           // the response; results merge into the carried runtime scope.
