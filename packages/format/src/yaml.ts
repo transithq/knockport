@@ -236,6 +236,7 @@ function folderToYamlDoc(f: Folder): Record<string, any> {
     scripts: f.scripts
       ? { pre: f.scripts.pre, test: f.scripts.test, postResponse: f.scripts.postResponse }
       : undefined,
+    variables: f.variables?.length ? f.variables : undefined,
     order: f.order,
     folders: f.folders.map(folderToYamlDoc),
     requests: f.requests.map(requestToYamlDoc),
@@ -347,6 +348,7 @@ function rawToFolder(raw: any): Folder {
     description: raw.description,
     auth: raw.auth ? deserializeAuth(raw.auth) : undefined,
     scripts: raw.scripts,
+    variables: (raw.variables ?? []).map(deserializeVarPair),
     folders: (raw.folders ?? []).map(rawToFolder),
     requests: (raw.requests ?? []).map(rawToRequest),
     order: raw.order ?? [],

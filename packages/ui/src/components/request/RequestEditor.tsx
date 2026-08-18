@@ -24,6 +24,7 @@ import {
   collectionVariablesMap,
   environmentVariableMap,
   findCollectionOfRequest,
+  folderVariablesFor,
   globalsVariableMap,
   resolveRequest,
 } from "../../store/variables";
@@ -72,10 +73,12 @@ export function RequestEditor({ tabId }: { tabId: string }) {
     const env = environments.find((e) => e.id === activeEnvironmentId);
     const globals = environments.find((e) => e.isDefault);
     const collection = findCollectionOfRequest(collections, request?.id ?? "");
+    const folderVars = collection ? folderVariablesFor(collection, request?.id ?? "") : [];
     return new Set<string>([
       ...(globals?.variables ?? []).map((v) => v.key),
       ...(env?.variables ?? []).map((v) => v.key),
       ...(collection?.variables ?? []).map((v) => v.key),
+      ...folderVars.map((v) => v.key),
       ...(request?.requestVars ?? []).map((v) => v.key),
       ...getPredefinedVariableNames(),
     ]);
@@ -764,6 +767,9 @@ export async function handleSend(tabId: string) {
   try {
     const { getTransport } = await import("@knockport/transport");
     const collection = findCollectionOfRequest(store.collections, request.id);
+    // Folder-inherited variables (A2): the request's folder chain, merged
+    // over the collection/env layers and under request variables.
+    const folderVars = collection ? folderVariablesFor(collection, request.id) : undefined;
     // Prompt variables (A5): `{{$prompt.name}}` placeholders (request +
     // collection scripts) pause the send for an answer each, merged into
     // the map before pre-request scripts. Cancelling aborts the send.
@@ -782,7 +788,10 @@ export async function handleSend(tabId: string) {
       return;
     }
     let vars = withPromptAnswers(
-      buildVariableMap(store, undefined, { requestVars: request.requestVars }),
+      buildVariableMap(store, undefined, {
+        folderVars,
+        requestVars: request.requestVars,
+      }),
       answers,
     );
     if (collection?.scripts?.pre?.trim() || request.scripts?.pre?.trim()) {

@@ -256,10 +256,16 @@ export interface Folder {
   description?: string;
   auth?: AuthConfig;
   scripts?: RequestScripts;
+  /** Folder-scoped variables (Bruno `folderVariables`): merge over the
+   *  collection + environment layers, under request variables. */
+  variables?: FolderVariable[];
   folders: Folder[];
   requests: Request[];
   order: string[];
 }
+
+/** Folder-scoped variable — same plain key/value shape as request vars. */
+export type FolderVariable = RequestVariable;
 
 export interface CollectionMetadata {
   version?: string;

@@ -19,6 +19,7 @@ import {
   buildVariableMap,
   collectionVariablesMap,
   environmentVariableMap,
+  folderVariablesFor,
   globalsVariableMap,
   resolveRequest,
 } from "../../store/variables";
@@ -142,8 +143,13 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
           (t) => (!t.kind || t.kind === "request") && t.requestId === collectionCopy.id,
         );
         const req = (liveTab && state.requests[liveTab.id]) || collectionCopy;
+        // Folder-inherited variables (A2) for this request's folder chain.
+        const folderVars = folderVariablesFor(collection, req.id);
         let vars = {
-          ...buildVariableMap(state, override, { requestVars: req.requestVars }),
+          ...buildVariableMap(state, override, {
+            folderVars,
+            requestVars: req.requestVars,
+          }),
           ...carryVars,
           ...promptVars,
         };

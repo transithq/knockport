@@ -85,6 +85,7 @@ function folderDoc(f: Folder): Record<string, any> {
     description: f.description,
     auth: f.auth,
     scripts: f.scripts,
+    variables: f.variables?.length ? f.variables : undefined,
     order: f.order,
   };
 }
@@ -208,6 +209,7 @@ export function filesToCollection(files: Record<string, string>): Collection {
       description: doc?.description,
       auth: doc?.auth,
       scripts: doc?.scripts,
+      variables: doc?.variables,
       folders: [],
       requests: [],
       order: doc?.order ?? [],

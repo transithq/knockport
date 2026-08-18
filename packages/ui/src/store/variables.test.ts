@@ -1,6 +1,12 @@
-import type { Collection, Environment } from "@knockport/core";
+import type { Collection, Environment, Folder } from "@knockport/core";
 import { describe, expect, it } from "vitest";
-import { buildVariableMap, environmentVariableMap, requestVariableMap } from "./variables";
+import {
+  buildVariableMap,
+  environmentVariableMap,
+  findFolderPath,
+  folderVariablesFor,
+  requestVariableMap,
+} from "./variables";
 
 function env(id: string, name: string, vars: [string, string][], isDefault = false): Environment {
   return {
@@ -105,5 +111,89 @@ describe("requestVariableMap + request-vars layer (A1)", () => {
   it("no request vars leaves the baseline untouched", () => {
     const map = buildVariableMap(state("env-active", [active]));
     expect(map.shared).toBe("active");
+  });
+});
+
+describe("folder chain + folder variables (A2)", () => {
+  const deepRequest: Collection["requests"][number] = {
+    id: "req_deep",
+    name: "Deep",
+    method: "GET",
+    url: "",
+    headers: [],
+    params: [],
+    body: { type: "none" },
+    auth: { type: "inherit" },
+  };
+  const rootRequest: Collection["requests"][number] = { ...deepRequest, id: "req_root", name: "Root" };
+  const folderB: Folder = {
+    id: "fld_b",
+    name: "B",
+    variables: [
+      { key: "a1", value: "b-wins" },
+      { key: "b1", value: "b-val" },
+    ],
+    folders: [],
+    requests: [deepRequest],
+    order: [],
+  };
+  const folderA: Folder = {
+    id: "fld_a",
+    name: "A",
+    variables: [
+      { key: "a1", value: "a-val" },
+      { key: "off", value: "x", enabled: false },
+    ],
+    folders: [folderB],
+    requests: [],
+    order: [],
+  };
+  const treeCollection: Collection = {
+    ...collection,
+    folders: [folderA],
+    requests: [rootRequest],
+  };
+
+  it("findFolderPath returns root→folder chain for a nested request", () => {
+    const chain = findFolderPath(treeCollection, "req_deep");
+    expect(chain?.map((f) => f.id)).toEqual(["fld_a", "fld_b"]);
+  });
+
+  it("findFolderPath returns empty for a collection-root request", () => {
+    expect(findFolderPath(treeCollection, "req_root")).toEqual([]);
+    expect(findFolderPath(treeCollection, "nope")).toBeUndefined();
+  });
+
+  it("folderVariablesFor merges the chain with deeper folders winning", () => {
+    const vars = folderVariablesFor(treeCollection, "req_deep");
+    expect(vars.find((v) => v.key === "a1")?.value).toBe("b-wins");
+    expect(vars.find((v) => v.key === "b1")?.value).toBe("b-val");
+  });
+
+  it("folder vars sit between env and request layers", () => {
+    const active = env("env-active", "Active", [
+      ["a1", "env"],
+      ["envOnly", "envval"],
+    ]);
+    const map = buildVariableMap(
+      { collections: [treeCollection], environments: [active], activeEnvironmentId: "env-active" },
+      undefined,
+      {
+        folderVars: folderVariablesFor(treeCollection, "req_deep"),
+        requestVars: [{ key: "a1", value: "req" }],
+      },
+    );
+    expect(map.a1).toBe("req"); // request vars win
+    expect(map.b1).toBe("b-val"); // folder var
+    expect(map.envOnly).toBe("envval");
+  });
+
+  it("disabled folder variables are skipped", () => {
+    const map = buildVariableMap(
+      { collections: [treeCollection], environments: [], activeEnvironmentId: null },
+      undefined,
+      { folderVars: folderVariablesFor(treeCollection, "req_deep") },
+    );
+    expect(map.off).toBeUndefined();
   });
 });

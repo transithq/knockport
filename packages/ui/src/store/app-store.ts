@@ -29,6 +29,7 @@ export interface RequestTab {
     | "request"
     | "environment"
     | "collection"
+    | "folder"
     | "runner"
     | "settings"
     | "websocket"
@@ -326,6 +327,8 @@ export interface AppStore {
   deleteCollection: (id: string) => void;
   addFolder: (collectionId: string, parentFolderId: string | null, name: string) => void;
   renameFolder: (collectionId: string, folderId: string, name: string) => void;
+  /** Patch a folder's settings (name, auth, scripts, variables, …). */
+  updateFolder: (collectionId: string, folderId: string, changes: Partial<Folder>) => void;
   deleteFolder: (collectionId: string, folderId: string) => void;
   addRequest: (collectionId: string, folderId: string | null, name?: string) => void;
   addExistingRequest: (collectionId: string, folderId: string | null, request: Request) => void;
@@ -345,6 +348,7 @@ export interface AppStore {
   openTab: (request: Request) => void;
   openEnvironmentTab: (envId: string) => void;
   openCollectionTab: (collectionId: string) => void;
+  openFolderTab: (collectionId: string, folderId: string) => void;
   openRunnerTab: (collectionId: string) => void;
   openSettingsTab: () => void;
   closeTab: (tabId: string) => void;
@@ -625,6 +629,26 @@ export const useAppStore = create<AppStore>((set, get) => ({
           ? { ...c, folders: insertFolder(c.folders, parentFolderId, makeFolder(name)) }
           : c,
       ),
+    }));
+    const c = get().collections.find((x) => x.id === collectionId);
+    if (c) persistCollection(c);
+  },
+
+  updateFolder: (collectionId, folderId, changes) => {
+    set((s) => ({
+      collections: s.collections.map((c) =>
+        c.id === collectionId
+          ? { ...c, folders: mapFolderTree(c.folders, folderId, (f) => ({ ...f, ...changes })) }
+          : c,
+      ),
+      // Keep any open folder tab's title in sync with the name
+      tabs: changes.name
+        ? s.tabs.map((t) =>
+            t.kind === "folder" && t.collectionId === collectionId && t.requestId === `fld:${folderId}`
+              ? { ...t, name: changes.name as string }
+              : t,
+          )
+        : s.tabs,
     }));
     const c = get().collections.find((x) => x.id === collectionId);
     if (c) persistCollection(c);
@@ -988,6 +1012,44 @@ export const useAppStore = create<AppStore>((set, get) => ({
           collectionId,
           kind: "collection",
           name: col.name,
+          isDirty: false,
+        },
+      ],
+      activeTabId: tabId,
+    }));
+  },
+
+  openFolderTab: (collectionId, folderId) => {
+    const s = get();
+    const col = s.collections.find((c) => c.id === collectionId);
+    if (!col) return;
+    const findFolder = (folders: Folder[]): Folder | undefined => {
+      for (const f of folders) {
+        if (f.id === folderId) return f;
+        const nested = findFolder(f.folders);
+        if (nested) return nested;
+      }
+      return undefined;
+    };
+    const folder = findFolder(col.folders);
+    if (!folder) return;
+    const existing = s.tabs.find(
+      (t) => t.kind === "folder" && t.requestId === `fld:${folderId}` && t.collectionId === collectionId,
+    );
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return;
+    }
+    const tabId = createId("tab");
+    set((st) => ({
+      tabs: [
+        ...st.tabs,
+        {
+          id: tabId,
+          requestId: `fld:${folderId}`,
+          collectionId,
+          kind: "folder",
+          name: folder.name,
           isDirty: false,
         },
       ],

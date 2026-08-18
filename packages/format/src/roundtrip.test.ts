@@ -184,6 +184,19 @@ describe("native YAML round-trip", () => {
     expect(r.responseVars?.[0].value).toBe("response.json().token");
   });
 
+  it("round-trips folder variables (A2)", () => {
+    const original = makeCollection();
+    original.folders[0].variables = [
+      { key: "apiVersion", value: "v2" },
+      { key: "legacy", value: "v1", enabled: false },
+    ];
+    const imported = importKnockportYaml(serializeCollection(original)) as Collection;
+    expect(imported.folders[0].variables).toEqual([
+      { key: "apiVersion", value: "v2" },
+      { key: "legacy", value: "v1", enabled: false },
+    ]);
+  });
+
   it("byte-stability: serializing twice yields identical output", () => {
     const original = makeCollection();
     expect(serializeCollection(original)).toBe(serializeCollection(original));

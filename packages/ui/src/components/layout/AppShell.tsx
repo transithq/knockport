@@ -1,9 +1,10 @@
 import { createId } from "@knockport/core";
 import type { Request } from "@knockport/core";
-import { Boxes, Braces, ChevronDown, Cloud, MoreHorizontal, Play, Plus, Radio, Server, Settings, X, Zap } from "lucide-react";
+import { Boxes, Braces, ChevronDown, Cloud, Folder, MoreHorizontal, Play, Plus, Radio, Server, Settings, X, Zap } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useAppStore } from "../../store/app-store";
 import { CollectionEditor } from "../collections/CollectionEditor";
+import { FolderEditor } from "../collections/FolderEditor";
 import { CommandPalette } from "../command/CommandPalette";
 import { useResizer } from "../common/useResizer";
 import { DropdownMenu } from "../common/DropdownMenu";
@@ -236,6 +237,8 @@ function TabBar() {
                 <Boxes size={12} className="kp-env-tab-icon" />
               ) : tab.kind === "collection" ? (
                 <Braces size={12} className="kp-env-tab-icon" />
+              ) : tab.kind === "folder" ? (
+                <Folder size={12} className="kp-env-tab-icon" />
               ) : tab.kind === "runner" ? (
                 <Play size={12} className="kp-env-tab-icon" />
               ) : tab.kind === "settings" ? (
@@ -437,6 +440,11 @@ export function AppShell() {
             <EnvironmentEditor envId={activeTab.envId ?? ""} />
           ) : activeTab.kind === "collection" ? (
             <CollectionEditor collectionId={activeTab.collectionId ?? ""} />
+          ) : activeTab.kind === "folder" ? (
+            <FolderEditor
+              collectionId={activeTab.collectionId ?? ""}
+              folderId={activeTab.requestId.replace(/^fld:/, "")}
+            />
           ) : activeTab.kind === "runner" ? (
             <RunnerTab collectionId={activeTab.collectionId ?? ""} />
           ) : activeTab.kind === "settings" ? (

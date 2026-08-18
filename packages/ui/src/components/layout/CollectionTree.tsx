@@ -3,14 +3,17 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronDown,
   ChevronRight,
+  FolderCog,
   FolderOpen,
   FolderPlus,
   MoreHorizontal,
+  Pencil,
   Plus,
   Trash2,
 } from "lucide-react";
 import type { Collection } from "@knockport/core";
 import { useAppStore } from "../../store/app-store";
+import { DropdownMenu } from "../common/DropdownMenu";
 import { flattenTree, countRequests, type TreeRow } from "./tree-model";
 
 const ROW_HEIGHT = 33;
@@ -123,6 +126,7 @@ function FolderRow({ row, collapsed, onToggle }: RowProps) {
   const renameFolder = useAppStore((s) => s.renameFolder);
   const deleteFolder = useAppStore((s) => s.deleteFolder);
   const addRequest = useAppStore((s) => s.addRequest);
+  const openFolderTab = useAppStore((s) => s.openFolderTab);
   const open = !collapsed.has(folder.id);
 
   const newRequest = () => {
@@ -156,18 +160,22 @@ function FolderRow({ row, collapsed, onToggle }: RowProps) {
       </button>
       <span className="kp-truncate" style={{ flex: 1 }}>{folder.name}</span>
       <span className="kp-tree-actions">
+        <button type="button" className="kp-icon-btn" title="Folder settings" onClick={() => openFolderTab(collectionId, folder.id)}>
+          <FolderCog size={12} />
+        </button>
         <button type="button" className="kp-icon-btn" title="New request" onClick={newRequest}>
           <Plus size={12} />
         </button>
-        <button type="button" className="kp-icon-btn" title="New folder" onClick={newFolder}>
-          <FolderPlus size={12} />
-        </button>
-        <button type="button" className="kp-icon-btn" title="Rename" onClick={rename}>
-          <MoreHorizontal size={12} />
-        </button>
-        <button type="button" className="kp-icon-btn kp-danger" title="Delete" onClick={remove}>
-          <Trash2 size={12} />
-        </button>
+        <DropdownMenu
+          buttonClassName="kp-icon-btn"
+          buttonTitle="More folder actions"
+          buttonLabel={<MoreHorizontal size={12} />}
+          items={[
+            { label: "New folder", icon: <FolderPlus size={12} />, onClick: newFolder },
+            { label: "Rename…", icon: <Pencil size={12} />, onClick: rename },
+            { label: "Delete…", icon: <Trash2 size={12} />, onClick: remove },
+          ]}
+        />
       </span>
     </div>
   );

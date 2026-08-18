@@ -246,6 +246,43 @@ export function findCollectionOfRequest(collections: Collection[], requestId: st
   return collections.find((c) => c.requests.some((r) => r.id === requestId) || c.folders.some(inFolder));
 }
 
+/**
+ * The folder chain from the collection root down to (and including) the
+ * folder that directly contains the request. Root first. Empty when the
+ * request sits at the collection root.
+ */
+export function findFolderPath(collection: Collection, requestId: string): Folder[] | undefined {
+  // A request living directly on the collection root has no folder chain.
+  if (collection.requests.some((r) => r.id === requestId)) return [];
+  const inFolder = (folders: Folder[], chain: Folder[]): Folder[] | undefined => {
+    for (const f of folders) {
+      if (f.requests.some((r) => r.id === requestId)) return [...chain, f];
+      const deeper = inFolder(f.folders, [...chain, f]);
+      if (deeper) return deeper;
+    }
+    return undefined;
+  };
+  return inFolder(collection.folders, []);
+}
+
+/**
+ * Folder-inherited variables (A2) for a request: every folder in the chain
+ * from root to the parent folder, merged in order — deeper folders override
+ * their ancestors for the same key. These sit above the collection/env layers
+ * in {@link buildVariableMap} and below request variables.
+ */
+export function folderVariablesFor(collection: Collection, requestId: string): RequestVariable[] {
+  const chain = findFolderPath(collection, requestId);
+  if (!chain?.length) return [];
+  const map = new Map<string, RequestVariable>();
+  for (const folder of chain) {
+    for (const v of folder.variables ?? []) {
+      if (v.key) map.set(v.key, v);
+    }
+  }
+  return [...map.values()];
+}
+
 /** Resolve `inherit` auth against the parent collection. */
 export function effectiveAuth(request: Request, collection?: Collection): AuthConfig {
   const own = request.auth ?? { type: "inherit" };
