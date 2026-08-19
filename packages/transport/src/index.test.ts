@@ -208,6 +208,69 @@ describe("binary body upload (E1)", () => {
   });
 });
 
+describe("per-part contentType for multipart (E2)", () => {
+  it("buildBody wraps text and file parts with their explicit content-type", () => {
+    const file = new File([new Uint8Array([1, 2, 3])], "a.bin", { type: "application/octet-stream" });
+    const req = makeRequest({
+      method: "POST",
+      body: {
+        type: "multipart-form",
+        formData: [
+          { key: "note", value: "hi", type: "text", enabled: true, contentType: "text/plain" },
+          { key: "up", value: file, type: "file", enabled: true, contentType: "image/png" },
+          { key: "plain", value: "x", type: "text", enabled: true },
+        ],
+      },
+    });
+    const form = buildBody(req) as FormData;
+    expect((form.get("note") as File).type).toBe("text/plain");
+    expect((form.get("up") as File).type).toBe("image/png");
+    expect(typeof form.get("plain")).toBe("string");
+    expect((form.get("up") as File).name).toBe("a.bin");
+  });
+
+  it("relay wire passes per-part contentType on text and file parts", async () => {
+    const file = new File([new Uint8Array([1, 2, 3])], "a.bin");
+    const relay = {
+      status: 200,
+      statusText: "OK",
+      headers: [],
+      body: "",
+      encoding: "utf8",
+      timings: { total: 50, ttfb: 10, download: 40 },
+    };
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: () => Promise.resolve(relay),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const req = makeRequest({
+        method: "POST",
+        body: {
+          type: "multipart-form",
+          formData: [
+            { key: "note", value: "hi", type: "text", enabled: true, contentType: "text/plain" },
+            { key: "up", value: file, type: "file", enabled: true, contentType: "image/png" },
+            { key: "plain", value: "x", type: "text", enabled: true },
+          ],
+        },
+      });
+      await new RelayTransport("https://relay.example").execute(req);
+      const [, init] = fetchStub.mock.calls[0];
+      const wire = JSON.parse(init.body);
+      expect(wire.multipart).toHaveLength(3);
+      expect(wire.multipart[0]).toMatchObject({ name: "note", value: "hi", content_type: "text/plain" });
+      expect(wire.multipart[1]).toMatchObject({ name: "up", content_type: "image/png" });
+      expect(wire.multipart[2].content_type).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 describe("DirectTransport binary capture (F1)", () => {
   it("base64-encodes media bodies and leaves the text body empty", async () => {
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

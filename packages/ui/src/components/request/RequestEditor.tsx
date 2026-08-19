@@ -15,7 +15,7 @@ import {
 } from "@knockport/core";
 import type { TestRunSummary } from "@knockport/engine";
 import { clsx } from "clsx";
-import { ChevronDown, Code2, Loader2, MoreHorizontal, Paperclip, Save, Send, X } from "lucide-react";
+import { ChevronDown, Code2, Loader2, MoreHorizontal, Paperclip, Pencil, Save, Send, X } from "lucide-react";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { type ActivePanel, useAppStore } from "../../store/app-store";
 import { attachCookieJar } from "../../store/cookie-jar";
@@ -583,6 +583,9 @@ function FormDataTable({
 }) {
   const uid = useId();
   const [newKey, setNewKey] = useState("");
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const isMultipart = encoding === "multipart-form";
   const commitNew = () => {
     if (newKey.trim()) {
       onChange([...entries, { key: newKey.trim(), value: "", type: "text", enabled: true }]);
@@ -592,10 +595,40 @@ function FormDataTable({
   const update = (i: number, changes: Partial<FormDataEntry>) =>
     onChange(entries.map((e, idx) => (idx === i ? { ...e, ...changes } : e)));
 
+  const openBulk = () => {
+    setBulkText(serializeBulkText(entries));
+    setBulkOpen(true);
+  };
+  const commitBulk = () => {
+    const parsed = parseBulkText(bulkText);
+    // File parts can't round-trip through plain text — keep them in place and
+    // fill text slots from the parsed lines (Hoppscotch behavior).
+    const next: FormDataEntry[] = [];
+    let p = 0;
+    for (const e of entries) {
+      if (e.type === "text") {
+        if (p < parsed.length) next.push(parsed[p++]);
+      } else {
+        next.push(e);
+      }
+    }
+    while (p < parsed.length) next.push(parsed[p++]);
+    onChange(next);
+    setBulkOpen(false);
+  };
+
   return (
     <div className="kp-kv">
       <div className="kp-form-head">
         <div className="kp-kv-title">Form Fields</div>
+        <button
+          type="button"
+          className={clsx("kp-icon-btn", bulkOpen && "active")}
+          title="Bulk edit as text (key: value per line, // disables a line)"
+          onClick={bulkOpen ? commitBulk : openBulk}
+        >
+          <Pencil size={13} />
+        </button>
         <div className="kp-seg-row kp-encoding-seg" title="Body encoding for these fields">
           <button
             type="button"
@@ -613,12 +646,33 @@ function FormDataTable({
           </button>
         </div>
       </div>
+      {bulkOpen ? (
+        <div className="kp-bulk-editor">
+          <textarea
+            className="kp-code-input kp-mono"
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            spellCheck={false}
+            placeholder={"key: value\n//disabled-key: value"}
+          />
+          <div className="kp-bulk-foot">
+            <span className="kp-hint">
+              {entries.filter((e) => e.type === "file").length} file part(s) kept — not
+              editable as text.
+            </span>
+            <button type="button" className="kp-btn small primary" onClick={commitBulk}>
+              Done
+            </button>
+          </div>
+        </div>
+      ) : (
       <div className="kp-kv-table kp-form-table">
         <div className="kp-kv-row kp-kv-head">
           <span />
           <span>Key</span>
           <span>Value</span>
           <span>File</span>
+          {isMultipart && <span>Type</span>}
           <span className="kp-kv-menu">
             <MoreHorizontal size={13} />
           </span>
@@ -684,6 +738,15 @@ function FormDataTable({
               >
                 <Paperclip size={13} />
               </button>
+              {isMultipart && (
+                <input
+                  type="text"
+                  placeholder="Auto"
+                  title="Per-part Content-Type (empty = auto)"
+                  value={entry.contentType ?? ""}
+                  onChange={(e) => update(i, { contentType: e.target.value })}
+                />
+              )}
               <span />
             </div>
           );
@@ -702,11 +765,46 @@ function FormDataTable({
           />
           <input type="text" placeholder="Value" readOnly />
           <span />
+          {isMultipart && <input type="text" readOnly />}
           <span />
         </div>
       </div>
+      )}
     </div>
   );
+}
+
+// ── Form-data bulk edit format (E2) ──────────────────────────────────────────
+// Bruno-style `key:value` per line; `//` prefix disables a line. Only text
+// entries participate — file parts are preserved separately.
+function serializeBulkText(entries: FormDataEntry[]): string {
+  return entries
+    .filter((e) => e.type === "text")
+    .map((e) => `${e.enabled ? "" : "//"}${e.key}:${e.value}`)
+    .join("\n");
+}
+
+function parseBulkText(text: string): FormDataEntry[] {
+  const out: FormDataEntry[] = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.trimEnd();
+    if (!line.trim()) continue;
+    let enabled = true;
+    let body = line;
+    if (body.startsWith("//")) {
+      enabled = false;
+      body = body.slice(2);
+    }
+    const idx = body.indexOf(":");
+    if (idx === -1) continue;
+    out.push({
+      key: body.slice(0, idx).trim(),
+      value: body.slice(idx + 1).trim(),
+      type: "text",
+      enabled,
+    });
+  }
+  return out;
 }
 
 /** SOAP 1.1 envelope: wraps existing content as the Body payload, or

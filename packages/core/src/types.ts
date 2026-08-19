@@ -111,6 +111,10 @@ export interface FormDataEntry {
   value: string | File;
   type: "text" | "file";
   enabled: boolean;
+  /** Per-part Content-Type override (E2). Empty/undefined = auto (the part
+   * is sent without an explicit content-type, or the file's own type). */
+  contentType?: string;
+  description?: string;
 }
 
 // ── Headers & Params ─────────────────────────────────────────────────────────

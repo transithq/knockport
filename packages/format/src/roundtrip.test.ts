@@ -155,6 +155,22 @@ describe("native YAML round-trip", () => {
     expect(imported.requests[0].body.file).toBeUndefined();
   });
 
+  it("round-trips per-part contentType on multipart form entries (E2)", () => {
+    const original = makeCollection();
+    original.requests[0].body = {
+      type: "multipart-form",
+      formData: [
+        { key: "note", value: "hi", type: "text", enabled: true, contentType: "text/plain" },
+        { key: "up", value: "[file]", type: "file", enabled: true, contentType: "image/png" },
+      ],
+    };
+    const yaml = serializeCollection(original);
+    const imported = importKnockportYaml(yaml) as Collection;
+    expect(imported.requests[0].body.formData?.[0].contentType).toBe("text/plain");
+    expect(imported.requests[0].body.formData?.[1].contentType).toBe("image/png");
+    expect(imported.requests[0].body.formData?.[1].value).toBe("[file]");
+  });
+
   it("round-trips the full OAuth2 auth block (B1 fields)", () => {
     const original = makeCollection();
     original.auth = {

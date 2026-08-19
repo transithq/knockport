@@ -1237,6 +1237,28 @@ body.kp-resizing-y .kp-resize-handle {
   align-items: center;
   gap: 8px;
 }
+/* Form-data bulk edit (E2) */
+.kp-bulk-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+}
+.kp-bulk-editor textarea {
+  width: 100%;
+  min-height: 140px;
+  resize: vertical;
+}
+.kp-bulk-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.kp-bulk-foot .kp-hint {
+  flex: 1;
+  margin: 0;
+}
 .kp-checkbox {
   width: 15px;
   height: 15px;

@@ -122,7 +122,20 @@ export function buildBody(request: Request): BodyInit | undefined {
       const formData = new FormData();
       for (const entry of request.body.formData ?? []) {
         if (entry.enabled) {
-          formData.append(entry.key, entry.value);
+          const ct = entry.contentType;
+          if (entry.type === "file" && entry.value instanceof File) {
+            // Per-part contentType override (E2): re-wrap the file bytes with
+            // the explicit type so fetch derives the part header from it.
+            formData.append(
+              entry.key,
+              ct ? new Blob([entry.value], { type: ct }) : entry.value,
+              entry.value.name,
+            );
+          } else if (ct) {
+            formData.append(entry.key, new Blob([String(entry.value ?? "")], { type: ct }), entry.key);
+          } else {
+            formData.append(entry.key, entry.value);
+          }
         }
       }
       return formData;
@@ -432,11 +445,15 @@ async function buildMultipartParts(request: Request): Promise<RelayMultipartPart
       parts.push({
         name: entry.key,
         filename: entry.value.name,
-        content_type: entry.value.type || undefined,
+        content_type: entry.contentType || entry.value.type || undefined,
         data_base64: bytesToBase64(bytes),
       });
     } else {
-      parts.push({ name: entry.key, value: String(entry.value ?? "") });
+      parts.push({
+        name: entry.key,
+        value: String(entry.value ?? ""),
+        content_type: entry.contentType || undefined,
+      });
     }
   }
   return parts;

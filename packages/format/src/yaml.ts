@@ -320,6 +320,8 @@ function serializeBody(body: BodyContent): Record<string, any> | undefined {
       value: typeof f.value === "string" ? f.value : "[file]",
       type: f.type,
       enabled: f.enabled,
+      contentType: f.contentType,
+      description: f.description,
     })),
     graphql: body.graphql,
   };
