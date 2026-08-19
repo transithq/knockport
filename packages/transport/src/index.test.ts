@@ -5,6 +5,8 @@ import {
   RelayTransport,
   buildBody,
   buildHeaderList,
+  encodeUrl,
+  optionsForRequest,
   parseSetCookie,
   parseSetCookies,
 } from "./index";
@@ -265,6 +267,62 @@ describe("per-part contentType for multipart (E2)", () => {
       expect(wire.multipart[0]).toMatchObject({ name: "note", value: "hi", content_type: "text/plain" });
       expect(wire.multipart[1]).toMatchObject({ name: "up", content_type: "image/png" });
       expect(wire.multipart[2].content_type).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("per-request settings (E4)", () => {
+  it("encodeUrl content-blind-encodes path + query, preserving origin", () => {
+    expect(encodeUrl("https://example.com/api/users?name=Jane Doe&q=%20")).toBe(
+      "https://example.com/api/users?name=Jane%20Doe&q=%2520",
+    );
+    expect(encodeUrl("https://example.com/a b/c")).toBe("https://example.com/a%20b/c");
+    expect(encodeUrl("http://localhost:8080/x?token=abc#def")).toBe(
+      "http://localhost:8080/x?token=abc%23def",
+    );
+    expect(encodeUrl("")).toBe("");
+  });
+
+  it("optionsForRequest applies Bruno DEFAULT_SETTINGS semantics", () => {
+    const base = makeRequest({ method: "GET", url: "https://example.com" });
+    const opts = optionsForRequest(base, { defaultTimeoutMs: 30000 });
+    expect(opts.timeout).toBe(30000);
+    expect(opts.followRedirects).toBeUndefined(); // default on at the transports
+    expect(opts.encodeUrl).toBeUndefined();
+
+    const custom: Request = {
+      ...base,
+      settings: { followRedirects: false, maxRedirects: 2, timeout: 1500, encodeUrl: true },
+    };
+    const resolved = optionsForRequest(custom, { defaultTimeoutMs: 30000 });
+    expect(resolved).toMatchObject({ followRedirects: false, maxRedirects: 2, timeout: 1500, encodeUrl: true });
+
+    const zero = optionsForRequest({ ...base, settings: { timeout: 0 } }, { defaultTimeoutMs: 5000 });
+    expect(zero.timeout).toBe(5000); // 0 = inherit
+  });
+
+  it("relay wire sends settings (follow_redirects, max_redirects, timeout_ms)", async () => {
+    const relay = { status: 200, statusText: "OK", headers: [], body: "", encoding: "utf8", timings: { total: 50, ttfb: 10, download: 40 } };
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: () => Promise.resolve(relay),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const req = makeRequest({
+        method: "GET",
+        url: "https://example.com",
+        settings: { followRedirects: false, maxRedirects: 2, timeout: 1500 },
+      });
+      const options = optionsForRequest(req, { defaultTimeoutMs: 30000 });
+      await new RelayTransport("https://relay.example").execute(req, options);
+      const [, init] = fetchStub.mock.calls[0];
+      const wire = JSON.parse(init.body);
+      expect(wire.settings).toEqual({ follow_redirects: false, max_redirects: 2, timeout_ms: 1500 });
     } finally {
       vi.unstubAllGlobals();
     }

@@ -268,7 +268,20 @@ function requestToYamlDoc(r: Request): Record<string, any> {
       ? { vus: r.load.vus, duration: r.load.duration, thresholds: r.load.thresholds }
       : undefined,
     examples: r.examples?.length ? r.examples.map(exampleToYamlDoc) : undefined,
+    settings: r.settings ? serializeSettings(r.settings) : undefined,
   };
+}
+
+/** Request settings (E4): only non-default values are written. */
+function serializeSettings(s: NonNullable<Request["settings"]>): Record<string, any> | undefined {
+  const out: Record<string, any> = {};
+  if (s.followRedirects === false) out.followRedirects = false;
+  if (typeof s.maxRedirects === "number") out.maxRedirects = s.maxRedirects;
+  if (typeof s.timeout === "number") out.timeout = s.timeout;
+  if (s.encodeUrl === true) out.encodeUrl = true;
+  if (s.verifySSL === false) out.verifySSL = false;
+  if (s.forwardAuthorizationHeader === false) out.forwardAuthorizationHeader = false;
+  return Object.keys(out).length ? out : undefined;
 }
 
 function exampleToYamlDoc(e: RequestExample): Record<string, any> {
@@ -423,6 +436,19 @@ function rawToRequest(raw: any): Request {
     assertions: raw.assertions,
     load: raw.load,
     examples: (raw.examples ?? []).map(deserializeExample),
+    settings: raw.settings ? deserializeSettings(raw.settings) : undefined,
+  };
+}
+
+/** Request settings round-trip (E4). */
+function deserializeSettings(raw: any): Request["settings"] {
+  return {
+    ...(raw.followRedirects !== undefined ? { followRedirects: raw.followRedirects === true } : {}),
+    ...(typeof raw.maxRedirects === "number" ? { maxRedirects: raw.maxRedirects } : {}),
+    ...(typeof raw.timeout === "number" ? { timeout: raw.timeout } : {}),
+    ...(raw.encodeUrl === true ? { encodeUrl: true } : {}),
+    ...(raw.verifySSL === false ? { verifySSL: false } : {}),
+    ...(raw.forwardAuthorizationHeader === false ? { forwardAuthorizationHeader: false } : {}),
   };
 }
 

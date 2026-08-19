@@ -91,7 +91,7 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
   const run = async () => {
     if (included.length === 0) return;
     patch({ phase: "running", results: [], selectedIdx: null, stoppedReason: undefined });
-    const { getTransport } = await import("@knockport/transport");
+    const { getTransport, optionsForRequest } = await import("@knockport/transport");
     const {
       runTests,
       runPreScript,
@@ -196,12 +196,15 @@ export function RunnerTab({ collectionId }: { collectionId: string }) {
         // headers on the request win). Execution uses the attached copy.
         const cookieAttached = attachCookieJar(resolved, state.cookieJar);
         const start = performance.now();
-        // Enforce the global timeout per request via an abort signal
+        // E4 per-request settings: followRedirects/maxRedirects/encodeUrl flow
+        // into the transport options; a request-level timeout override beats
+        // the global preference (the relay also receives timeout_ms on wire).
+        const options = optionsForRequest(cookieAttached, { defaultTimeoutMs: state.timeoutMs });
         const abort = new AbortController();
-        const timer = setTimeout(() => abort.abort(), state.timeoutMs);
+        const timer = setTimeout(() => abort.abort(), options.timeout ?? state.timeoutMs);
         let failed = false;
         try {
-          const res = await transport.execute(cookieAttached, { signal: abort.signal });
+          const res = await transport.execute(cookieAttached, { signal: abort.signal, ...options });
           clearTimeout(timer);
           // G1: capture the response's Set-Cookie headers into the jar.
           useAppStore.getState().captureResponseCookies(res);

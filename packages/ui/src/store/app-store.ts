@@ -9,6 +9,7 @@ import type {
   KeyValuePair,
   Request,
   RequestExample,
+  RequestSettings,
   Response,
 } from "@knockport/core";
 import { createId } from "@knockport/core";
@@ -45,7 +46,7 @@ export interface RequestTab {
   collectionId?: string;
 }
 
-export type ActivePanel = "params" | "headers" | "auth" | "body" | "vars" | "scripts" | "tests";
+export type ActivePanel = "params" | "headers" | "auth" | "body" | "vars" | "scripts" | "tests" | "settings";
 export type ResponsePanel = "body" | "cookies" | "headers" | "tests" | "examples";
 export type SidebarTab = "collections" | "environments" | "history";
 
@@ -374,6 +375,7 @@ export interface AppStore {
   updateRequestParams: (tabId: string, params: KeyValuePair[]) => void;
   updateRequestBody: (tabId: string, body: BodyContent) => void;
   updateRequestAuth: (tabId: string, auth: AuthConfig) => void;
+  updateRequestSettings: (tabId: string, settings: RequestSettings) => void;
 
   // Actions — Request examples (F4)
   /** Save the tab's current request + response as an example on the request. */
@@ -1322,6 +1324,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
       requests: {
         ...s.requests,
         [tabId]: { ...s.requests[tabId], auth },
+      },
+    })),
+
+  updateRequestSettings: (tabId, settings) =>
+    set((s) => ({
+      requests: {
+        ...s.requests,
+        [tabId]: { ...s.requests[tabId], settings },
       },
     })),
 

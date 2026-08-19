@@ -1376,6 +1376,27 @@ body.kp-resizing-y .kp-resize-handle {
   color: var(--kp-text-secondary);
 }
 
+/* ── Request settings pane (E4) ────────────────────────────────────────────── */
+.kp-req-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px;
+  max-width: 680px;
+}
+.kp-req-settings .kp-setting-row {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.kp-req-settings .kp-setting-row label {
+  width: 210px;
+  padding-top: 2px;
+}
+.kp-req-settings .kp-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 /* ── Settings page tab (full area) ─────────────────────────────────────────── */
 .kp-settings-page {
   flex: 1;

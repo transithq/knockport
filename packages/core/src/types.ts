@@ -196,6 +196,16 @@ export interface RequestSettings {
   maxRedirects?: number;
   timeout?: number;
   verifySSL?: boolean;
+  /** Bruno `encodeUrl` (B§9): content-blind-encode path segments + query
+   *  name/value pairs before the request goes on the wire. Default off —
+   *  the URL is sent as typed (modulo WHATWG normalization). */
+  encodeUrl?: boolean;
+  /** Bruno `forwardAuthorizationHeader` (B§9): whether Authorization may be
+   *  forwarded on a cross-origin redirect. The KnockPort relay ALWAYS strips
+   *  credentials on cross-origin redirects (tropel-http / reqwest / k6
+   *  parity — the safe default), so this is accepted for schema parity and
+   *  is inert at execution time. */
+  forwardAuthorizationHeader?: boolean;
 }
 
 export interface RequestMetadata {

@@ -28,6 +28,9 @@ export interface TransportOptions {
   followRedirects?: boolean;
   maxRedirects?: number;
   verifySSL?: boolean;
+  /** Bruno `encodeUrl` (B§9): content-blind-encode path segments + query
+   *  name/value pairs (pre-encoded inputs intentionally double-encode). */
+  encodeUrl?: boolean;
 }
 
 // ── Transport Registry ───────────────────────────────────────────────────────
@@ -68,14 +71,96 @@ export class TransportRegistry {
 }
 
 // ── Shared request-building helpers ─────────────────────────────────────────
-function buildUrl(request: Request): string {
+function buildUrl(request: Request, encode = false): string {
   const url = new URL(request.url);
   for (const param of request.params) {
     if (param.enabled && param.key) {
       url.searchParams.append(param.key, param.value);
     }
   }
-  return url.toString();
+  const built = url.toString();
+  return encode ? encodeUrl(built) : built;
+}
+
+/**
+ * Resolve a request's per-request settings (E4) into TransportOptions,
+ * applying Bruno's DEFAULT_SETTINGS defaults: followRedirects on, maxRedirects
+ * 5, timeout inherited from the caller's global default, URL encoding off.
+ * The relay cannot vary maxRedirects per request above its own client cap and
+ * the browser fetch has no maxRedirects knob at all — the field still flows to
+ * the relay wire so the relay can clamp below its cap (see apps/relay).
+ */
+export function optionsForRequest(
+  request: Request,
+  opts: { defaultTimeoutMs?: number } = {},
+): TransportOptions {
+  const s = request.settings ?? {};
+  const timeout =
+    typeof s.timeout === "number" && Number.isFinite(s.timeout) && s.timeout > 0
+      ? s.timeout
+      : opts.defaultTimeoutMs;
+  return {
+    timeout,
+    followRedirects: s.followRedirects,
+    maxRedirects: s.maxRedirects,
+    encodeUrl: s.encodeUrl,
+  };
+}
+
+/**
+ * Bruno `encodeUrl` (B§9): content-blind encoding applied at the wire
+ * boundary. The scheme + authority pass through verbatim; path segments are
+ * decode-then-encode (idempotent — a pre-encoded `%22` stays `%22`); query
+ * name/value pairs are encodeURIComponent'd content-blind (a pre-encoded
+ * `%20` becomes `%2520`, per PR #5507's contract). `#` is treated as data.
+ */
+export function encodeUrl(url: string): string {
+  if (!url) return url;
+  const queryIdx = url.indexOf("?");
+  const originAndPath = queryIdx >= 0 ? url.slice(0, queryIdx) : url;
+  const queryString = queryIdx >= 0 ? url.slice(queryIdx + 1) : "";
+  const originMatch = originAndPath.match(/^([a-z][a-z0-9+.-]*:\/\/[^/?#]*)?(.*)$/i);
+  const origin = originMatch?.[1] ?? "";
+  const path = originMatch?.[2] ?? originAndPath;
+  let result = origin + encodePathSegments(path);
+  if (queryIdx >= 0) {
+    const pairs: string[] = [];
+    for (const pair of queryString.split("&")) {
+      if (!pair) continue;
+      const eq = pair.indexOf("=");
+      if (eq === -1) {
+        pairs.push(encodeURIComponent(pair));
+      } else {
+        pairs.push(`${encodeURIComponent(pair.slice(0, eq))}=${encodeURIComponent(pair.slice(eq + 1))}`);
+      }
+    }
+    result += `?${pairs.join("&")}`;
+  }
+  return result;
+}
+
+/** decode-then-encode a path segment so raw and pre-encoded input collapse
+ *  to the same single-encoded form (Bruno's `encodePathSegments`). */
+function encodePathSegments(path: string): string {
+  return path
+    .split("/")
+    .map((segment) => encodeURIComponent(safeDecodeURIComponent(segment)))
+    .join("/");
+}
+
+/** Forgiving decode: decodes well-formed escapes, leaves the rest alone. */
+function safeDecodeURIComponent(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s.replace(/%[0-9A-Fa-f]{2}/g, (m) => {
+      try {
+        return decodeURIComponent(m);
+      } catch {
+        return m;
+      }
+    });
+  }
 }
 
 export function buildHeaderList(request: Request): { key: string; value: string }[] {
@@ -263,7 +348,7 @@ export class RelayTransport implements Transport {
       ? this.linkSignals(options.signal, controller)
       : controller.signal;
 
-    const url = buildUrl(request);
+    const url = buildUrl(request, options?.encodeUrl);
     let headers = buildHeaderList(request);
     const isMultipart = request.body?.type === "multipart-form";
     const binaryFile =
@@ -305,6 +390,16 @@ export class RelayTransport implements Transport {
           binary: binary
             ? { ...binary, content_type: ownedContentType }
             : undefined,
+          // Per-request settings (E4): the relay applies follow_redirects and
+          // timeout_ms per request and clamps redirect hops to max_redirects
+          // below its own client cap. encodeUrl is applied client-side above;
+          // forwardAuthorizationHeader is always "strip" at the relay (secure
+          // tropel-http/reqwest/k6 parity), so it is not part of the wire.
+          settings: {
+            follow_redirects: options?.followRedirects,
+            max_redirects: options?.maxRedirects,
+            timeout_ms: options?.timeout,
+          },
         }),
         signal,
       });
@@ -517,7 +612,7 @@ export class DirectTransport implements Transport {
       ? this.linkSignals(options.signal, controller)
       : controller.signal;
 
-    const url = buildUrl(request);
+    const url = buildUrl(request, options?.encodeUrl);
     const headers = Object.fromEntries(buildHeaderList(request).map((h) => [h.key, h.value]));
     const body = buildBody(request);
 

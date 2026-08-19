@@ -9,6 +9,7 @@ import {
   HTTP_METHODS,
   type HttpMethod,
   type KeyValuePair,
+  type RequestSettings,
   scrubRequestSecrets,
   secretVariableValues,
   withPromptAnswers,
@@ -159,6 +160,7 @@ export function RequestEditor({ tabId }: { tabId: string }) {
     },
     { id: "scripts", label: "Scripts" },
     { id: "tests", label: "Tests" },
+    { id: "settings", label: "Settings" },
   ];
 
   return (
@@ -293,6 +295,7 @@ export function RequestEditor({ tabId }: { tabId: string }) {
         {activeRequestPanel === "vars" && <VarsPanel tabId={tabId} />}
         {activeRequestPanel === "scripts" && <ScriptEditor tabId={tabId} />}
         {activeRequestPanel === "tests" && <TestsPanel tabId={tabId} />}
+        {activeRequestPanel === "settings" && <RequestSettingsPane tabId={tabId} />}
       </div>
     </div>
   );
@@ -947,6 +950,125 @@ kp.test("fast enough", () => {
   );
 }
 
+// ── Request Settings Pane (E4) ───────────────────────────────────────────────
+// Bruno `RequestPane/Settings` parity (B§9 DEFAULT_SETTINGS): URL encoding,
+// redirect behavior, and a per-request timeout override. Defaults match
+// Bruno: encodeUrl off, followRedirects on, maxRedirects 5, timeout inherited
+// (global preference), forwardAuthorizationHeader on.
+const DEFAULT_SETTINGS = {
+  encodeUrl: false,
+  followRedirects: true,
+  maxRedirects: 5,
+  timeout: "inherit" as number | "inherit",
+  forwardAuthorizationHeader: true,
+};
+
+/** Pane-local settings view: timeout may carry the "inherit" sentinel. */
+type SettingsWithInherit = Omit<RequestSettings, "timeout"> & { timeout?: number | "inherit" };
+
+function RequestSettingsPane({ tabId }: { tabId: string }) {
+  const requests = useAppStore((s) => s.requests);
+  const updateRequestSettings = useAppStore((s) => s.updateRequestSettings);
+  const request = requests[tabId];
+  if (!request) return null;
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    ...request.settings,
+  } as SettingsWithInherit;
+  const set = (patch: Partial<RequestSettings>) => {
+    const next: SettingsWithInherit = { ...settings, ...patch };
+    if (next.timeout === "inherit") delete next.timeout;
+    updateRequestSettings(tabId, next as RequestSettings);
+  };
+
+  return (
+    <div className="kp-req-settings">
+      <p className="kp-hint">
+        Per-request behavior overrides. Timeout "inherit" falls back to the global Settings page
+        value.
+      </p>
+
+      <div className="kp-setting-row">
+        <label>URL Encoding</label>
+        <input
+          type="checkbox"
+          className="kp-checkbox"
+          checked={settings.encodeUrl}
+          onChange={(e) => set({ encodeUrl: e.target.checked })}
+        />
+        <p className="kp-hint">Automatically encode query parameters in the URL</p>
+      </div>
+
+      <div className="kp-setting-row">
+        <label>Follow Redirects</label>
+        <input
+          type="checkbox"
+          className="kp-checkbox"
+          checked={settings.followRedirects}
+          onChange={(e) => set({ followRedirects: e.target.checked })}
+        />
+        <p className="kp-hint">Follow HTTP redirects automatically</p>
+      </div>
+
+      <div className="kp-setting-row">
+        <label>Max Redirects</label>
+        <input
+          type="number"
+          className="kp-num-input"
+          min={0}
+          value={settings.maxRedirects}
+          onChange={(e) =>
+            set({
+              maxRedirects:
+                e.target.value === "" ? undefined : Math.max(0, Number.parseInt(e.target.value, 10)),
+            })
+          }
+        />
+        <p className="kp-hint">Ceiling on redirects to follow (relay caps at 5)</p>
+      </div>
+
+      <div className="kp-setting-row">
+        <label>Timeout (ms)</label>
+        <select
+          className="kp-select"
+          style={{ width: 110 }}
+          value={settings.timeout === "inherit" ? "inherit" : "custom"}
+          onChange={(e) => set({ timeout: e.target.value === "inherit" ? undefined : 0 })}
+        >
+          <option value="inherit">Inherit</option>
+          <option value="custom">Custom</option>
+        </select>
+        {settings.timeout !== "inherit" && (
+          <input
+            type="number"
+            className="kp-num-input"
+            min={1}
+            step={1000}
+            value={settings.timeout}
+            onChange={(e) =>
+              set({ timeout: e.target.value === "" ? undefined : Math.max(1, Number.parseInt(e.target.value, 10)) })
+            }
+          />
+        )}
+        <p className="kp-hint">Maximum time to wait before aborting the request</p>
+      </div>
+
+      <div className="kp-setting-row">
+        <label>Forward Authorization on Redirect</label>
+        <input
+          type="checkbox"
+          className="kp-checkbox"
+          checked={settings.forwardAuthorizationHeader}
+          onChange={(e) => set({ forwardAuthorizationHeader: e.target.checked })}
+        />
+        <p className="kp-hint">
+          Reserved — the relay always strips credentials on cross-origin redirects (secure default)
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ── Request Settings ─────────────────────────────────────────────────────────
 // Transport preferences (relay, timeout) are global — see the Settings page.
 // ── Send ─────────────────────────────────────────────────────────────────────
@@ -956,8 +1078,9 @@ export async function handleSend(tabId: string) {
   if (!request) return;
 
     store.setLoading(tabId, true);
+  let effectiveTimeout = store.timeoutMs;
   try {
-    const { getTransport } = await import("@knockport/transport");
+    const { getTransport, optionsForRequest } = await import("@knockport/transport");
     const collection = findCollectionOfRequest(store.collections, request.id);
     // Folder-inherited variables (A2): the request's folder chain, merged
     // over the collection/env layers and under request variables.
@@ -1019,13 +1142,18 @@ export async function handleSend(tabId: string) {
         useAppStore.getState().updateRequestAuth(tabId, cookieAttached.auth);
       }
     }
-    // Enforce the global timeout via an abort signal (transports link it to
-    // their own AbortController).
+    // E4 per-request settings: followRedirects/maxRedirects/encodeUrl resolve
+    // into the transport options; a request-level timeout override beats the
+    // global preference (and drives the abort signal below).
+    const options = optionsForRequest(cookieAttached, { defaultTimeoutMs: store.timeoutMs });
+    effectiveTimeout = options.timeout ?? store.timeoutMs;
+    // Enforce the timeout via an abort signal (transports link it to their
+    // own AbortController). The relay also gets timeout_ms on the wire.
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), store.timeoutMs);
+    const timer = setTimeout(() => abort.abort(), options.timeout ?? store.timeoutMs);
     let response;
     try {
-      response = await transport.execute(cookieAttached, { signal: abort.signal });
+      response = await transport.execute(cookieAttached, { signal: abort.signal, ...options });
     } finally {
       clearTimeout(timer);
     }
@@ -1136,7 +1264,7 @@ export async function handleSend(tabId: string) {
       requestId: request.id,
       status: 0,
       statusText: timedOut
-        ? `Request timed out after ${store.timeoutMs} ms`
+        ? `Request timed out after ${effectiveTimeout} ms`
         : err instanceof Error
           ? err.message
           : "Request failed",

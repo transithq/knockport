@@ -171,6 +171,31 @@ describe("native YAML round-trip", () => {
     expect(imported.requests[0].body.formData?.[1].value).toBe("[file]");
   });
 
+  it("round-trips per-request settings (E4)", () => {
+    const original = makeCollection();
+    original.requests[0].settings = {
+      followRedirects: false,
+      maxRedirects: 3,
+      timeout: 1500,
+      encodeUrl: true,
+      verifySSL: false,
+      forwardAuthorizationHeader: false,
+    };
+    const yaml = serializeCollection(original);
+    expect(yaml).toContain("settings:");
+    expect(yaml).toContain("followRedirects: false");
+    expect(yaml).toContain("encodeUrl: true");
+    const imported = importKnockportYaml(yaml) as Collection;
+    expect(imported.requests[0].settings).toEqual(original.requests[0].settings);
+  });
+
+  it("omits the settings block when all settings are default", () => {
+    const original = makeCollection();
+    original.requests[0].settings = { followRedirects: true };
+    const yaml = serializeCollection(original);
+    expect(yaml).not.toContain("settings:");
+  });
+
   it("round-trips the full OAuth2 auth block (B1 fields)", () => {
     const original = makeCollection();
     original.auth = {

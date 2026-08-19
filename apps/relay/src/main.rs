@@ -76,6 +76,24 @@ struct ProxyRequest {
     /// application/octet-stream).
     #[serde(default)]
     binary: Option<BinaryBody>,
+    /// Per-request settings (E4): optional overrides for redirect following,
+    /// the redirect ceiling, and the request timeout.
+    #[serde(default)]
+    settings: Option<RequestSettings>,
+}
+
+/// Per-request settings (E4): mirrors the frontend's RequestSettings wire
+/// subset. follow_redirects feeds SdkRequest.follow_redirects (tropel-http
+/// honors it per request); timeout_ms overrides the 30 s relay default;
+/// max_redirects clamps the hop chain below the relay's own client cap.
+#[derive(Deserialize)]
+struct RequestSettings {
+    #[serde(default)]
+    follow_redirects: Option<bool>,
+    #[serde(default)]
+    max_redirects: Option<u32>,
+    #[serde(default)]
+    timeout_ms: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -448,7 +466,21 @@ async fn proxy(
         method,
         headers,
         body,
-        timeout: Some(REQUEST_TIMEOUT),
+        // Per-request settings (E4): follow_redirects and timeout override the
+        // client defaults; both are honored by tropel-http per request.
+        follow_redirects: payload
+            .settings
+            .as_ref()
+            .and_then(|s| s.follow_redirects)
+            .unwrap_or(true),
+        timeout: Some(
+            payload
+                .settings
+                .as_ref()
+                .and_then(|s| s.timeout_ms)
+                .map(Duration::from_millis)
+                .unwrap_or(REQUEST_TIMEOUT),
+        ),
         ..Default::default()
     };
 
@@ -473,6 +505,21 @@ async fn proxy(
             return Err(err(StatusCode::BAD_GATEWAY, "upstream request failed"));
         }
     };
+
+    // Per-request maxRedirects (E4): tropel-http follows up to the relay's
+    // client cap (MAX_REDIRECTS, matching Bruno's default of 5). When the
+    // user's ceiling is LOWER, return the 3xx response at the cap boundary
+    // instead of the final hop — Bruno/axios semantics for "don't follow
+    // more than N redirects". Hops above the ceiling were already fetched
+    // server-side, but the response the viewer sees is the one at the cap.
+    let mut response = response;
+    if let Some(cap) = payload.settings.as_ref().and_then(|s| s.max_redirects) {
+        if (cap as usize) < response.redirects.len() {
+            if let Some(hop) = response.redirects.get(cap as usize) {
+                response = hop.clone();
+            }
+        }
+    }
 
     // Lossless header list (duplicate names preserved, e.g. multiple
     // Set-Cookie lines) minus hop-by-hop / content-coding headers.
