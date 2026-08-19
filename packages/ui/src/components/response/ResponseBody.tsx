@@ -1,7 +1,7 @@
 import type { MediaKind, ResponseCookie } from "@knockport/core";
 import { mediaKind, normalizeContentType, query } from "@knockport/core";
 import { clsx } from "clsx";
-import { Check, ChevronDown, Copy, Download, PanelBottom, PanelRight, Play, Save, Trash2, WrapText, X } from "lucide-react";
+import { Braces, Check, ChevronDown, Copy, Download, PanelBottom, PanelRight, Play, Save, Trash2, WrapText, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LARGE_RESPONSE_BYTES, useAppStore } from "../../store/app-store";
 import { CodeViewer, type ViewerLanguage } from "../common/CodeViewer";
@@ -484,6 +484,14 @@ function BodyPanel({
             onClick={() => setWrapPref(!userWrap)}
           >
             <WrapText size={13} />
+          </button>
+          <button
+            type="button"
+            className="kp-icon-btn"
+            title="Generate a typed interface from the response"
+            onClick={() => useAppStore.getState().setInterfaceOpen(true)}
+          >
+            <Braces size={13} />
           </button>
           <span>Size: {formatSize(response.bodySize)}</span>
           <button type="button" className="kp-save-btn" title="Download the formatted response" onClick={saveBody}>

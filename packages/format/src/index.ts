@@ -30,4 +30,10 @@ export {
   importAuto,
 } from "./importers";
 export { generateCode, generateCurl, generateJsFetch, generatePython, type CodegenTarget } from "./codegen";
+export {
+  interfaceLanguages,
+  generateInterface,
+  type InterfaceLanguage,
+  type InterfaceLanguageKey,
+} from "./interface-codegen";
 export { exportJson, exportPostman } from "./exporters";

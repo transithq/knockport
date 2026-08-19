@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@knockport/core": "workspace:*",
+    "quicktype-core": "^26.0.0",
     "yaml": "^2.7.0"
   },
   "devDependencies": {

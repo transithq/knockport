@@ -8,7 +8,14 @@ import {
   findCollectionOfRequest,
   resolveRequest,
 } from "../../store/variables";
-import { generateCode, importAuto, type CodegenTarget } from "@knockport/format";
+import {
+  generateCode,
+  importAuto,
+  interfaceLanguages,
+  generateInterface,
+  type CodegenTarget,
+  type InterfaceLanguageKey,
+} from "@knockport/format";
 
 // ── Lightweight syntax highlighting for generated code ──────────────────────
 const JS_KW = new Set(["const", "let", "var", "await", "async", "function", "return", "import", "from", "export", "new", "if", "else", "for", "while", "try", "catch", "throw", "typeof"]);
@@ -128,6 +135,103 @@ export function CodegenModal() {
         <div className="kp-modal-footer">
           <button type="button" className="kp-btn primary" onClick={copy}>
             <Copy size={14} /> {copied ? "Copied!" : "Copy"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Response Interface Modal (F3) ───────────────────────────────────────────
+// Hoppscotch parity (H§6 `ResponseInterface.vue`): generate a typed interface
+// / struct from the current response body via quicktype (`just-types`), across
+// the same 22-language matrix Hoppscotch offers. Opened from the response
+// statusbar ("Data schema").
+export function InterfaceModal() {
+  const open = useAppStore((s) => s.interfaceOpen);
+  const setOpen = useAppStore((s) => s.setInterfaceOpen);
+  const activeTabId = useAppStore((s) => s.activeTabId);
+  const responses = useAppStore((s) => s.responses);
+  const [langKey, setLangKey] = useState<InterfaceLanguageKey>("TypeScript");
+  const [code, setCode] = useState("");
+  const [error, setError] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const body = responses[activeTabId ?? ""]?.body ?? "";
+    generateInterface(interfaceLanguages[langKey], body)
+      .then((lines) => {
+        if (cancelled) return;
+        setCode(lines);
+        setError(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError(true);
+        setCode("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, activeTabId, langKey, responses]);
+
+  if (!open) return null;
+
+  const copy = async () => {
+    await navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  };
+
+  const download = () => {
+    const name = `response-interface-${interfaceLanguages[langKey]}.txt`;
+    const blob = new Blob([code], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="kp-cmdk-overlay" onClick={() => setOpen(false)}>
+      <div className="kp-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="kp-modal-header">
+          <span>Data Schema</span>
+          <button type="button" className="kp-icon-btn" onClick={() => setOpen(false)}><X size={14} /></button>
+        </div>
+        <div className="kp-interface-lang">
+          <select
+            className="kp-select"
+            value={langKey}
+            onChange={(e) => setLangKey(e.target.value as InterfaceLanguageKey)}
+          >
+            {Object.keys(interfaceLanguages).map((k) => (
+              <option key={k} value={k}>{k}</option>
+            ))}
+          </select>
+          <span className="kp-hint">
+            Typed interface from the JSON response body
+          </span>
+        </div>
+        {error ? (
+          <p className="kp-import-error" style={{ margin: "10px 14px" }}>
+            Could not generate an interface from this response.
+          </p>
+        ) : (
+          <pre className="kp-code-block kp-mono kp-modal-code">
+            {code ? code : "Generating…"}
+          </pre>
+        )}
+        <div className="kp-modal-footer">
+          <button type="button" className="kp-btn primary" onClick={copy} disabled={!code}>
+            <Copy size={14} /> {copied ? "Copied!" : "Copy"}
+          </button>
+          <button type="button" className="kp-btn" onClick={download} disabled={!code}>
+            <Download size={14} /> Download
           </button>
         </div>
       </div>

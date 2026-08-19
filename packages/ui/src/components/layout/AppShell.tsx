@@ -9,7 +9,7 @@ import { CommandPalette } from "../command/CommandPalette";
 import { useResizer } from "../common/useResizer";
 import { DropdownMenu } from "../common/DropdownMenu";
 import { EnvironmentEditor } from "../environments/EnvironmentEditor";
-import { CodegenModal, ImportModal, InheritedScriptsModal, PromptVariablesModal } from "../modals/Modals";
+import { CodegenModal, ImportModal, InheritedScriptsModal, InterfaceModal, PromptVariablesModal } from "../modals/Modals";
 import { RequestEditor, handleSend } from "../request/RequestEditor";
 import { ResponseBody } from "../response/ResponseBody";
 import { ResponseSummary } from "../response/ResponseSummary";
@@ -407,7 +407,7 @@ export function AppShell() {
       // suppressed while any modal or the command palette is open)
       if ((e.ctrlKey || e.metaKey) && (e.key === "Enter" || e.key.toLowerCase() === "s")) {
         const s = useAppStore.getState();
-        if (s.commandPaletteOpen || s.codegenOpen || s.importOpen) return;
+        if (s.commandPaletteOpen || s.codegenOpen || s.importOpen || s.interfaceOpen) return;
         const tab = s.tabs.find((t) => t.id === s.activeTabId);
         if (!tab || (tab.kind && tab.kind !== "request")) return;
         e.preventDefault();
@@ -417,6 +417,7 @@ export function AppShell() {
       if (e.key === "Escape") {
         const s = useAppStore.getState();
         if (s.codegenOpen) s.setCodegenOpen(false);
+        else if (s.interfaceOpen) s.setInterfaceOpen(false);
         else if (s.importOpen) s.setImportOpen(false);
         else if (s.inheritScriptsRequest) s.setInheritScriptsRequest(null);
       }
@@ -479,6 +480,7 @@ export function AppShell() {
       </main>
       <CommandPalette />
       <CodegenModal />
+      <InterfaceModal />
       <ImportModal />
       <PromptVariablesModal />
       <InheritedScriptsModal />

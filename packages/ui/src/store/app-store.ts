@@ -282,6 +282,7 @@ export interface AppStore {
   commandPaletteOpen: boolean;
   codegenOpen: boolean;
   importOpen: boolean;
+  interfaceOpen: boolean;
   /** Pending prompt-variable dialog (A5): answers resolve on Send. */
   promptVars: { names: string[]; resolve: (answers: Record<string, string> | null) => void } | null;
   /** Inherited-scripts viewer (C10): the request whose script chain is shown; null = closed. */
@@ -423,6 +424,7 @@ export interface AppStore {
   setCommandPaletteOpen: (open: boolean) => void;
   setCodegenOpen: (open: boolean) => void;
   setImportOpen: (open: boolean) => void;
+  setInterfaceOpen: (open: boolean) => void;
   setPromptVars: (
     pending: { names: string[]; resolve: (answers: Record<string, string> | null) => void } | null,
   ) => void;
@@ -515,6 +517,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   commandPaletteOpen: false,
   codegenOpen: false,
   importOpen: false,
+  interfaceOpen: false,
   promptVars: null,
   inheritScriptsRequest: null,
   wsUrl: (typeof localStorage !== "undefined" && localStorage.getItem("kp-ws-url")) || "wss://echo.websocket.org",
@@ -1470,6 +1473,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   setCodegenOpen: (open) => set({ codegenOpen: open }),
   setImportOpen: (open) => set({ importOpen: open }),
+  setInterfaceOpen: (open) => set({ interfaceOpen: open }),
   setPromptVars: (pending) => set({ promptVars: pending }),
   setInheritScriptsRequest: (requestId) => set({ inheritScriptsRequest: requestId }),
   openWebSocketTab: () => {
