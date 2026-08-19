@@ -44,6 +44,9 @@ importers:
       '@tropel/core-wasm':
         specifier: file:../../../tropel/packages/core-wasm
         version: file:../tropel/packages/core-wasm
+      '@tropel/input-wasm':
+        specifier: file:../../../tropel/packages/input-wasm
+        version: file:../tropel/packages/input-wasm
       react:
         specifier: ^19.0.0
         version: 19.2.8
@@ -113,6 +116,9 @@ importers:
       '@knockport/core':
         specifier: workspace:*
         version: link:../core
+      '@tropel/input-wasm':
+        specifier: file:../../../tropel/packages/input-wasm
+        version: file:../tropel/packages/input-wasm
       quicktype-core:
         specifier: ^26.0.0
         version: 26.0.0
@@ -1034,6 +1040,10 @@ packages:
 
   '@tropel/core-wasm@file:../tropel/packages/core-wasm':
     resolution: {directory: ../tropel/packages/core-wasm, type: directory}
+    engines: {node: '>=20'}
+
+  '@tropel/input-wasm@file:../tropel/packages/input-wasm':
+    resolution: {directory: ../tropel/packages/input-wasm, type: directory}
     engines: {node: '>=20'}
 
   '@tropel/shims@0.1.0':
@@ -2517,6 +2527,8 @@ snapshots:
   '@tanstack/virtual-core@3.17.7': {}
 
   '@tropel/core-wasm@file:../tropel/packages/core-wasm': {}
+
+  '@tropel/input-wasm@file:../tropel/packages/input-wasm': {}
 
   '@tropel/shims@0.1.0': {}
 

@@ -13,6 +13,8 @@ import {
   importAuto,
   interfaceLanguages,
   generateInterface,
+  ensureTropelInput,
+  importAnyAsCollection,
   type CodegenTarget,
   type InterfaceLanguageKey,
 } from "@knockport/format";
@@ -309,25 +311,45 @@ export function ImportModal() {
   const [text, setText] = useState("");
   const [error, setError] = useState("");
 
+  // Start the lazy input-wasm fetch the moment the modal opens so the
+  // ~720 KB parser slice is ready by the time the user hits Import. When the
+  // slice is unavailable the TS importers handle the request instead.
+  useEffect(() => {
+    if (open) void ensureTropelInput();
+  }, [open]);
+
   if (!open) return null;
 
+  const applyImport = (result: ReturnType<typeof importAuto>) => {
+    const store = useAppStore.getState();
+    if ("folders" in result) {
+      store.addCollection(result);
+      store.setSidebarTab("collections");
+    } else if ("method" in result) {
+      store.openTab(result);
+    } else {
+      // Environment
+      store.addEnvironment(result);
+      store.setSidebarTab("environments");
+    }
+    setText("");
+    setError("");
+    setOpen(false);
+  };
+
   const doImport = () => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
     try {
-      const result = importAuto(text);
-      const store = useAppStore.getState();
-      if ("folders" in result) {
-        store.addCollection(result);
-        store.setSidebarTab("collections");
-      } else if ("method" in result) {
-        store.openTab(result);
-      } else {
-        // Environment
-        store.addEnvironment(result);
-        store.setSidebarTab("environments");
+      // Try the tropel wasm slice first (OpenAPI/Postman/HAR via the real
+      // adapters); fall back to the TS importers (cURL/env/native) when the
+      // slice isn't ready or doesn't recognize the bytes.
+      const wasmResult = importAnyAsCollection(new TextEncoder().encode(trimmed));
+      if (wasmResult) {
+        applyImport(wasmResult.collection);
+        return;
       }
-      setText("");
-      setError("");
-      setOpen(false);
+      applyImport(importAuto(trimmed));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to import");
     }

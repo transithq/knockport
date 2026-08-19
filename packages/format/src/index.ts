@@ -29,6 +29,14 @@ export {
   importKnockportYaml,
   importAuto,
 } from "./importers";
+export { scenarioToCollection } from "./scenario";
+export {
+  ensureTropelInput,
+  isTropelInputReady,
+  importAnyAsCollection,
+  registerTropelInputWasmUrl,
+  type ImportResult,
+} from "./import-wasm";
 export { generateCode, generateCurl, generateJsFetch, generatePython, type CodegenTarget } from "./codegen";
 export {
   interfaceLanguages,

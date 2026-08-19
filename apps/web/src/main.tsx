@@ -14,6 +14,7 @@ import {
 import "@knockport/ui/styles/globals.css";
 import "./styles.css";
 import "./tropel";
+import "./tropel-input";
 
 // Seed the store with a sample collection + environments on first load so the
 // UI reflects the reference design instead of being empty. On subsequent loads

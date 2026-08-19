@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@knockport/core": "workspace:*",
+    "@tropel/input-wasm": "file:../../../tropel/packages/input-wasm",
     "quicktype-core": "^26.0.0",
     "yaml": "^2.7.0"
   },
