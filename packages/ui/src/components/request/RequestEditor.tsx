@@ -396,6 +396,7 @@ function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyC
     "xml",
     "html",
     "form-urlencoded",
+    "binary",
     "graphql",
   ];
   const label = (t: string) =>
@@ -435,6 +436,8 @@ function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyC
           encoding={body.type === "multipart-form" ? "multipart-form" : "form-urlencoded"}
           onEncodingChange={setEncoding}
         />
+      ) : body.type === "binary" ? (
+        <BinaryBodyEditor body={body} onChange={onChange} />
       ) : body.type === "graphql" ? (
         <div className="kp-graphql-editor">
           <div className="kp-graphql-pane">
@@ -485,6 +488,80 @@ function BodyEditor({ body, onChange }: { body: BodyContent; onChange: (b: BodyC
           </>
         )
       )}
+    </div>
+  );
+}
+
+// ── Binary Body Editor (E1) ──────────────────────────────────────────────────
+// Single in-memory file (Hoppscotch parity). Sends as application/octet-stream
+// (or the file's own type) through DirectTransport/relay. The File handle is
+// never persisted — disk/export writes a `[file]` marker and the picker resets.
+function BinaryBodyEditor({
+  body,
+  onChange,
+}: {
+  body: BodyContent;
+  onChange: (b: BodyContent) => void;
+}) {
+  const uid = useId();
+  const file = body.file ?? null;
+  return (
+    <div className="kp-binary-editor">
+      <div className="kp-hint">
+        Send a single file as the request body with an{" "}
+        <code className="kp-mono">application/octet-stream</code> content-type.
+      </div>
+      {file ? (
+        <div className="kp-file-chip kp-binary-chip" title={`${file.name} (${file.type || "unknown type"})`}>
+          <Paperclip size={12} />
+          <span className="kp-truncate">
+            {file.name} ({formatBytes(file.size)})
+            {file.type ? ` · ${file.type}` : ""}
+          </span>
+          <button
+            type="button"
+            className="kp-file-clear"
+            title="Remove file"
+            onClick={() => onChange({ ...body, file: undefined, content: undefined })}
+          >
+            <X size={11} />
+          </button>
+        </div>
+      ) : body.content ? (
+        <div className="kp-hint kp-binary-marker">
+          <code className="kp-mono">{body.content}</code>
+          <span> — pick a file to send it as the binary body.</span>
+        </div>
+      ) : null}
+      <input
+        type="file"
+        id={uid}
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onChange({ ...body, file: f });
+          e.target.value = "";
+        }}
+      />
+      <div className="kp-binary-actions">
+        <button
+          type="button"
+          className="kp-btn small"
+          title="Choose a file to send"
+          onClick={() => document.getElementById(uid)?.click()}
+        >
+          <Paperclip size={13} /> {file ? "Replace file" : "Choose file"}
+        </button>
+        {file && (
+          <button
+            type="button"
+            className="kp-btn small danger"
+            onClick={() => onChange({ ...body, file: undefined, content: undefined })}
+          >
+            <X size={13} /> Clear
+          </button>
+        )}
+      </div>
     </div>
   );
 }

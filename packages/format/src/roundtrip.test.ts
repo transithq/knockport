@@ -145,6 +145,16 @@ describe("native YAML round-trip", () => {
     expect(examples[0].response.contentType).toBe("application/json");
   });
 
+  it("binary bodies with a File serialize to a [file] marker (E1)", () => {
+    const original = makeCollection();
+    original.requests[0].body = { type: "binary", file: new File(["x"], "photo.png") };
+    const yaml = serializeCollection(original);
+    const imported = importKnockportYaml(yaml) as Collection;
+    expect(imported.requests[0].body.type).toBe("binary");
+    expect(imported.requests[0].body.content).toBe("[file: photo.png]");
+    expect(imported.requests[0].body.file).toBeUndefined();
+  });
+
   it("round-trips the full OAuth2 auth block (B1 fields)", () => {
     const original = makeCollection();
     original.auth = {

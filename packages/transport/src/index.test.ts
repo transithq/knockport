@@ -129,6 +129,85 @@ describe("graphql body serialization", () => {
   });
 });
 
+describe("binary body upload (E1)", () => {
+  it("buildBody returns the File for binary bodies (fetch BodyInit)", () => {
+    const file = new File([new Uint8Array([1, 2, 3])], "a.bin", { type: "application/octet-stream" });
+    const body = buildBody(makeRequest({ method: "POST", body: { type: "binary", file } }));
+    expect(body).toBe(file);
+  });
+
+  it("buildBody falls back to legacy text content for binary bodies", () => {
+    const body = buildBody(makeRequest({ method: "POST", body: { type: "binary", content: "raw" } }));
+    expect(body).toBe("raw");
+  });
+
+  it("relay sends binary files as base64 wire parts with octet-stream default", async () => {
+    const file = new File([new Uint8Array([0xde, 0xad, 0xbe, 0xef])], "blob.bin", {
+      type: "application/octet-stream",
+    });
+    const relay = {
+      status: 200,
+      statusText: "OK",
+      headers: [],
+      body: "",
+      encoding: "utf8",
+      timings: { total: 50, ttfb: 10, download: 40 },
+    };
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: () => Promise.resolve(relay),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const req = makeRequest({ method: "POST", body: { type: "binary", file } });
+      await new RelayTransport("https://relay.example").execute(req);
+      const [, init] = fetchStub.mock.calls[0];
+      const wire = JSON.parse(init.body);
+      expect(wire.binary).toBeDefined();
+      expect(wire.binary.content_type).toBe("application/octet-stream");
+      expect(wire.binary.data_base64).toBe("3q2+7w==");
+      expect(wire.body).toBeUndefined();
+      expect(wire.headers).not.toContainEqual(expect.objectContaining({ key: "Content-Type" }));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("relay honors a user content-type override on binary bodies", async () => {
+    const file = new File([new Uint8Array([1])], "a.bin");
+    const relay = {
+      status: 200,
+      statusText: "OK",
+      headers: [],
+      body: "",
+      encoding: "utf8",
+      timings: { total: 50, ttfb: 10, download: 40 },
+    };
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: () => Promise.resolve(relay),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const req = makeRequest({
+        method: "POST",
+        headers: [{ key: "Content-Type", value: "image/svg+xml", enabled: true }],
+        body: { type: "binary", file },
+      });
+      await new RelayTransport("https://relay.example").execute(req);
+      const [, init] = fetchStub.mock.calls[0];
+      const wire = JSON.parse(init.body);
+      expect(wire.binary.content_type).toBe("image/svg+xml");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 describe("DirectTransport binary capture (F1)", () => {
   it("base64-encodes media bodies and leaves the text body empty", async () => {
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

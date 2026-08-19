@@ -1214,6 +1214,29 @@ body.kp-resizing-y .kp-resize-handle {
   color: var(--kp-accent);
   border-color: var(--kp-border-focus);
 }
+/* Binary body editor (E1) */
+.kp-binary-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.kp-binary-chip {
+  align-self: flex-start;
+  max-width: 100%;
+}
+.kp-binary-marker {
+  font-size: 12px;
+  color: var(--kp-text-tertiary);
+}
+.kp-binary-marker code {
+  color: var(--kp-text-secondary);
+}
+.kp-binary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .kp-checkbox {
   width: 15px;
   height: 15px;

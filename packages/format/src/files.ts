@@ -60,7 +60,9 @@ function requestDoc(r: Request): Record<string, any> {
             value: typeof f.value === "string" ? f.value : "[file]",
           })),
         }
-      : body;
+      : body.type === "binary" && body.file
+        ? { ...body, file: undefined, content: `[file: ${body.file.name}]` }
+        : body;
   return {
     id: r.id,
     name: r.name,

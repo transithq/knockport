@@ -2072,15 +2072,20 @@ version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
+ "getrandom 0.4.3",
  "hex",
  "hmac",
  "md-5",
  "percent-encoding",
  "rand",
  "reqwest",
+ "serde",
+ "serde_json",
  "sha1",
  "sha2",
+ "thiserror",
  "tropel-sdk",
+ "web-time",
 ]
 
 [[package]]

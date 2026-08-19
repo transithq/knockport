@@ -309,9 +309,12 @@ function serializePairs(pairs: KeyValuePair[]): Record<string, any>[] | undefine
 
 function serializeBody(body: BodyContent): Record<string, any> | undefined {
   if (body.type === "none") return undefined;
+  // File handles cannot live in a text file — replace with a marker (E1).
+  const content =
+    body.type === "binary" && body.file ? `[file: ${body.file.name}]` : body.content;
   return {
     type: body.type,
-    content: body.content,
+    content,
     formData: body.formData?.map((f) => ({
       key: f.key,
       value: typeof f.value === "string" ? f.value : "[file]",

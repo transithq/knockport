@@ -155,6 +155,19 @@ export function scrubRequestSecrets(request: Request, secretValues: string[]): R
   const scrubPairs = (pairs: KeyValuePair[]): KeyValuePair[] =>
     pairs.map((p) => ({ ...p, value: mask(p.value) }));
   const scrubBody = (body: BodyContent): BodyContent => {
+    // File handles can't survive persistence/JSON — reduce to filename markers
+    // so history stays serializable (E1).
+    if (body.type === "binary" && body.file) {
+      return { ...body, file: undefined, content: `[file: ${body.file.name}]` };
+    }
+    if (body.formData) {
+      return {
+        ...body,
+        formData: body.formData.map((f) =>
+          f.value instanceof File ? { ...f, value: f.value.name } : f,
+        ),
+      };
+    }
     if ("content" in body && typeof body.content === "string") {
       return { ...body, content: mask(body.content) };
     }

@@ -128,7 +128,8 @@ export function buildBody(request: Request): BodyInit | undefined {
       return formData;
     }
     case "binary":
-      return request.body.content;
+      // File is a valid fetch BodyInit (E1); text content is the legacy path.
+      return request.body.file ?? request.body.content;
     default:
       return undefined;
   }
@@ -252,15 +253,27 @@ export class RelayTransport implements Transport {
     const url = buildUrl(request);
     let headers = buildHeaderList(request);
     const isMultipart = request.body?.type === "multipart-form";
-    // Multipart goes as structured parts (files base64); the relay owns the
-    // boundary + content-type, so drop any user content-type for these.
-    if (isMultipart) {
+    const binaryFile =
+      request.body?.type === "binary" && request.body.file instanceof File
+        ? (request.body.file as File)
+        : undefined;
+    // Multipart and binary-file bodies go as structured wire parts (files
+    // base64); the relay owns the body bytes + content-type, so drop any user
+    // content-type for these (the binary default is octet-stream unless the
+    // user set an explicit one, which we hand to the relay verbatim).
+    let ownedContentType: string | undefined;
+    if (isMultipart || binaryFile) {
+      const userCt = headers.find((h) => h.key.toLowerCase() === "content-type");
+      if (binaryFile) {
+        ownedContentType = userCt?.value || binaryFile.type || "application/octet-stream";
+      }
       headers = headers.filter((h) => h.key.toLowerCase() !== "content-type");
     }
-    const bodyInit = isMultipart ? undefined : buildBody(request);
+    const bodyInit = isMultipart || binaryFile ? undefined : buildBody(request);
     const body =
       typeof bodyInit === "string" ? bodyInit : bodyInit != null ? String(bodyInit) : undefined;
     const multipart = isMultipart ? await buildMultipartParts(request) : undefined;
+    const binary = binaryFile ? await buildBinaryPart(binaryFile) : undefined;
 
     const startTime = performance.now();
     try {
@@ -270,7 +283,16 @@ export class RelayTransport implements Transport {
           "content-type": "application/json",
           ...(this.token ? { authorization: `Bearer ${this.token}` } : {}),
         },
-        body: JSON.stringify({ method: request.method, url, headers, body, multipart }),
+        body: JSON.stringify({
+          method: request.method,
+          url,
+          headers,
+          body,
+          multipart,
+          binary: binary
+            ? { ...binary, content_type: ownedContentType }
+            : undefined,
+        }),
         signal,
       });
 
@@ -388,6 +410,17 @@ export interface RelayMultipartPart {
   filename?: string;
   content_type?: string;
   data_base64?: string;
+}
+
+/** Binary body part for the relay wire format (E1): bytes base64-encoded. */
+export interface RelayBinaryPart {
+  content_type?: string;
+  data_base64: string;
+}
+
+async function buildBinaryPart(file: File): Promise<RelayBinaryPart> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return { data_base64: bytesToBase64(bytes) };
 }
 
 async function buildMultipartParts(request: Request): Promise<RelayMultipartPart[]> {

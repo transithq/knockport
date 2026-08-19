@@ -101,6 +101,9 @@ export interface BodyContent {
   content?: string;
   formData?: FormDataEntry[];
   graphql?: { query: string; variables?: string };
+  /** In-memory file for binary bodies (E1). Never persisted — serializers
+   * replace it with a `[file]` marker. */
+  file?: File;
 }
 
 export interface FormDataEntry {

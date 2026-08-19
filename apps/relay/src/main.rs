@@ -71,6 +71,18 @@ struct ProxyRequest {
     /// the body and owns the boundary + content-type.
     #[serde(default)]
     multipart: Vec<MultipartPart>,
+    /// Binary body (E1): bytes base64-encoded. When present the relay sends
+    /// them verbatim with an explicit content-type (user override or default
+    /// application/octet-stream).
+    #[serde(default)]
+    binary: Option<BinaryBody>,
+}
+
+#[derive(Deserialize)]
+struct BinaryBody {
+    #[serde(default)]
+    content_type: Option<String>,
+    data_base64: String,
 }
 
 #[derive(Deserialize)]
@@ -365,7 +377,18 @@ async fn proxy(
         .await
         .map_err(|reason| err(StatusCode::FORBIDDEN, reason))?;
 
-    let (body_bytes, multipart_ct): (Vec<u8>, Option<String>) = if payload.multipart.is_empty() {
+    let (body_bytes, owned_ct): (Vec<u8>, Option<String>) = if let Some(bin) = &payload.binary {
+        let bytes = base64_decode(&bin.data_base64)
+            .map_err(|_| err(StatusCode::BAD_REQUEST, "invalid base64 in binary body"))?;
+        if bytes.len() > MAX_REQUEST_BODY {
+            return Err(err(StatusCode::PAYLOAD_TOO_LARGE, "request body too large"));
+        }
+        let ct = bin
+            .content_type
+            .clone()
+            .unwrap_or_else(|| "application/octet-stream".to_string());
+        (bytes, Some(ct))
+    } else if payload.multipart.is_empty() {
         (
             match &payload.body {
                 Some(b) if b.len() > MAX_REQUEST_BODY => {
@@ -396,13 +419,14 @@ async fn proxy(
         if name == "host" || name == "content-length" || HOP_HEADERS.contains(&name.as_str()) {
             continue;
         }
-        // The relay owns the content-type when it assembles a multipart body.
-        if multipart_ct.is_some() && name == "content-type" {
+        // The relay owns the content-type when it assembles the body (multipart
+        // or binary-file bodies).
+        if owned_ct.is_some() && name == "content-type" {
             continue;
         }
         headers.push((pair.key.clone(), pair.value.clone()));
     }
-    if let Some(ct) = &multipart_ct {
+    if let Some(ct) = &owned_ct {
         headers.push(("Content-Type".to_string(), ct.clone()));
     }
 
